@@ -30,27 +30,30 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
     /// directly, but needs to maintain it for type correctness in the function signatures.
     fn find_leaf<'b, V>(&self, root: &'b LeafNode<K, V>) -> &'b LeafNode<K, V> {
-        let mut current = root;
-        
-        // Continue to next node if key is greater than all keys in current node
-        while current.count > 0 {
-            if let Some(ref entry) = current.items[current.count - 1] {
-                if self.key > &entry.key {
-                    // Key is greater than largest key in current node,
-                    // so it might be in the next node if one exists
-                    if let Some(ref next) = current.next {
-                        current = next;
-                        continue;
-                    }
-                }
-            }
-            
-            // Key is less than or equal to the largest key in current node,
-            // or there is no next node, so this is the correct node
-            break;
+        // Check if this is the node we want
+        if Self::is_target_node(root, self.key) {
+            return root;
         }
         
-        current
+        // If we have a next node and the key belongs in a later node
+        if let Some(ref next) = root.next {
+            // Check if key belongs in the next node
+            if Self::is_target_node(next, self.key) {
+                return next;
+            }
+            
+            // If next node has a next and key might be in a later node
+            if next.next.is_some() && Self::key_belongs_in_later_node(next, self.key) {
+                // Recursively search from the next node
+                return self.find_leaf(next);
+            }
+            
+            // Key belongs in the next node (or it's the last node)
+            return next;
+        }
+        
+        // No next node, so key belongs in the current node
+        root
     }
     
     /// Finds the leaf node where the key should be located.
@@ -62,67 +65,62 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     ///
     /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
     /// directly, but needs to maintain it for type correctness in the function signatures.
+    ///
+    /// Note: This is a recursive implementation to avoid unsafe code when dealing with 
+    /// mutable references in a linked structure.
     fn find_leaf_mut<'b, V>(&self, root: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
-        // Check if key belongs in root
-        if root.count == 0 || root.next.is_none() {
-            // If the root is empty or there are no next nodes, return root
+        // Check if this is the node we want
+        if Self::is_target_node(root, self.key) {
             return root;
         }
         
-        // Check if key belongs in root by comparing with largest key in root
-        if let Some(ref entry) = root.items[root.count - 1] {
-            if self.key <= &entry.key {
-                // Key belongs in root
-                return root;
+        // If we have a next node and the key belongs in a later node
+        if let Some(ref mut next) = root.next {
+            // Check if key belongs in the next node
+            if Self::is_target_node(next, self.key) {
+                return next;
             }
-        }
-        
-        // Key belongs in a later node, so access the next node through the mutable reference
-        // and provide direct ownership transfer of the mutable borrow
-        let next = root.next.as_mut().unwrap();
-        
-        // Check if key belongs in the next node
-        let belongs_in_next = if next.count == 0 {
-            true
-        } else if let Some(ref entry) = next.items[next.count - 1] {
-            self.key <= &entry.key
-        } else {
-            true
-        };
-        
-        // If this is the last node or the key belongs in this next node, return it
-        if next.next.is_none() || belongs_in_next {
+            
+            // If next node has a next and key might be in a later node
+            if next.next.is_some() && Self::key_belongs_in_later_node(next, self.key) {
+                // Recursively search from the next node
+                return self.find_leaf_mut(next);
+            }
+            
+            // Key belongs in the next node (or it's the last node)
             return next;
         }
         
-        // For deeper nodes, we need to simplify our approach
-        // Let's create a version that just follows the chain to the last node for now
-        // In a real implementation, we would use a proper tree structure with parent pointers
-        
-        // Access nodes as a chain by following next pointers
-        let mut current = next;
-        
-        // Traverse the chain until we find the appropriate leaf
-        while let Some(ref mut next_node) = current.next {
-            let belongs_in_next = if next_node.count == 0 {
-                true
-            } else if let Some(ref entry) = next_node.items[next_node.count - 1] {
-                self.key <= &entry.key
-            } else {
-                true
-            };
-            
-            if belongs_in_next || next_node.next.is_none() {
-                // This is the node we want
-                return next_node;
-            }
-            
-            // Continue to the next node
-            current = next_node;
+        // No next node, so key belongs in the current node
+        root
+    }
+    
+    /// Helper method to check if a leaf node is the target for a key
+    fn is_target_node<V>(node: &LeafNode<K, V>, key: &K) -> bool {
+        // A node is a target if:
+        // 1. It has no next node, or
+        // 2. It's empty, or
+        // 3. The key is <= the largest key in the node
+        node.next.is_none() || 
+        node.count == 0 || 
+        if let Some(ref entry) = node.items[node.count - 1] {
+            key <= &entry.key
+        } else {
+            true
         }
-        
-        // If we reach here, the key belongs in the last node we found
-        current
+    }
+    
+    /// Helper method to check if a key belongs in a node after this one
+    fn key_belongs_in_later_node<V>(node: &LeafNode<K, V>, key: &K) -> bool {
+        // A key belongs in a later node if:
+        // 1. The node is not empty, and
+        // 2. The key is > the largest key in the node
+        node.count > 0 &&
+        if let Some(ref entry) = node.items[node.count - 1] {
+            key > &entry.key
+        } else {
+            false
+        }
     }
 }
 
