@@ -2,21 +2,41 @@
 
 use std::collections::BTreeMap;
 
+/// A key-value entry in a leaf node.
+#[derive(Debug, Clone)]
+struct Entry<K, V> {
+    key: K,
+    value: V,
+}
+
 /// A node in the B+ tree containing the actual key-value data.
 #[derive(Debug)]
 struct LeafNode<K, V> {
     /// Maximum number of entries this node can hold before splitting
     branching_factor: usize,
-    /// Data stored in this leaf node
+    /// Data stored in this leaf node (using BTreeMap for initial implementation)
     entries: BTreeMap<K, V>,
+    /// Array of key-value entries, will be used for B+ tree implementation
+    /// Entries are stored in order, with valid entries from 0..count and None for unused slots
+    items: Vec<Option<Entry<K, V>>>,
+    /// Number of valid entries in the items array
+    count: usize,
 }
 
 impl<K: Ord, V> LeafNode<K, V> {
     /// Creates a new leaf node with the specified branching factor.
     fn new(branching_factor: usize) -> Self {
+        // Initialize the items vector with None values up to branching_factor
+        let mut items = Vec::with_capacity(branching_factor);
+        for _ in 0..branching_factor {
+            items.push(None);
+        }
+        
         Self {
             branching_factor,
             entries: BTreeMap::new(),
+            items,
+            count: 0,
         }
     }
     
