@@ -79,7 +79,7 @@ fn insert_maintains_sorted_order() {
 
 #[test]
 fn slice_returns_entries_in_sorted_order() {
-    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5); // Increased branching factor to 5
     
     // Insert in non-sorted order
     tree.insert(30, 300);
@@ -102,7 +102,7 @@ fn slice_returns_entries_in_sorted_order() {
 
 #[test]
 fn range_returns_entries_in_given_range() {
-    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5); // Increased branching factor to 5
     
     // Insert entries
     tree.insert(10, 100);

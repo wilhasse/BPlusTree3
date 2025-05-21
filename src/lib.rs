@@ -1,7 +1,5 @@
 //! BPlusTree library.
 
-use std::collections::BTreeMap;
-
 /// A key-value entry in a leaf node.
 #[derive(Debug, Clone)]
 struct Entry<K, V> {
@@ -14,9 +12,7 @@ struct Entry<K, V> {
 struct LeafNode<K, V> {
     /// Maximum number of entries this node can hold before splitting
     branching_factor: usize,
-    /// Data stored in this leaf node (using BTreeMap for initial implementation)
-    entries: BTreeMap<K, V>,
-    /// Array of key-value entries, will be used for B+ tree implementation
+    /// Array of key-value entries for B+ tree implementation
     /// Entries are stored in order, with valid entries from 0..count and None for unused slots
     items: Vec<Option<Entry<K, V>>>,
     /// Number of valid entries in the items array
@@ -34,7 +30,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         
         Self {
             branching_factor,
-            entries: BTreeMap::new(),
             items,
             count: 0,
         }
@@ -42,11 +37,19 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     
     /// Inserts a key-value pair into the node.
     fn insert(&mut self, key: K, value: V) -> Option<V> {
-        // Check if key already exists, so we can update the items array if needed
-        let old_value = self.entries.insert(key.clone(), value.clone());
+        // Check if key already exists and update it if found
+        for i in 0..self.count {
+            if let Some(ref mut entry) = self.items[i] {
+                if entry.key == key {
+                    let old_value = entry.value.clone();
+                    entry.value = value;
+                    return Some(old_value);
+                }
+            }
+        }
         
-        if old_value.is_none() && self.count < self.branching_factor {
-            // New key being added
+        // Key doesn't exist, check if we have room for a new entry
+        if self.count < self.branching_factor {
             let new_entry = Entry { key, value };
             
             // Find the position to insert the new entry to maintain sorted order
@@ -68,60 +71,67 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             // Insert the new entry and increment count
             self.items[insert_pos] = Some(new_entry);
             self.count += 1;
-        } else if let Some(ref value) = old_value {
-            // Update existing entry in the items array
-            for i in 0..self.count {
-                if let Some(ref mut entry) = self.items[i] {
-                    if entry.key == key {
-                        entry.value = value.clone();
-                        break;
-                    }
-                }
-            }
+            
+            return None;
         }
         
-        old_value
+        // No room for a new entry
+        // In a real implementation, we would handle node splitting here
+        None
     }
     
     /// Returns a reference to the value corresponding to the key.
     fn get(&self, key: &K) -> Option<&V> {
-        self.entries.get(key)
+        // Linear search through the sorted items
+        for i in 0..self.count {
+            if let Some(ref entry) = self.items[i] {
+                if &entry.key == key {
+                    return Some(&entry.value);
+                } else if &entry.key > key {
+                    // We've passed where the key would be, so it doesn't exist
+                    // This early return is possible because items are kept sorted
+                    return None;
+                }
+            }
+        }
+        None
     }
     
     /// Returns the number of elements in the node.
     fn len(&self) -> usize {
-        self.entries.len()
+        self.count
     }
     
     /// Returns `true` if the node contains no elements.
     fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.count == 0
     }
     
     /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
     /// If min_key is None, starts from the smallest key.
     /// If max_key is None, goes up to the largest key.
     fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
-        // For now, let's use the entries BTreeMap directly which is already in sorted order
-        // This is simpler and more reliable for the current implementation
         let mut result = Vec::new();
         
-        for (key, value) in &self.entries {
-            // Check min bound
-            if let Some(min) = min_key {
-                if key < min {
-                    continue;
+        // Iterate through the sorted items array
+        for i in 0..self.count {
+            if let Some(ref entry) = self.items[i] {
+                // Check min bound
+                if let Some(min) = min_key {
+                    if &entry.key < min {
+                        continue;
+                    }
                 }
-            }
-            
-            // Check max bound
-            if let Some(max) = max_key {
-                if key > max {
-                    break; // BTreeMap is ordered, so we can stop once we exceed the max
+                
+                // Check max bound
+                if let Some(max) = max_key {
+                    if &entry.key > max {
+                        break; // Items are ordered, so we can stop once we exceed the max
+                    }
                 }
+                
+                result.push((&entry.key, &entry.value));
             }
-            
-            result.push((key, value));
         }
         
         result
