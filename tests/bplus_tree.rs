@@ -1,6 +1,32 @@
 use bplustree3::BPlusTree;
 
 #[test]
+fn all_keys_exist_after_multiple_inserts_with_split() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    // Insert 5 keys (more than branching factor)
+    let keys = [15, 7, 42, 23, 31];
+    let values = [150, 70, 420, 230, 310];
+    
+    // Insert all keys
+    for i in 0..keys.len() {
+        tree.insert(keys[i], values[i]);
+    }
+    
+    // Verify all keys exist and return the correct values
+    for i in 0..keys.len() {
+        let value = tree.get(&keys[i]);
+        assert_eq!(value, Some(&values[i]), "Key {} should have value {}", keys[i], values[i]);
+    }
+    
+    // Verify total element count
+    assert_eq!(tree.len(), 5);
+    
+    // Verify node structure (should be split into two nodes)
+    assert_eq!(tree.leaf_count(), 2);
+}
+
+#[test]
 fn adding_more_than_branching_factor_keys_causes_split() {
     let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
     
