@@ -28,13 +28,20 @@ fn insert_increases_length() {
 }
 
 #[test]
-fn get_returns_inserted_value() {
+fn get_returns_value_when_key_exists() {
     let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
     
     tree.insert(42, 100);
     
     let value = tree.get(&42);
     assert_eq!(value, Some(&100));
+}
+
+#[test]
+fn get_returns_none_when_key_missing() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    tree.insert(42, 100);
     
     let missing = tree.get(&50);
     assert_eq!(missing, None);
