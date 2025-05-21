@@ -430,12 +430,8 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
     /// Inserts a key-value pair into the tree.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         // We need to clone the key for the search reference due to Rust's borrowing rules
-        let key_clone = key.clone();
-        self.insert_recursive(&key_clone, key, value)
-    }
-    
-    /// Helper method for insertion that handles node splitting at any position in the leaf chain
-    fn insert_recursive(&mut self, search_key: &K, key: K, value: V) -> Option<V> {
+        let search_key = key.clone();
+        
         // Split the root if necessary
         if self.root.count >= self.branching_factor {
             let new_node = self.root.split();
@@ -443,16 +439,16 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         }
         
         // Find the leaf where this key belongs
-        let finder = LeafFinder::new(search_key);
+        let finder = LeafFinder::new(&search_key);
         let leaf = finder.find_leaf_mut(&mut self.root);
         
         // Check if the leaf is full before trying to insert
         if leaf.count >= self.branching_factor {
             // Split the path to the leaf to make room
-            self.split_path_to_leaf(search_key);
+            self.split_path_to_leaf(&search_key);
             
             // Find the leaf again after splitting
-            let finder = LeafFinder::new(search_key);
+            let finder = LeafFinder::new(&search_key);
             let leaf = finder.find_leaf_mut(&mut self.root);
             
             // Now insert into the non-full leaf
