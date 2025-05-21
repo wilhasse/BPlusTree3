@@ -35,16 +35,47 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
     
+    /// Find the position of a key in the items array.
+    /// Returns (position, Some(entry_index)) if key exists, or (insert_position, None) if key doesn't exist.
+    fn find_position(&self, key: &K) -> (usize, Option<usize>) {
+        // Search for the key in the sorted array
+        let mut insert_pos = self.count; // Default to end of array
+        
+        for i in 0..self.count {
+            if let Some(ref entry) = self.items[i] {
+                // Use match for comparison as suggested by clippy
+                match entry.key.cmp(key) {
+                    std::cmp::Ordering::Equal => {
+                        // Key found
+                        return (i, Some(i));
+                    },
+                    std::cmp::Ordering::Greater => {
+                        // Found first key greater than target key
+                        insert_pos = i;
+                        break;
+                    },
+                    std::cmp::Ordering::Less => {
+                        // Continue searching
+                    }
+                }
+            }
+        }
+        
+        // Key not found, return the position where it should be inserted
+        (insert_pos, None)
+    }
+    
     /// Inserts a key-value pair into the node.
     fn insert(&mut self, key: K, value: V) -> Option<V> {
-        // Check if key already exists and update it if found
-        for i in 0..self.count {
-            if let Some(ref mut entry) = self.items[i] {
-                if entry.key == key {
-                    let old_value = entry.value.clone();
-                    entry.value = value;
-                    return Some(old_value);
-                }
+        // Find if key exists or where it should be inserted
+        let (pos, maybe_existing_index) = self.find_position(&key);
+        
+        // If key exists, update the value
+        if let Some(existing_index) = maybe_existing_index {
+            if let Some(ref mut entry) = self.items[existing_index] {
+                let old_value = entry.value.clone();
+                entry.value = value;
+                return Some(old_value);
             }
         }
         
@@ -52,24 +83,13 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         if self.count < self.branching_factor {
             let new_entry = Entry { key, value };
             
-            // Find the position to insert the new entry to maintain sorted order
-            let mut insert_pos = self.count;
-            for i in 0..self.count {
-                if let Some(ref entry) = self.items[i] {
-                    if entry.key > new_entry.key {
-                        insert_pos = i;
-                        break;
-                    }
-                }
-            }
-            
             // Shift elements to make room for the new entry
-            for i in (insert_pos..self.count).rev() {
+            for i in (pos..self.count).rev() {
                 self.items[i + 1] = self.items[i].clone();
             }
             
             // Insert the new entry and increment count
-            self.items[insert_pos] = Some(new_entry);
+            self.items[pos] = Some(new_entry);
             self.count += 1;
             
             return None;
@@ -82,18 +102,15 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     
     /// Returns a reference to the value corresponding to the key.
     fn get(&self, key: &K) -> Option<&V> {
-        // Linear search through the sorted items
-        for i in 0..self.count {
-            if let Some(ref entry) = self.items[i] {
-                if &entry.key == key {
-                    return Some(&entry.value);
-                } else if &entry.key > key {
-                    // We've passed where the key would be, so it doesn't exist
-                    // This early return is possible because items are kept sorted
-                    return None;
-                }
+        // Use the find_position helper to check if key exists
+        let (_, maybe_index) = self.find_position(key);
+        
+        if let Some(index) = maybe_index {
+            if let Some(ref entry) = self.items[index] {
+                return Some(&entry.value);
             }
         }
+        
         None
     }
     

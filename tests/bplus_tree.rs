@@ -78,6 +78,93 @@ fn insert_maintains_sorted_order() {
 }
 
 #[test]
+fn insert_at_beginning() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5);
+    
+    // Insert some values first
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    tree.insert(40, 400);
+    
+    // Now insert at beginning
+    tree.insert(10, 100);
+    
+    // Verify correct order and values
+    let entries = tree.slice();
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[0], (&10, &100));  // New first entry
+    assert_eq!(entries[1], (&20, &200));
+    assert_eq!(entries[2], (&30, &300));
+    assert_eq!(entries[3], (&40, &400));
+}
+
+#[test]
+fn insert_in_middle() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5);
+    
+    // Insert values with a gap
+    tree.insert(10, 100);
+    tree.insert(30, 300);
+    tree.insert(40, 400);
+    
+    // Now insert in the middle
+    tree.insert(20, 200);
+    
+    // Verify correct order and values
+    let entries = tree.slice();
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[0], (&10, &100));
+    assert_eq!(entries[1], (&20, &200));  // New middle entry
+    assert_eq!(entries[2], (&30, &300));
+    assert_eq!(entries[3], (&40, &400));
+}
+
+#[test]
+fn insert_at_end() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5);
+    
+    // Insert some values first
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    
+    // Now insert at end
+    tree.insert(40, 400);
+    
+    // Verify correct order and values
+    let entries = tree.slice();
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[0], (&10, &100));
+    assert_eq!(entries[1], (&20, &200));
+    assert_eq!(entries[2], (&30, &300));
+    assert_eq!(entries[3], (&40, &400));  // New last entry
+}
+
+#[test]
+fn update_existing_key() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5);
+    
+    // Insert some values
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    
+    // Update middle value
+    let old_value = tree.insert(20, 250);
+    
+    // Verify update was successful
+    assert_eq!(old_value, Some(200));
+    assert_eq!(tree.len(), 3);  // Length unchanged
+    
+    // Verify correct order and updated value
+    let entries = tree.slice();
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0], (&10, &100));
+    assert_eq!(entries[1], (&20, &250));  // Updated value
+    assert_eq!(entries[2], (&30, &300));
+}
+
+#[test]
 fn slice_returns_entries_in_sorted_order() {
     let mut tree: BPlusTree<i32, i32> = BPlusTree::new(5); // Increased branching factor to 5
     
