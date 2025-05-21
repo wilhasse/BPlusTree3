@@ -113,34 +113,48 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
     /// directly, but needs to maintain it for type correctness in the function signatures.
     ///
-    /// This implementation uses a recursive approach to traverse through any number of nodes
-    /// while maintaining Rust's ownership rules.
+    /// This implementation uses an iterative approach similar to find_leaf, but with special
+    /// handling for mutable references to maintain Rust's ownership rules.
     fn find_leaf_mut<'b, V>(&self, root: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
-        // For keys that belong in root node, return root directly
-        if Self::belongs_in_node(root, self.key) {
-            return root;
+        // Start with the root node
+        let mut current = root;
+        
+        // Loop until we find the right node
+        loop {
+            // If this is the right node or there's no next node, return it
+            if Self::belongs_in_node(current, self.key) || current.next.is_none() {
+                return current;
+            }
+            
+            // Check if the key belongs in the next node
+            let belongs_in_next = {
+                let next = current.next.as_ref().unwrap();
+                Self::belongs_in_node(next, self.key)
+            };
+            
+            if belongs_in_next {
+                // Key belongs in the next node, return it
+                // Break ownership chain by taking the next node
+                let next = current.next.as_mut().unwrap();
+                return next;
+            }
+            
+            // The key belongs in a node further down the chain
+            // Need to continue traversing by moving current to the next node
+            // This is the tricky part with mutable references - we need to
+            // obtain a new mutable reference to the next node
+            
+            // Using Option::take would disconnect the chain, so instead
+            // we'll use the unsafe approach from the original implementation
+            // but contained in a single assignment
+            
+            // Safety: This is safe because:
+            // 1. We're simply transferring the mutable borrow to the next node
+            // 2. We won't use the previous nodes again after this
+            // 3. We maintain the invariant that there's only one mutable reference
+            let next_ptr = current.next.as_mut().unwrap() as *mut Box<LeafNode<K, V>>;
+            current = unsafe { &mut **next_ptr };
         }
-        
-        // We need to traverse to the next node
-        if root.next.is_none() {
-            // No next node, so key must belong in root
-            return root;
-        }
-        
-        // Check if the key belongs in the next node
-        let belongs_in_next = {
-            let next = root.next.as_ref().unwrap();
-            Self::belongs_in_node(next, self.key)
-        };
-        
-        if belongs_in_next {
-            // Key belongs in the next node, return it
-            return root.next.as_mut().unwrap();
-        }
-        
-        // The key belongs in a node further down the chain
-        // We need to recurse to find the right node
-        self.find_leaf_mut(root.next.as_mut().unwrap())
     }
     
     
