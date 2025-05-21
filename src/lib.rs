@@ -441,20 +441,19 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let finder = LeafFinder::new(&search_key);
         let leaf = finder.find_leaf_mut(&mut self.root);
         
-        // Check if the leaf is full before trying to insert
-        if leaf.is_full() {
-            // Split the path to the leaf to make room
-            self.split_path_to_leaf(&search_key);
-            
-            // Find the leaf again after splitting
-            let finder = LeafFinder::new(&search_key);
-            let leaf = finder.find_leaf_mut(&mut self.root);
-            
-            // Now insert into the non-full leaf
+        // If leaf has space, insert directly
+        if !leaf.is_full() {
             return leaf.insert(key, value);
         }
         
-        // Leaf has space, so we can insert directly
+        // Leaf is full, split the path to make room
+        self.split_path_to_leaf(&search_key);
+        
+        // Find the leaf again after splitting
+        let finder = LeafFinder::new(&search_key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
+        
+        // Now insert into the non-full leaf
         leaf.insert(key, value)
     }
     
