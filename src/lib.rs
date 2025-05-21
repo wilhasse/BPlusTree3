@@ -8,7 +8,7 @@ struct Entry<K, V> {
 }
 
 /// A node in the B+ tree containing the actual key-value data.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct LeafNode<K, V> {
     /// Maximum number of entries this node can hold before splitting
     branching_factor: usize,
@@ -17,6 +17,8 @@ struct LeafNode<K, V> {
     items: Vec<Option<Entry<K, V>>>,
     /// Number of valid entries in the items array
     count: usize,
+    /// Reference to the next leaf node in the linked list
+    next: Option<Box<LeafNode<K, V>>>,
 }
 
 impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
@@ -32,6 +34,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             branching_factor,
             items,
             count: 0,
+            next: None,
         }
     }
     
@@ -124,30 +127,95 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.count == 0
     }
     
+    /// Splits this node into two nodes, keeping roughly half the entries in this node
+    /// and moving the other half to a new node. The new node is returned.
+    fn split(&mut self) -> Box<Self> {
+        let split_point = self.count / 2;
+        
+        // Create a new node with the same branching factor
+        let mut new_node = Box::new(Self::new(self.branching_factor));
+        
+        // Move items from split_point onwards to the new node
+        for i in split_point..self.count {
+            new_node.items[i - split_point] = self.items[i].take();
+            new_node.count += 1;
+        }
+        
+        // Update count in current node
+        self.count = split_point;
+        
+        // Link new node into the chain (new_node's next = self.next, self.next = new_node)
+        new_node.next = self.next.take();
+        
+        new_node
+    }
+    
+    /// Count the number of leaf nodes in the linked list starting from this node
+    fn count_leaves(&self) -> usize {
+        let mut count = 1; // Start with this node
+        let mut current = self;
+        
+        while let Some(ref next_node) = current.next {
+            count += 1;
+            current = next_node;
+        }
+        
+        count
+    }
+    
+    /// Get the sizes of all leaf nodes in the linked list starting from this node
+    fn get_leaf_sizes(&self) -> Vec<usize> {
+        let mut sizes = Vec::new();
+        let mut current = self;
+        
+        // Add this node's size
+        sizes.push(current.count);
+        
+        // Add sizes of all linked nodes
+        while let Some(ref next_node) = current.next {
+            sizes.push(next_node.count);
+            current = next_node;
+        }
+        
+        sizes
+    }
+    
     /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
     /// If min_key is None, starts from the smallest key.
     /// If max_key is None, goes up to the largest key.
     fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
         let mut result = Vec::new();
+        let mut current_node = self;
         
-        // Iterate through the sorted items array
-        for i in 0..self.count {
-            if let Some(ref entry) = self.items[i] {
-                // Check min bound
-                if let Some(min) = min_key {
-                    if &entry.key < min {
-                        continue;
+        // Loop through all nodes in the linked list
+        loop {
+            // Process entries in the current node
+            for i in 0..current_node.count {
+                if let Some(ref entry) = current_node.items[i] {
+                    // Check min bound
+                    if let Some(min) = min_key {
+                        if &entry.key < min {
+                            continue;
+                        }
                     }
-                }
-                
-                // Check max bound
-                if let Some(max) = max_key {
-                    if &entry.key > max {
-                        break; // Items are ordered, so we can stop once we exceed the max
+                    
+                    // Check max bound
+                    if let Some(max) = max_key {
+                        if &entry.key > max {
+                            // We've gone past the max, so we can stop processing entirely
+                            return result;
+                        }
                     }
+                    
+                    result.push((&entry.key, &entry.value));
                 }
-                
-                result.push((&entry.key, &entry.value));
+            }
+            
+            // Move to the next node if available
+            if let Some(ref next_node) = current_node.next {
+                current_node = next_node;
+            } else {
+                break;
             }
         }
         
@@ -176,15 +244,67 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
     pub fn branching_factor(&self) -> usize {
         self.branching_factor
     }
+    
+    /// Returns the number of leaf nodes in the tree (for testing)
+    pub fn leaf_count(&self) -> usize {
+        self.root.count_leaves()
+    }
+    
+    /// Returns the size of each leaf node (for testing)
+    pub fn leaf_sizes(&self) -> Vec<usize> {
+        self.root.get_leaf_sizes()
+    }
 
     /// Inserts a key-value pair into the tree.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        // Check if the root node is already full and needs splitting before insert
+        if self.root.count >= self.branching_factor {
+            // Need to split the root node first
+            let new_node = self.root.split();
+            
+            // Set up the linked list from root to new node
+            self.root.next = Some(new_node);
+        }
+        
+        // Find the correct node to insert into - first check if it belongs in root
+        let belongs_in_root = self.root.count == 0 || 
+            (self.root.count > 0 && 
+            match &self.root.items[self.root.count - 1] {
+                Some(entry) => &key <= &entry.key,
+                None => true, // If no items, insert in root
+            });
+            
+        if belongs_in_root {
+            // Insert into root
+            return self.root.insert(key, value);
+        } else if let Some(ref mut next_node) = self.root.next {
+            // Insert into the next node
+            return next_node.insert(key, value);
+        }
+        
+        // If we get here, we should insert into root (shouldn't happen with proper logic)
         self.root.insert(key, value)
     }
 
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.root.get(key)
+        // Start by checking the root node
+        let result = self.root.get(key);
+        if result.is_some() {
+            return result;
+        }
+        
+        // If not found in root, check subsequent nodes
+        let mut current = &self.root;
+        while let Some(ref next_node) = current.next {
+            let result = next_node.get(key);
+            if result.is_some() {
+                return result;
+            }
+            current = next_node;
+        }
+        
+        None
     }
     
     /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
@@ -206,7 +326,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
-        self.root.len()
+        let mut total = 0;
+        let mut current = &self.root;
+        
+        // Add count from the root
+        total += current.len();
+        
+        // Add counts from all linked nodes
+        while let Some(ref next_node) = current.next {
+            total += next_node.len();
+            current = next_node;
+        }
+        
+        total
     }
 
     /// Returns `true` if the tree contains no elements.

@@ -1,6 +1,43 @@
 use bplustree3::BPlusTree;
 
 #[test]
+fn adding_more_than_branching_factor_keys_causes_split() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    // Insert up to branching factor
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    tree.insert(40, 400);
+    
+    // At this point we should have one leaf node with 4 entries
+    assert_eq!(tree.leaf_count(), 1);
+    assert_eq!(tree.leaf_sizes(), vec![4]);
+    
+    // This fifth insert should trigger a split
+    tree.insert(50, 500);
+    
+    // We should now have two leaf nodes
+    assert_eq!(tree.leaf_count(), 2);
+    
+    // Nodes should be split approximately evenly
+    let sizes = tree.leaf_sizes();
+    assert_eq!(sizes.len(), 2);
+    
+    // Verify that the split is reasonable (within 1 element of each other)
+    assert!(sizes[0] >= 2 && sizes[0] <= 3);
+    assert!(sizes[1] >= 2 && sizes[1] <= 3);
+    assert_eq!(sizes[0] + sizes[1], 5);
+    
+    // All keys should be retrievable
+    assert_eq!(tree.get(&10), Some(&100));
+    assert_eq!(tree.get(&20), Some(&200));
+    assert_eq!(tree.get(&30), Some(&300));
+    assert_eq!(tree.get(&40), Some(&400));
+    assert_eq!(tree.get(&50), Some(&500));
+}
+
+#[test]
 fn create_empty_tree() {
     let _tree: BPlusTree<i32, i32> = BPlusTree::new(4);
 }
