@@ -12,11 +12,32 @@ struct LeafNode<K, V> {
 }
 
 impl<K: Ord, V> LeafNode<K, V> {
+    /// Creates a new leaf node with the specified branching factor.
     fn new(branching_factor: usize) -> Self {
         Self {
             branching_factor,
             entries: BTreeMap::new(),
         }
+    }
+    
+    /// Inserts a key-value pair into the node.
+    fn insert(&mut self, key: K, value: V) -> Option<V> {
+        self.entries.insert(key, value)
+    }
+    
+    /// Returns a reference to the value corresponding to the key.
+    fn get(&self, key: &K) -> Option<&V> {
+        self.entries.get(key)
+    }
+    
+    /// Returns the number of elements in the node.
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+    
+    /// Returns `true` if the node contains no elements.
+    fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 }
 
@@ -44,12 +65,12 @@ impl<K: Ord, V> BPlusTree<K, V> {
 
     /// Inserts a key-value pair into the tree.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.root.entries.insert(key, value)
+        self.root.insert(key, value)
     }
 
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.root.entries.get(key)
+        self.root.get(key)
     }
 
     /// Removes a key from the tree, returning the value if it existed.
@@ -59,12 +80,12 @@ impl<K: Ord, V> BPlusTree<K, V> {
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
-        self.root.entries.len()
+        self.root.len()
     }
 
     /// Returns `true` if the tree contains no elements.
     pub fn is_empty(&self) -> bool {
-        self.root.entries.is_empty()
+        self.root.is_empty()
     }
 }
 
