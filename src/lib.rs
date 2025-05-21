@@ -218,7 +218,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
         
         // Key doesn't exist, check if we have room for a new entry
-        if self.count < self.branching_factor {
+        if !self.is_full() {
             let new_entry = Entry { key, value };
             
             // Shift elements to make room for the new entry
@@ -260,6 +260,11 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Returns `true` if the node contains no elements.
     fn is_empty(&self) -> bool {
         self.count == 0
+    }
+    
+    /// Returns `true` if the node is full and cannot accept more elements.
+    fn is_full(&self) -> bool {
+        self.count >= self.branching_factor
     }
     
     /// Splits this node into two nodes, keeping roughly half the entries in this node
@@ -433,7 +438,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let search_key = key.clone();
         
         // Split the root if necessary
-        if self.root.count >= self.branching_factor {
+        if self.root.is_full() {
             let new_node = self.root.split();
             self.root.next = Some(new_node);
         }
@@ -443,7 +448,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let leaf = finder.find_leaf_mut(&mut self.root);
         
         // Check if the leaf is full before trying to insert
-        if leaf.count >= self.branching_factor {
+        if leaf.is_full() {
             // Split the path to the leaf to make room
             self.split_path_to_leaf(&search_key);
             
@@ -471,7 +476,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
             while !(*current_node).next.is_none() {
                 // If the next node is full, split it
                 if let Some(ref mut next) = (*current_node).next {
-                    if next.count >= self.branching_factor {
+                    if next.is_full() {
                         // We found a full node that needs splitting
                         
                         // Check if the key belongs in the next node before splitting
