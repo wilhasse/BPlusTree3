@@ -112,6 +112,13 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     ///
     /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
     /// directly, but needs to maintain it for type correctness in the function signatures.
+    ///
+    /// Note: While find_leaf uses iteration, this method uses recursion. This is because Rust's
+    /// borrowing rules make it difficult to iterate through a linked structure with mutable
+    /// references. In an iterative approach, we would need to "transfer" the mutable borrow from
+    /// one node to the next, which would require unsafe code. The recursive approach naturally
+    /// creates a new stack frame with a new lifetime for each call, making it easier for Rust's
+    /// borrow checker to verify safety.
     fn find_leaf_mut<'b, V>(&self, root: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
         // Base case 1: If this is the right node, return it
         if Self::belongs_in_node(root, self.key) {
