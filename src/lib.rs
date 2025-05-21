@@ -7,6 +7,125 @@ struct Entry<K, V> {
     value: V,
 }
 
+/// Utility to find the appropriate leaf node for a given key.
+#[derive(Debug)]
+struct LeafFinder<'a, K> {
+    /// The key we're searching for
+    key: &'a K,
+}
+
+impl<'a, K: Ord> LeafFinder<'a, K> {
+    /// Creates a new LeafFinder for the given key
+    fn new(key: &'a K) -> Self {
+        Self { key }
+    }
+    
+    /// Finds the leaf node where the key should be located.
+    /// Returns a reference to the leaf node.
+    ///
+    /// The LeafFinder itself doesn't store any values of type V or operate on them directly, but it
+    /// needs to preserve this type information to properly handle and return the correct LeafNode
+    /// type.
+    ///
+    /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
+    /// directly, but needs to maintain it for type correctness in the function signatures.
+    fn find_leaf<'b, V>(&self, root: &'b LeafNode<K, V>) -> &'b LeafNode<K, V> {
+        let mut current = root;
+        
+        // Continue to next node if key is greater than all keys in current node
+        while current.count > 0 {
+            if let Some(ref entry) = current.items[current.count - 1] {
+                if self.key > &entry.key {
+                    // Key is greater than largest key in current node,
+                    // so it might be in the next node if one exists
+                    if let Some(ref next) = current.next {
+                        current = next;
+                        continue;
+                    }
+                }
+            }
+            
+            // Key is less than or equal to the largest key in current node,
+            // or there is no next node, so this is the correct node
+            break;
+        }
+        
+        current
+    }
+    
+    /// Finds the leaf node where the key should be located.
+    /// Returns a mutable reference to the leaf node.
+    ///
+    /// The LeafFinder itself doesn't store any values of type V or operate on them directly, but it
+    /// needs to preserve this type information to properly handle and return the correct LeafNode
+    /// type.
+    ///
+    /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
+    /// directly, but needs to maintain it for type correctness in the function signatures.
+    fn find_leaf_mut<'b, V>(&self, root: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
+        // Check if key belongs in root
+        if root.count == 0 || root.next.is_none() {
+            // If the root is empty or there are no next nodes, return root
+            return root;
+        }
+        
+        // Check if key belongs in root by comparing with largest key in root
+        if let Some(ref entry) = root.items[root.count - 1] {
+            if self.key <= &entry.key {
+                // Key belongs in root
+                return root;
+            }
+        }
+        
+        // Key belongs in a later node, so access the next node through the mutable reference
+        // and provide direct ownership transfer of the mutable borrow
+        let next = root.next.as_mut().unwrap();
+        
+        // Check if key belongs in the next node
+        let belongs_in_next = if next.count == 0 {
+            true
+        } else if let Some(ref entry) = next.items[next.count - 1] {
+            self.key <= &entry.key
+        } else {
+            true
+        };
+        
+        // If this is the last node or the key belongs in this next node, return it
+        if next.next.is_none() || belongs_in_next {
+            return next;
+        }
+        
+        // For deeper nodes, we need to simplify our approach
+        // Let's create a version that just follows the chain to the last node for now
+        // In a real implementation, we would use a proper tree structure with parent pointers
+        
+        // Access nodes as a chain by following next pointers
+        let mut current = next;
+        
+        // Traverse the chain until we find the appropriate leaf
+        while let Some(ref mut next_node) = current.next {
+            let belongs_in_next = if next_node.count == 0 {
+                true
+            } else if let Some(ref entry) = next_node.items[next_node.count - 1] {
+                self.key <= &entry.key
+            } else {
+                true
+            };
+            
+            if belongs_in_next || next_node.next.is_none() {
+                // This is the node we want
+                return next_node;
+            }
+            
+            // Continue to the next node
+            current = next_node;
+        }
+        
+        // If we reach here, the key belongs in the last node we found
+        current
+    }
+}
+
 /// A node in the B+ tree containing the actual key-value data.
 #[derive(Debug, Clone)]
 struct LeafNode<K, V> {
@@ -239,6 +358,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
             root: LeafNode::new(branching_factor),
         }
     }
+    
+    // Helper method to expose the root node for testing
+    #[cfg(test)]
+    fn get_root(&self) -> &LeafNode<K, V> {
+        &self.root
+    }
+    
+    // Helper method to expose the root node for testing
+    #[cfg(test)]
+    fn get_root_mut(&mut self) -> &mut LeafNode<K, V> {
+        &mut self.root
+    }
 
     /// Returns the branching factor of the tree.
     pub fn branching_factor(&self) -> usize {
@@ -266,52 +397,39 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
             self.root.next = Some(new_node);
         }
         
-        // Find the correct node to insert into - first check if it belongs in root
-        let belongs_in_root = self.root.count == 0 || 
-            (self.root.count > 0 && 
-            match &self.root.items[self.root.count - 1] {
-                Some(entry) => &key <= &entry.key,
-                None => true, // If no items, insert in root
-            });
-            
-        if belongs_in_root {
-            // Insert into root
-            return self.root.insert(key, value);
-        } else if let Some(ref mut next_node) = self.root.next {
-            // Insert into the next node
-            return next_node.insert(key, value);
-        }
+        // Use the LeafFinder to find the correct leaf node to insert into
+        let finder = LeafFinder::new(&key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
         
-        // If we get here, we should insert into root (shouldn't happen with proper logic)
-        self.root.insert(key, value)
+        // Insert into the identified leaf
+        leaf.insert(key, value)
     }
 
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        // Start by checking the root node
-        let result = self.root.get(key);
-        if result.is_some() {
-            return result;
-        }
+        // Use the LeafFinder to find the leaf node where the key should be
+        let finder = LeafFinder::new(key);
+        let leaf = finder.find_leaf(&self.root);
         
-        // If not found in root, check subsequent nodes
-        let mut current = &self.root;
-        while let Some(ref next_node) = current.next {
-            let result = next_node.get(key);
-            if result.is_some() {
-                return result;
-            }
-            current = next_node;
-        }
-        
-        None
+        // Look up the key in the leaf node
+        leaf.get(key)
     }
     
     /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
     /// If min_key is None, starts from the smallest key.
     /// If max_key is None, goes up to the largest key.
     pub fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
-        self.root.range(min_key, max_key)
+        // If min_key is provided, use LeafFinder to find the starting leaf
+        let start_leaf = if let Some(min) = min_key {
+            let finder = LeafFinder::new(min);
+            finder.find_leaf(&self.root)
+        } else {
+            // If no min_key, start from the root
+            &self.root
+        };
+        
+        // Start range search from the identified leaf
+        start_leaf.range(min_key, max_key)
     }
     
     /// Returns a slice of the tree containing all key-value pairs in sorted order.
@@ -344,6 +462,103 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
     /// Returns `true` if the tree contains no elements.
     pub fn is_empty(&self) -> bool {
         self.root.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_leaf_finder_single_node() {
+        // Create a tree with a single node
+        let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+        
+        // Insert some keys
+        tree.insert(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+        
+        // Create a leaf finder for a key that belongs in this node
+        let finder = LeafFinder::new(&15);
+        
+        // Use the finder to locate the appropriate leaf
+        let leaf = finder.find_leaf(tree.get_root());
+        
+        // Since there's only one node, it should be the root
+        assert_eq!(leaf.count, 3);
+        
+        // Verify it has the expected keys
+        assert_eq!(leaf.items[0].as_ref().unwrap().key, 10);
+        assert_eq!(leaf.items[1].as_ref().unwrap().key, 20);
+        assert_eq!(leaf.items[2].as_ref().unwrap().key, 30);
+    }
+    
+    #[test]
+    fn test_leaf_finder_multiple_nodes() {
+        // Create a tree with branching factor 2 (will split quickly)
+        let mut tree: BPlusTree<i32, i32> = BPlusTree::new(2);
+        
+        // Insert keys that will force a specific split pattern
+        tree.insert(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+        // Let's add the key 40 afterward and make sure it goes into the second node
+        tree.insert(40, 400);
+        
+        // Check that we have multiple nodes
+        assert_eq!(tree.leaf_count(), 2);
+        
+        let root = tree.get_root();
+        
+        // Now that we see how the nodes are split, let's test with values we know go to different nodes
+        
+        // Find the appropriate node for a key that should be in the first node
+        let finder_first = LeafFinder::new(&10);
+        let leaf_first = finder_first.find_leaf(root);
+        
+        // Find the appropriate node for a key that should be in the second node
+        let finder_second = LeafFinder::new(&25);  // This should find the second node with 20, 30
+        let leaf_second = finder_second.find_leaf(root);
+        
+        // According to our debug output, verify we found the correct nodes
+        assert!(leaf_first.items.iter().any(|item| 
+            item.as_ref().map_or(false, |e| e.key == 10)));
+            
+        assert!(leaf_second.items.iter().any(|item| 
+            item.as_ref().map_or(false, |e| e.key == 20)));
+            
+        assert!(leaf_second.items.iter().any(|item| 
+            item.as_ref().map_or(false, |e| e.key == 30)));
+        
+        // These should be different nodes
+        assert_ne!(leaf_first as *const _, leaf_second as *const _);
+    }
+    
+    #[test]
+    fn test_leaf_finder_mutable() {
+        // Create a tree with branching factor 2 (will split quickly)
+        let mut tree: BPlusTree<i32, i32> = BPlusTree::new(2);
+        
+        // Insert keys that will cause splits
+        tree.insert(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+        tree.insert(40, 400);
+        
+        // Find a mutable reference to the leaf for a key in the second node
+        let finder = LeafFinder::new(&25);  // This will find the node containing 20 and 30
+        let leaf_mut = finder.find_leaf_mut(tree.get_root_mut());
+        
+        // Modify the leaf directly - replace the value for key 20
+        if let Some(ref mut entry) = leaf_mut.items[0] {
+            if entry.key == 20 {
+                entry.value = 250;
+            }
+        }
+        
+        // Verify the modification worked
+        assert_eq!(tree.get(&20), Some(&250));
     }
 }
 
