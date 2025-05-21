@@ -429,12 +429,12 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
 
     /// Inserts a key-value pair into the tree.
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        // We need to use a recursive insertion strategy with splitting
+        // We need to clone the key for the search reference due to Rust's borrowing rules
         let key_clone = key.clone();
         self.insert_recursive(&key_clone, key, value)
     }
     
-    /// Helper method for insertion that handles node splitting at any level
+    /// Helper method for insertion that handles node splitting at any position in the leaf chain
     fn insert_recursive(&mut self, search_key: &K, key: K, value: V) -> Option<V> {
         // Split the root if necessary
         if self.root.count >= self.branching_factor {
@@ -446,25 +446,21 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let finder = LeafFinder::new(search_key);
         let leaf = finder.find_leaf_mut(&mut self.root);
         
-        // Try to insert into the leaf
-        let result = leaf.insert(key.clone(), value.clone());
-        
-        // If insertion failed because the leaf is full, we need to split it and retry
-        if result.is_none() && leaf.count >= self.branching_factor {
-            // We need to rebuild the whole chain, starting from the root,
-            // making sure each node in the path to our target leaf is split if needed
-            
-            // This approach traverses the path to the leaf, splitting nodes as we go
+        // Check if the leaf is full before trying to insert
+        if leaf.count >= self.branching_factor {
+            // Split the path to the leaf to make room
             self.split_path_to_leaf(search_key);
             
-            // Now that the path is split correctly, try the insertion again
-            // We know the leaf won't be full this time
+            // Find the leaf again after splitting
             let finder = LeafFinder::new(search_key);
             let leaf = finder.find_leaf_mut(&mut self.root);
+            
+            // Now insert into the non-full leaf
             return leaf.insert(key, value);
         }
         
-        result
+        // Leaf has space, so we can insert directly
+        leaf.insert(key, value)
     }
     
     /// Splits all full nodes in the path from the root to the leaf for the given key
