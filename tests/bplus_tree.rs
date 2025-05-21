@@ -270,3 +270,50 @@ fn range_returns_entries_in_given_range() {
     assert_eq!(entries[1], (&30, &300));
     assert_eq!(entries[2], (&40, &400));
 }
+
+#[test]
+fn multi_level_node_chain_bug() {
+    // Create a tree with small branching factor to force multiple splits
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(2);
+    
+    // Insert keys in order
+    println!("\nInserting keys in ascending order:");
+    for i in 10..=80 {
+        if i % 10 == 0 {
+            tree.insert(i, i * 10);
+            println!("After inserting {}: {} nodes, sizes: {:?}", 
+                     i, tree.leaf_count(), tree.leaf_sizes());
+        }
+    }
+    
+    // Verify all keys can be found
+    let mut missing_keys = Vec::new();
+    for i in 10..=80 {
+        if i % 10 == 0 {
+            let value = tree.get(&i);
+            if value != Some(&(i * 10)) {
+                missing_keys.push(i);
+                println!("Missing key: {}, expected value: {}", i, i * 10);
+            }
+        }
+    }
+    
+    if !missing_keys.is_empty() {
+        println!("\nBUG DETECTED: Keys were inserted but cannot be found!");
+        println!("Missing keys: {:?}", missing_keys);
+        println!("This indicates that either:");
+        println!("1. The LeafFinder is not correctly traversing more than 2 nodes, or");
+        println!("2. The BPlusTree.insert method is not handling node splits correctly beyond the root.");
+        println!("\nCurrent node structure:");
+        println!("Number of nodes: {}", tree.leaf_count());
+        println!("Node sizes: {:?}", tree.leaf_sizes());
+        
+        // Debugging output - manually traverse nodes to see what's happening
+        println!("\nManually traversing nodes:");
+        tree.print_node_chain();
+        
+        // Here we are assuming that the keys are in order - if they aren't, our get method 
+        // will fail to find them, which is what we're seeing
+        assert!(missing_keys.is_empty(), "Failed to find keys: {:?}", missing_keys);
+    }
+}
