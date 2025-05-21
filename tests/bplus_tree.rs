@@ -76,3 +76,47 @@ fn insert_maintains_sorted_order() {
     assert_eq!(tree.get(&20), Some(&200));
     assert_eq!(tree.get(&30), Some(&300));
 }
+
+#[test]
+fn slice_returns_entries_in_sorted_order() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    // Insert in non-sorted order
+    tree.insert(30, 300);
+    tree.insert(10, 100);
+    tree.insert(50, 500);
+    tree.insert(20, 200);
+    tree.insert(40, 400);
+    
+    // Get all entries as a slice
+    let entries = tree.slice();
+    
+    // Verify the entries are in sorted order by key
+    assert_eq!(entries.len(), 5);
+    assert_eq!(entries[0], (&10, &100));
+    assert_eq!(entries[1], (&20, &200));
+    assert_eq!(entries[2], (&30, &300));
+    assert_eq!(entries[3], (&40, &400));
+    assert_eq!(entries[4], (&50, &500));
+}
+
+#[test]
+fn range_returns_entries_in_given_range() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    // Insert entries
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    tree.insert(40, 400);
+    tree.insert(50, 500);
+    
+    // Get entries in range [20, 40]
+    let entries = tree.range(Some(&20), Some(&40));
+    
+    // Verify the correct range is returned in sorted order
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0], (&20, &200));
+    assert_eq!(entries[1], (&30, &300));
+    assert_eq!(entries[2], (&40, &400));
+}

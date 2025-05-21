@@ -97,6 +97,35 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+    
+    /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
+    /// If min_key is None, starts from the smallest key.
+    /// If max_key is None, goes up to the largest key.
+    fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
+        // For now, let's use the entries BTreeMap directly which is already in sorted order
+        // This is simpler and more reliable for the current implementation
+        let mut result = Vec::new();
+        
+        for (key, value) in &self.entries {
+            // Check min bound
+            if let Some(min) = min_key {
+                if key < min {
+                    continue;
+                }
+            }
+            
+            // Check max bound
+            if let Some(max) = max_key {
+                if key > max {
+                    break; // BTreeMap is ordered, so we can stop once we exceed the max
+                }
+            }
+            
+            result.push((key, value));
+        }
+        
+        result
+    }
 }
 
 #[derive(Debug)]
@@ -129,6 +158,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: &K) -> Option<&V> {
         self.root.get(key)
+    }
+    
+    /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
+    /// If min_key is None, starts from the smallest key.
+    /// If max_key is None, goes up to the largest key.
+    pub fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
+        self.root.range(min_key, max_key)
+    }
+    
+    /// Returns a slice of the tree containing all key-value pairs in sorted order.
+    pub fn slice(&self) -> Vec<(&K, &V)> {
+        self.range(None, None)
     }
 
     /// Removes a key from the tree, returning the value if it existed.
