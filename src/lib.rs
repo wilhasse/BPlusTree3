@@ -437,12 +437,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         // We need to clone the key for the search reference due to Rust's borrowing rules
         let search_key = key.clone();
         
-        // Split the root if necessary
-        if self.root.is_full() {
-            let new_node = self.root.split();
-            self.root.next = Some(new_node);
-        }
-        
         // Find the leaf where this key belongs
         let finder = LeafFinder::new(&search_key);
         let leaf = finder.find_leaf_mut(&mut self.root);
@@ -466,6 +460,12 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
     
     /// Splits all full nodes in the path from the root to the leaf for the given key
     fn split_path_to_leaf(&mut self, key: &K) {
+        // First check if the root itself is full and needs splitting
+        if self.root.is_full() {
+            let new_node = self.root.split();
+            self.root.next = Some(new_node);
+        }
+        
         // Start at the root and follow the path, splitting nodes as needed
         let mut current_node = &mut self.root as *mut LeafNode<K, V>;
         
