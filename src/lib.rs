@@ -48,8 +48,8 @@ impl<K: Ord, V> BPlusTree<K, V> {
     }
 
     /// Returns a reference to the value corresponding to the key.
-    pub fn get(&self, _key: &K) -> Option<&V> {
-        unimplemented!("not yet implemented")
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.root.entries.get(key)
     }
 
     /// Removes a key from the tree, returning the value if it existed.

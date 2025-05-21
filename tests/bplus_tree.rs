@@ -26,3 +26,16 @@ fn insert_increases_length() {
     tree.insert(42, 100);
     assert_eq!(tree.len(), 1);
 }
+
+#[test]
+fn get_returns_inserted_value() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    tree.insert(42, 100);
+    
+    let value = tree.get(&42);
+    assert_eq!(value, Some(&100));
+    
+    let missing = tree.get(&50);
+    assert_eq!(missing, None);
+}
