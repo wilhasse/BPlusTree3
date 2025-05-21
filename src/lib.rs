@@ -23,7 +23,7 @@ struct LeafNode<K, V> {
     count: usize,
 }
 
-impl<K: Ord, V> LeafNode<K, V> {
+impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Creates a new leaf node with the specified branching factor.
     fn new(branching_factor: usize) -> Self {
         // Initialize the items vector with None values up to branching_factor
@@ -42,7 +42,45 @@ impl<K: Ord, V> LeafNode<K, V> {
     
     /// Inserts a key-value pair into the node.
     fn insert(&mut self, key: K, value: V) -> Option<V> {
-        self.entries.insert(key, value)
+        // Check if key already exists, so we can update the items array if needed
+        let old_value = self.entries.insert(key.clone(), value.clone());
+        
+        if old_value.is_none() && self.count < self.branching_factor {
+            // New key being added
+            let new_entry = Entry { key, value };
+            
+            // Find the position to insert the new entry to maintain sorted order
+            let mut insert_pos = self.count;
+            for i in 0..self.count {
+                if let Some(ref entry) = self.items[i] {
+                    if entry.key > new_entry.key {
+                        insert_pos = i;
+                        break;
+                    }
+                }
+            }
+            
+            // Shift elements to make room for the new entry
+            for i in (insert_pos..self.count).rev() {
+                self.items[i + 1] = self.items[i].clone();
+            }
+            
+            // Insert the new entry and increment count
+            self.items[insert_pos] = Some(new_entry);
+            self.count += 1;
+        } else if let Some(ref value) = old_value {
+            // Update existing entry in the items array
+            for i in 0..self.count {
+                if let Some(ref mut entry) = self.items[i] {
+                    if entry.key == key {
+                        entry.value = value.clone();
+                        break;
+                    }
+                }
+            }
+        }
+        
+        old_value
     }
     
     /// Returns a reference to the value corresponding to the key.
@@ -69,7 +107,7 @@ pub struct BPlusTree<K, V> {
     root: LeafNode<K, V>,
 }
 
-impl<K: Ord, V> BPlusTree<K, V> {
+impl<K: Ord + Clone, V: Clone> BPlusTree<K, V> {
     /// Creates an empty `BPlusTree` with the specified branching factor.
     pub fn new(branching_factor: usize) -> Self {
         Self { 

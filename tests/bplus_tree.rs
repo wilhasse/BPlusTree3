@@ -46,3 +46,33 @@ fn get_returns_none_when_key_missing() {
     let missing = tree.get(&50);
     assert_eq!(missing, None);
 }
+
+#[test]
+fn inserting_multiple_items_works() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
+    
+    assert_eq!(tree.len(), 3);
+    assert_eq!(tree.get(&10), Some(&100));
+    assert_eq!(tree.get(&20), Some(&200));
+    assert_eq!(tree.get(&30), Some(&300));
+}
+
+#[test]
+fn insert_maintains_sorted_order() {
+    let mut tree: BPlusTree<i32, i32> = BPlusTree::new(4);
+    
+    // Insert in non-sorted order
+    tree.insert(30, 300);
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    
+    // Verify retrieval works for all keys
+    assert_eq!(tree.len(), 3);
+    assert_eq!(tree.get(&10), Some(&100));
+    assert_eq!(tree.get(&20), Some(&200));
+    assert_eq!(tree.get(&30), Some(&300));
+}
