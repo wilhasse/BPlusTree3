@@ -447,6 +447,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let (pos, _) = target_leaf.find_position(&key);
 
         // Assume there's room
+        // Kinda funky there's two insert_new_entry_at calls
         target_leaf.insert_new_entry_at(pos, key, value);
         None
     }
