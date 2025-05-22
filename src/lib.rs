@@ -455,7 +455,8 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
 
         // Now find the appropriate leaf for insertion (either the original or the new one)
         let finder = LeafFinder::new(&search_key);
-        let target_leaf = finder.find_leaf_mut(&mut self.root);
+        // tricky to start at the current leaf. Won't work once we move to a real tree
+        let target_leaf = finder.find_leaf_mut(leaf);
 
         // Insert or update in the target leaf (which should now have space)
         target_leaf.insert_or_update(key, value)
