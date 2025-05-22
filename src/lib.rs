@@ -1209,4 +1209,126 @@ mod tests {
             println!("Successfully tested updates with branching factor {}", branching_factor);
         }
     }
+
+    /// Timed fuzz test that runs for a specified duration.
+    /// 
+    /// Usage:
+    /// - Default (10 seconds): `cargo test fuzz_test_timed -- --nocapture`
+    /// - Custom duration: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --nocapture`
+    /// - Minutes: `FUZZ_TIME=5m cargo test fuzz_test_timed -- --nocapture`
+    /// - Hours: `FUZZ_TIME=1h cargo test fuzz_test_timed -- --nocapture`
+    /// - Milliseconds: `FUZZ_TIME=500ms cargo test fuzz_test_timed -- --nocapture`
+    #[test]
+    fn fuzz_test_timed() {
+        use std::time::{Duration, Instant};
+        use std::env;
+        
+        // Parse time duration from environment variable or default to 10 seconds
+        let duration_str = env::var("FUZZ_TIME").unwrap_or_else(|_| "10s".to_string());
+        let duration = parse_duration(&duration_str).unwrap_or(Duration::from_secs(10));
+        
+        println!("Running timed fuzz test for {:?}", duration);
+        
+        let start_time = Instant::now();
+        let mut total_operations = 0;
+        let mut total_keys_inserted = 0;
+        let mut max_nodes_reached = 0;
+        
+        while start_time.elapsed() < duration {
+            // Cycle through different branching factors
+            for branching_factor in [2, 3, 4, 5, 7, 8, 10] {
+                if start_time.elapsed() >= duration {
+                    break;
+                }
+                
+                let mut bplus_tree = BPlusTree::new(branching_factor);
+                let mut btree_map = BTreeMap::new();
+                let mut operations = Vec::new();
+                
+                // Run until we hit time limit or reach a reasonable number of nodes
+                let mut key = 1;
+                while start_time.elapsed() < duration && bplus_tree.leaf_count() < 50 {
+                    let value = key * 10;
+                    
+                    // Record the operation
+                    operations.push(format!("insert({}, {})", key, value));
+                    total_operations += 1;
+                    
+                    // Insert into both trees
+                    let bplus_result = bplus_tree.insert(key, value);
+                    let btree_result = btree_map.insert(key, value);
+                    
+                    // Check that insert results match
+                    if bplus_result != btree_result {
+                        println!("MISMATCH on insert({}, {}) with branching factor {}:", key, value, branching_factor);
+                        println!("BPlusTree returned: {:?}", bplus_result);
+                        println!("BTreeMap returned: {:?}", btree_result);
+                        println!("Recent operations:");
+                        for op in operations.iter().rev().take(10) {
+                            println!("  {}", op);
+                        }
+                        panic!("Insert result mismatch!");
+                    }
+                    
+                    // Periodically verify all keys can be found
+                    if key % 10 == 0 {
+                        for check_key in 1..=key {
+                            let bplus_value = bplus_tree.get(&check_key);
+                            let btree_value = btree_map.get(&check_key);
+                            
+                            if bplus_value != btree_value {
+                                println!("MISMATCH on get({}) with branching factor {}:", check_key, branching_factor);
+                                println!("BPlusTree returned: {:?}", bplus_value);
+                                println!("BTreeMap returned: {:?}", btree_value);
+                                println!("Tree has {} nodes with sizes: {:?}", 
+                                        bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                                println!("Recent operations:");
+                                for op in operations.iter().rev().take(20) {
+                                    println!("  {}", op);
+                                }
+                                panic!("Get result mismatch!");
+                            }
+                        }
+                    }
+                    
+                    key += 1;
+                    total_keys_inserted += 1;
+                    max_nodes_reached = max_nodes_reached.max(bplus_tree.leaf_count());
+                }
+            }
+        }
+        
+        println!("Timed fuzz test completed successfully!");
+        println!("Duration: {:?}", start_time.elapsed());
+        println!("Total operations: {}", total_operations);
+        println!("Total keys inserted: {}", total_keys_inserted);
+        println!("Max nodes reached: {}", max_nodes_reached);
+    }
+    
+    // Helper function to parse duration strings like "10s", "5m", "1h"
+    fn parse_duration(s: &str) -> Result<std::time::Duration, String> {
+        use std::time::Duration;
+        if s.is_empty() {
+            return Err("Empty duration string".to_string());
+        }
+        
+        let (number_part, unit_part) = if let Some(pos) = s.chars().position(|c| c.is_alphabetic()) {
+            (&s[..pos], &s[pos..])
+        } else {
+            return Err("No unit found in duration string".to_string());
+        };
+        
+        let number: u64 = number_part.parse()
+            .map_err(|_| format!("Invalid number: {}", number_part))?;
+        
+        let duration = match unit_part {
+            "s" | "sec" | "seconds" => Duration::from_secs(number),
+            "m" | "min" | "minutes" => Duration::from_secs(number * 60),
+            "h" | "hour" | "hours" => Duration::from_secs(number * 3600),
+            "ms" | "milliseconds" => Duration::from_millis(number),
+            _ => return Err(format!("Unknown time unit: {}", unit_part)),
+        };
+        
+        Ok(duration)
+    }
 }
