@@ -446,22 +446,12 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
             return leaf.insert(key, value);
         }
         
-        // Leaf is full, split it and insert into the appropriate node
-        self.split_leaf_and_insert(&search_key, key, value)
-    }
-    
-    /// Splits the full leaf and inserts the key-value pair into the appropriate node
-    fn split_leaf_and_insert(&mut self, search_key: &K, key: K, value: V) -> Option<V> {
-        // Find the full leaf again
-        let finder = LeafFinder::new(search_key);
-        let leaf = finder.find_leaf_mut(&mut self.root);
-        
-        // Split the leaf
+        // Leaf is full, split it
         let new_node = leaf.split();
         leaf.next = Some(new_node);
         
         // Now find the appropriate leaf for insertion (either the original or the new one)
-        let finder = LeafFinder::new(search_key);
+        let finder = LeafFinder::new(&search_key);
         let target_leaf = finder.find_leaf_mut(&mut self.root);
         
         // Insert into the target leaf (which should now have space)
