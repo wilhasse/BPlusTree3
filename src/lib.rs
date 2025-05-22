@@ -196,43 +196,44 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         (insert_pos, None)
     }
 
-    /// Inserts a key-value pair into the node.
-    /// Returns Some(old_value) if the key was updated, None if it was inserted,
-    /// or None if the node is full and the key couldn't be inserted.
-    ///
-    /// The return of None when node is full is a signal to the caller
-    /// that they need to handle splitting this node.
-    fn insert(&mut self, key: K, value: V) -> Option<V> {
+    /// Updates an existing key with a new value, returning the old value
+    fn update_existing_key(&mut self, index: usize, value: V) -> Option<V> {
+        if let Some(ref mut entry) = self.items[index] {
+            let old_value = entry.value.clone();
+            entry.value = value;
+            Some(old_value)
+        } else {
+            None
+        }
+    }
+
+    /// Shifts elements to make room for insertion at the given position
+    fn shift_elements_right(&mut self, pos: usize) {
+        for i in (pos..self.count).rev() {
+            self.items[i + 1] = self.items[i].clone();
+        }
+    }
+
+    /// Inserts a new entry at the given position (assumes there's room)
+    fn insert_new_entry_at(&mut self, pos: usize, key: K, value: V) {
+        let new_entry = Entry { key, value };
+        self.shift_elements_right(pos);
+        self.items[pos] = Some(new_entry);
+        self.count += 1;
+    }
+
+    /// Inserts or updates a key-value pair (assumes there's room if inserting)
+    fn insert_or_update(&mut self, key: K, value: V) -> Option<V> {
         // Find if key exists or where it should be inserted
         let (pos, maybe_existing_index) = self.find_position(&key);
 
         // If key exists, update the value
         if let Some(existing_index) = maybe_existing_index {
-            if let Some(ref mut entry) = self.items[existing_index] {
-                let old_value = entry.value.clone();
-                entry.value = value;
-                return Some(old_value);
-            }
+            return self.update_existing_key(existing_index, value);
         }
 
-        // Key doesn't exist, check if we have room for a new entry
-        if !self.is_full() {
-            let new_entry = Entry { key, value };
-
-            // Shift elements to make room for the new entry
-            for i in (pos..self.count).rev() {
-                self.items[i + 1] = self.items[i].clone();
-            }
-
-            // Insert the new entry and increment count
-            self.items[pos] = Some(new_entry);
-            self.count += 1;
-
-            return None;
-        }
-
-        // No room for a new entry - return None to signal that the node is full
-        // and needs to be split by the caller
+        // Key doesn't exist, insert new entry (assumes there's room)
+        self.insert_new_entry_at(pos, key, value);
         None
     }
 
@@ -437,22 +438,27 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         // Find the leaf where this key belongs
         let finder = LeafFinder::new(&search_key);
         let leaf = finder.find_leaf_mut(&mut self.root);
+        let (pos, maybe_existing_index) = leaf.find_position(&key);
+        if let Some(existing_index) = maybe_existing_index {
+            return leaf.update_existing_key(existing_index, value);
+        }
 
-        // If leaf has space, insert directly
+        // If leaf has space, insert or update directly
         if !leaf.is_full() {
-            return leaf.insert(key, value);
+            // Key doesn't exist, insert new entry (assumes there's room)
+            leaf.insert_new_entry_at(pos, key, value);
+            return None;
         }
 
         // Leaf is full, split it
         leaf.split();
 
         // Now find the appropriate leaf for insertion (either the original or the new one)
-        // TODO maybe don't start all the way at the top
         let finder = LeafFinder::new(&search_key);
         let target_leaf = finder.find_leaf_mut(&mut self.root);
 
-        // Insert into the target leaf (which should now have space)
-        target_leaf.insert(key, value)
+        // Insert or update in the target leaf (which should now have space)
+        target_leaf.insert_or_update(key, value)
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -945,29 +951,28 @@ mod tests {
 
     #[test]
     fn fuzz_test_bplus_tree() {
-        
         // Test with various branching factors
         for branching_factor in 2..=10 {
             println!("\n=== Testing branching factor {} ===", branching_factor);
-            
+
             let mut bplus_tree = BPlusTree::new(branching_factor);
             let mut btree_map = BTreeMap::new();
             let mut operations = Vec::new();
-            
+
             // Insert keys until we have up to 20 leaf nodes
             let mut key = 1;
             let mut iteration = 0;
-            
+
             while bplus_tree.leaf_count() < 20 && iteration < 1000 {
                 let value = key * 10;
-                
+
                 // Record the operation
                 operations.push(format!("insert({}, {})", key, value));
-                
+
                 // Insert into both trees
                 let bplus_result = bplus_tree.insert(key, value);
                 let btree_result = btree_map.insert(key, value);
-                
+
                 // Check that insert results match
                 if bplus_result != btree_result {
                     println!("MISMATCH on insert({}, {}):", key, value);
@@ -979,18 +984,24 @@ mod tests {
                     }
                     panic!("Insert result mismatch!");
                 }
-                
+
                 // Verify all previously inserted keys can still be found
                 for check_key in 1..=key {
                     let bplus_value = bplus_tree.get(&check_key);
                     let btree_value = btree_map.get(&check_key);
-                    
+
                     if bplus_value != btree_value {
-                        println!("MISMATCH on get({}) after insert({}, {}):", check_key, key, value);
+                        println!(
+                            "MISMATCH on get({}) after insert({}, {}):",
+                            check_key, key, value
+                        );
                         println!("BPlusTree returned: {:?}", bplus_value);
                         println!("BTreeMap returned: {:?}", btree_value);
-                        println!("BPlusTree has {} nodes with sizes: {:?}", 
-                                bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                        println!(
+                            "BPlusTree has {} nodes with sizes: {:?}",
+                            bplus_tree.leaf_count(),
+                            bplus_tree.leaf_sizes()
+                        );
                         println!("Operations so far:");
                         for op in &operations {
                             println!("  {}", op);
@@ -1000,7 +1011,7 @@ mod tests {
                         panic!("Get result mismatch!");
                     }
                 }
-                
+
                 // Verify tree length matches
                 if bplus_tree.len() != btree_map.len() {
                     println!("LENGTH MISMATCH after insert({}, {}):", key, value);
@@ -1012,11 +1023,11 @@ mod tests {
                     }
                     panic!("Length mismatch!");
                 }
-                
+
                 // Verify slice/iteration order matches
                 let bplus_slice = bplus_tree.slice();
                 let btree_slice: Vec<_> = btree_map.iter().collect();
-                
+
                 if bplus_slice.len() != btree_slice.len() {
                     println!("SLICE LENGTH MISMATCH after insert({}, {}):", key, value);
                     println!("BPlusTree slice len: {}", bplus_slice.len());
@@ -1027,10 +1038,15 @@ mod tests {
                     }
                     panic!("Slice length mismatch!");
                 }
-                
-                for (i, (bplus_item, btree_item)) in bplus_slice.iter().zip(btree_slice.iter()).enumerate() {
+
+                for (i, (bplus_item, btree_item)) in
+                    bplus_slice.iter().zip(btree_slice.iter()).enumerate()
+                {
                     if bplus_item.0 != btree_item.0 || bplus_item.1 != btree_item.1 {
-                        println!("SLICE ORDER MISMATCH at index {} after insert({}, {}):", i, key, value);
+                        println!(
+                            "SLICE ORDER MISMATCH at index {} after insert({}, {}):",
+                            i, key, value
+                        );
                         println!("BPlusTree item: ({:?}, {:?})", bplus_item.0, bplus_item.1);
                         println!("BTreeMap item: ({:?}, {:?})", btree_item.0, btree_item.1);
                         println!("BPlusTree slice: {:?}", bplus_slice);
@@ -1042,68 +1058,79 @@ mod tests {
                         panic!("Slice order mismatch!");
                     }
                 }
-                
+
                 key += 1;
                 iteration += 1;
-                
+
                 // Print progress every 10 insertions
                 if key % 10 == 0 {
-                    println!("  Inserted {} keys, {} nodes, sizes: {:?}", 
-                            key - 1, bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                    println!(
+                        "  Inserted {} keys, {} nodes, sizes: {:?}",
+                        key - 1,
+                        bplus_tree.leaf_count(),
+                        bplus_tree.leaf_sizes()
+                    );
                 }
             }
-            
-            println!("Successfully tested branching factor {} with {} keys and {} leaf nodes", 
-                    branching_factor, key - 1, bplus_tree.leaf_count());
+
+            println!(
+                "Successfully tested branching factor {} with {} keys and {} leaf nodes",
+                branching_factor,
+                key - 1,
+                bplus_tree.leaf_count()
+            );
         }
     }
 
     #[test]
     fn fuzz_test_with_random_keys() {
         use std::collections::HashSet;
-        
+
         // Test with random insertion order
         for branching_factor in [2, 3, 5, 8] {
-            println!("\n=== Testing branching factor {} with random keys ===", branching_factor);
-            
+            println!(
+                "\n=== Testing branching factor {} with random keys ===",
+                branching_factor
+            );
+
             let mut bplus_tree = BPlusTree::new(branching_factor);
             let mut btree_map = BTreeMap::new();
             let mut operations = Vec::new();
             let mut inserted_keys = HashSet::new();
-            
+
             // Generate a set of keys to insert
             let mut keys_to_insert = Vec::new();
             for i in 1..=100 {
                 keys_to_insert.push(i);
             }
-            
+
             // Insert keys in a specific "random" pattern (deterministic for reproducibility)
             let pattern = [3, 7, 1, 9, 5, 2, 8, 4, 6, 0]; // Cycle through this pattern
             let mut key_index = 0;
-            
+
             while bplus_tree.leaf_count() < 15 && key_index < keys_to_insert.len() {
                 // Pick key using the pattern
                 let pattern_index = key_index % pattern.len();
                 let offset = pattern[pattern_index];
                 let actual_key_index = (key_index + offset * 7) % keys_to_insert.len();
                 let key = keys_to_insert[actual_key_index];
-                
+
                 // Skip if already inserted
                 if inserted_keys.contains(&key) {
                     key_index += 1;
                     continue;
                 }
-                
+
                 let value = key * 10;
                 inserted_keys.insert(key);
-                
+
                 // Record the operation
                 operations.push(format!("insert({}, {})", key, value));
-                
+
                 // Insert into both trees
                 let bplus_result = bplus_tree.insert(key, value);
                 let btree_result = btree_map.insert(key, value);
-                
+
                 // Check that insert results match
                 if bplus_result != btree_result {
                     println!("MISMATCH on insert({}, {}):", key, value);
@@ -1115,18 +1142,24 @@ mod tests {
                     }
                     panic!("Insert result mismatch!");
                 }
-                
+
                 // Verify all previously inserted keys can still be found
                 for &check_key in &inserted_keys {
                     let bplus_value = bplus_tree.get(&check_key);
                     let btree_value = btree_map.get(&check_key);
-                    
+
                     if bplus_value != btree_value {
-                        println!("MISMATCH on get({}) after insert({}, {}):", check_key, key, value);
+                        println!(
+                            "MISMATCH on get({}) after insert({}, {}):",
+                            check_key, key, value
+                        );
                         println!("BPlusTree returned: {:?}", bplus_value);
                         println!("BTreeMap returned: {:?}", btree_value);
-                        println!("BPlusTree has {} nodes with sizes: {:?}", 
-                                bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                        println!(
+                            "BPlusTree has {} nodes with sizes: {:?}",
+                            bplus_tree.leaf_count(),
+                            bplus_tree.leaf_sizes()
+                        );
                         println!("Operations so far:");
                         for op in &operations {
                             println!("  {}", op);
@@ -1136,18 +1169,26 @@ mod tests {
                         panic!("Get result mismatch!");
                     }
                 }
-                
+
                 key_index += 1;
-                
-                // Print progress every 20 insertions  
+
+                // Print progress every 20 insertions
                 if inserted_keys.len() % 20 == 0 {
-                    println!("  Inserted {} keys, {} nodes, sizes: {:?}", 
-                            inserted_keys.len(), bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                    println!(
+                        "  Inserted {} keys, {} nodes, sizes: {:?}",
+                        inserted_keys.len(),
+                        bplus_tree.leaf_count(),
+                        bplus_tree.leaf_sizes()
+                    );
                 }
             }
-            
-            println!("Successfully tested branching factor {} with {} random keys and {} leaf nodes", 
-                    branching_factor, inserted_keys.len(), bplus_tree.leaf_count());
+
+            println!(
+                "Successfully tested branching factor {} with {} random keys and {} leaf nodes",
+                branching_factor,
+                inserted_keys.len(),
+                bplus_tree.leaf_count()
+            );
         }
     }
 
@@ -1155,12 +1196,15 @@ mod tests {
     fn fuzz_test_with_updates() {
         // Test updating existing keys
         for branching_factor in [2, 4, 7] {
-            println!("\n=== Testing branching factor {} with updates ===", branching_factor);
-            
+            println!(
+                "\n=== Testing branching factor {} with updates ===",
+                branching_factor
+            );
+
             let mut bplus_tree = BPlusTree::new(branching_factor);
             let mut btree_map = BTreeMap::new();
             let mut operations = Vec::new();
-            
+
             // First insert some keys
             for key in 1..=50 {
                 let value = key * 10;
@@ -1168,16 +1212,16 @@ mod tests {
                 bplus_tree.insert(key, value);
                 btree_map.insert(key, value);
             }
-            
+
             // Now update some keys
             let update_keys = [5, 15, 25, 35, 45, 1, 50, 20, 30, 40];
             for &key in &update_keys {
                 let new_value = key * 100;
                 operations.push(format!("update({}, {})", key, new_value));
-                
+
                 let bplus_result = bplus_tree.insert(key, new_value);
                 let btree_result = btree_map.insert(key, new_value);
-                
+
                 // Check that update results match (should return old value)
                 if bplus_result != btree_result {
                     println!("MISMATCH on update({}, {}):", key, new_value);
@@ -1189,11 +1233,11 @@ mod tests {
                     }
                     panic!("Update result mismatch!");
                 }
-                
+
                 // Verify the new value is retrievable
                 let bplus_value = bplus_tree.get(&key);
                 let btree_value = btree_map.get(&key);
-                
+
                 if bplus_value != btree_value {
                     println!("MISMATCH on get({}) after update:", key);
                     println!("BPlusTree returned: {:?}", bplus_value);
@@ -1205,13 +1249,16 @@ mod tests {
                     panic!("Get after update mismatch!");
                 }
             }
-            
-            println!("Successfully tested updates with branching factor {}", branching_factor);
+
+            println!(
+                "Successfully tested updates with branching factor {}",
+                branching_factor
+            );
         }
     }
 
     /// Timed fuzz test that runs for a specified duration.
-    /// 
+    ///
     /// Usage:
     /// - Default (10 seconds): `cargo test fuzz_test_timed -- --nocapture`
     /// - Custom duration: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --nocapture`
@@ -1220,47 +1267,50 @@ mod tests {
     /// - Milliseconds: `FUZZ_TIME=500ms cargo test fuzz_test_timed -- --nocapture`
     #[test]
     fn fuzz_test_timed() {
-        use std::time::{Duration, Instant};
         use std::env;
-        
+        use std::time::{Duration, Instant};
+
         // Parse time duration from environment variable or default to 10 seconds
         let duration_str = env::var("FUZZ_TIME").unwrap_or_else(|_| "10s".to_string());
         let duration = parse_duration(&duration_str).unwrap_or(Duration::from_secs(10));
-        
+
         println!("Running timed fuzz test for {:?}", duration);
-        
+
         let start_time = Instant::now();
         let mut total_operations = 0;
         let mut total_keys_inserted = 0;
         let mut max_nodes_reached = 0;
-        
+
         while start_time.elapsed() < duration {
             // Cycle through different branching factors
             for branching_factor in [2, 3, 4, 5, 7, 8, 10] {
                 if start_time.elapsed() >= duration {
                     break;
                 }
-                
+
                 let mut bplus_tree = BPlusTree::new(branching_factor);
                 let mut btree_map = BTreeMap::new();
                 let mut operations = Vec::new();
-                
+
                 // Run until we hit time limit or reach a reasonable number of nodes
                 let mut key = 1;
                 while start_time.elapsed() < duration && bplus_tree.leaf_count() < 50 {
                     let value = key * 10;
-                    
+
                     // Record the operation
                     operations.push(format!("insert({}, {})", key, value));
                     total_operations += 1;
-                    
+
                     // Insert into both trees
                     let bplus_result = bplus_tree.insert(key, value);
                     let btree_result = btree_map.insert(key, value);
-                    
+
                     // Check that insert results match
                     if bplus_result != btree_result {
-                        println!("MISMATCH on insert({}, {}) with branching factor {}:", key, value, branching_factor);
+                        println!(
+                            "MISMATCH on insert({}, {}) with branching factor {}:",
+                            key, value, branching_factor
+                        );
                         println!("BPlusTree returned: {:?}", bplus_result);
                         println!("BTreeMap returned: {:?}", btree_result);
                         println!("Recent operations:");
@@ -1269,19 +1319,25 @@ mod tests {
                         }
                         panic!("Insert result mismatch!");
                     }
-                    
+
                     // Periodically verify all keys can be found
                     if key % 10 == 0 {
                         for check_key in 1..=key {
                             let bplus_value = bplus_tree.get(&check_key);
                             let btree_value = btree_map.get(&check_key);
-                            
+
                             if bplus_value != btree_value {
-                                println!("MISMATCH on get({}) with branching factor {}:", check_key, branching_factor);
+                                println!(
+                                    "MISMATCH on get({}) with branching factor {}:",
+                                    check_key, branching_factor
+                                );
                                 println!("BPlusTree returned: {:?}", bplus_value);
                                 println!("BTreeMap returned: {:?}", btree_value);
-                                println!("Tree has {} nodes with sizes: {:?}", 
-                                        bplus_tree.leaf_count(), bplus_tree.leaf_sizes());
+                                println!(
+                                    "Tree has {} nodes with sizes: {:?}",
+                                    bplus_tree.leaf_count(),
+                                    bplus_tree.leaf_sizes()
+                                );
                                 println!("Recent operations:");
                                 for op in operations.iter().rev().take(20) {
                                     println!("  {}", op);
@@ -1290,37 +1346,39 @@ mod tests {
                             }
                         }
                     }
-                    
+
                     key += 1;
                     total_keys_inserted += 1;
                     max_nodes_reached = max_nodes_reached.max(bplus_tree.leaf_count());
                 }
             }
         }
-        
+
         println!("Timed fuzz test completed successfully!");
         println!("Duration: {:?}", start_time.elapsed());
         println!("Total operations: {}", total_operations);
         println!("Total keys inserted: {}", total_keys_inserted);
         println!("Max nodes reached: {}", max_nodes_reached);
     }
-    
+
     // Helper function to parse duration strings like "10s", "5m", "1h"
     fn parse_duration(s: &str) -> Result<std::time::Duration, String> {
         use std::time::Duration;
         if s.is_empty() {
             return Err("Empty duration string".to_string());
         }
-        
-        let (number_part, unit_part) = if let Some(pos) = s.chars().position(|c| c.is_alphabetic()) {
+
+        let (number_part, unit_part) = if let Some(pos) = s.chars().position(|c| c.is_alphabetic())
+        {
             (&s[..pos], &s[pos..])
         } else {
             return Err("No unit found in duration string".to_string());
         };
-        
-        let number: u64 = number_part.parse()
+
+        let number: u64 = number_part
+            .parse()
             .map_err(|_| format!("Invalid number: {}", number_part))?;
-        
+
         let duration = match unit_part {
             "s" | "sec" | "seconds" => Duration::from_secs(number),
             "m" | "min" | "minutes" => Duration::from_secs(number * 60),
@@ -1328,7 +1386,7 @@ mod tests {
             "ms" | "milliseconds" => Duration::from_millis(number),
             _ => return Err(format!("Unknown time unit: {}", unit_part)),
         };
-        
+
         Ok(duration)
     }
 }
