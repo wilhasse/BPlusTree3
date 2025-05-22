@@ -222,21 +222,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.count += 1;
     }
 
-    /// Inserts or updates a key-value pair (assumes there's room if inserting)
-    fn insert_or_update(&mut self, key: K, value: V) -> Option<V> {
-        // Find if key exists or where it should be inserted
-        let (pos, maybe_existing_index) = self.find_position(&key);
-
-        // If key exists, update the value
-        if let Some(existing_index) = maybe_existing_index {
-            return self.update_existing_key(existing_index, value);
-        }
-
-        // Key doesn't exist, insert new entry (assumes there's room)
-        self.insert_new_entry_at(pos, key, value);
-        None
-    }
-
     /// Returns a reference to the value corresponding to the key.
     fn get(&self, key: &K) -> Option<&V> {
         // Use the find_position helper to check if key exists
@@ -443,7 +428,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
             return leaf.update_existing_key(existing_index, value);
         }
 
-        // If leaf has space, insert or update directly
+        // If leaf has space, insert directly
         if !leaf.is_full() {
             // Key doesn't exist, insert new entry (assumes there's room)
             leaf.insert_new_entry_at(pos, key, value);
@@ -458,8 +443,12 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         // tricky to start at the current leaf. Won't work once we move to a real tree
         let target_leaf = finder.find_leaf_mut(leaf);
 
-        // Insert or update in the target leaf (which should now have space)
-        target_leaf.insert_or_update(key, value)
+        // Key definitely doesn't exist
+        let (pos, _) = target_leaf.find_position(&key);
+
+        // Assume there's room
+        target_leaf.insert_new_entry_at(pos, key, value);
+        None
     }
 
     /// Returns a reference to the value corresponding to the key.
