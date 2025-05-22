@@ -268,8 +268,8 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
     
     /// Splits this node into two nodes, keeping roughly half the entries in this node
-    /// and moving the other half to a new node. The new node is returned.
-    fn split(&mut self) -> Box<Self> {
+    /// and moving the other half to a new node. The new node is linked into the chain.
+    fn split(&mut self) {
         let split_point = self.count / 2;
         
         // Create a new node with the same branching factor
@@ -286,8 +286,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         
         // Link new node into the chain (new_node's next = self.next, self.next = new_node)
         new_node.next = self.next.take();
-        
-        new_node
+        self.next = Some(new_node);
     }
     
     /// Count the number of leaf nodes in the linked list starting from this node
@@ -447,8 +446,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         }
         
         // Leaf is full, split it
-        let new_node = leaf.split();
-        leaf.next = Some(new_node);
+        leaf.split();
         
         // Now find the appropriate leaf for insertion (either the original or the new one)
         let finder = LeafFinder::new(&search_key);
