@@ -446,56 +446,26 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
             return leaf.insert(key, value);
         }
         
-        // Leaf is full, split the path to make room
-        self.split_path_to_leaf(&search_key);
-        
-        // Find the leaf again after splitting
-        let finder = LeafFinder::new(&search_key);
-        let leaf = finder.find_leaf_mut(&mut self.root);
-        
-        // Now insert into the non-full leaf
-        leaf.insert(key, value)
+        // Leaf is full, split it and insert into the appropriate node
+        self.split_leaf_and_insert(&search_key, key, value)
     }
     
-    /// Splits all full nodes in the path from the root to the leaf for the given key
-    fn split_path_to_leaf(&mut self, key: &K) {
-        // First check if the root itself is full and needs splitting
-        if self.root.is_full() {
-            let new_node = self.root.split();
-            self.root.next = Some(new_node);
-        }
+    /// Splits the full leaf and inserts the key-value pair into the appropriate node
+    fn split_leaf_and_insert(&mut self, search_key: &K, key: K, value: V) -> Option<V> {
+        // Find the full leaf again
+        let finder = LeafFinder::new(search_key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
         
-        // Start at the root and follow the path, splitting nodes as needed
-        let mut current_node = &mut self.root as *mut LeafNode<K, V>;
+        // Split the leaf
+        let new_node = leaf.split();
+        leaf.next = Some(new_node);
         
-        // Use unsafe to traverse and modify the chain, due to Rust's borrowing limitations
-        // This is safe because we're careful about ownership and don't create multiple
-        // mutable references to the same memory
-        unsafe {
-            while !(*current_node).next.is_none() {
-                // If the next node is full, split it
-                if let Some(ref mut next) = (*current_node).next {
-                    if next.is_full() {
-                        // We found a full node that needs splitting
-                        
-                        // Check if the key belongs in the next node before splitting
-                        if LeafFinder::belongs_in_node(next, key) {
-                            // Split the node and update the chain
-                            let new_node = next.split();
-                            next.next = Some(new_node);
-                        }
-                    }
-                    
-                    // Move to the next node in the chain if the key belongs there
-                    if !LeafFinder::belongs_in_node(next, key) {
-                        current_node = next.as_mut() as *mut LeafNode<K, V>;
-                    } else {
-                        // Key belongs in the next node, stop traversal
-                        break;
-                    }
-                }
-            }
-        }
+        // Now find the appropriate leaf for insertion (either the original or the new one)
+        let finder = LeafFinder::new(search_key);
+        let target_leaf = finder.find_leaf_mut(&mut self.root);
+        
+        // Insert into the target leaf (which should now have space)
+        target_leaf.insert(key, value)
     }
 
     /// Returns a reference to the value corresponding to the key.
