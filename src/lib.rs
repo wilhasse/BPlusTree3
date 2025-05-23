@@ -350,7 +350,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 pub struct BPlusTree<K, V> {
     /// Maximum number of entries in each node
     branching_factor: usize,
-    /// Root node of the tree (temporarily using BTreeMap until we implement proper tree structure)
+    /// Root node of the tree
     root: LeafNode<K, V>,
 }
 
