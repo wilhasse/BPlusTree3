@@ -151,6 +151,19 @@ struct LeafNode<K, V> {
     prev: Option<Box<LeafNode<K, V>>>,
 }
 
+/// Result of a removal operation on a leaf node
+#[derive(Debug, PartialEq)]
+enum RemovalResult<V> {
+    /// Key was successfully removed, value returned, node is still valid
+    Success(V),
+    /// Key was not found in the node
+    NotFound,
+    /// Key was removed but node is now underflow (needs rebalancing)
+    Underflow(V),
+    /// Key was removed and node is now empty (should be removed from chain)
+    NodeEmpty(V),
+}
+
 impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Creates a new leaf node with the specified branching factor.
     fn new(branching_factor: usize) -> Self {
@@ -252,6 +265,60 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     /// Returns `true` if the node is full and cannot accept more elements.
     fn is_full(&self) -> bool {
         self.count >= self.branching_factor
+    }
+
+    /// Returns the minimum number of keys this node should have (for B+ tree invariant).
+    fn min_keys(&self) -> usize {
+        // For B+ trees, leaf nodes should have at least ceil(branching_factor/2) - 1 keys
+        // But for simplicity, we'll use branching_factor/2
+        if self.branching_factor <= 2 {
+            1 // Special case for small branching factors
+        } else {
+            self.branching_factor / 2
+        }
+    }
+
+    /// Returns `true` if the node has fewer keys than the minimum required (underflow).
+    fn is_underflow(&self) -> bool {
+        self.count < self.min_keys()
+    }
+
+    /// Returns `true` if the node can give a key to a sibling (has more than minimum).
+    fn can_give_key(&self) -> bool {
+        self.count > self.min_keys()
+    }
+
+    /// Removes a key from this node, returning the removal result.
+    fn remove_key(&mut self, key: &K) -> RemovalResult<V> {
+        let (_pos, maybe_index) = self.find_position(key);
+
+        // If key doesn't exist, return NotFound
+        let index = match maybe_index {
+            Some(idx) => idx,
+            None => return RemovalResult::NotFound,
+        };
+
+        // Extract the value before removing
+        let value = if let Some(entry) = self.items[index].take() {
+            entry.value
+        } else {
+            return RemovalResult::NotFound;
+        };
+
+        // Shift elements left to fill the gap
+        for i in index..self.count - 1 {
+            self.items[i] = self.items[i + 1].take();
+        }
+        self.count -= 1;
+
+        // Determine the result based on the new state
+        if self.count == 0 {
+            RemovalResult::NodeEmpty(value)
+        } else if self.is_underflow() {
+            RemovalResult::Underflow(value)
+        } else {
+            RemovalResult::Success(value)
+        }
     }
 
     /// Splits this node into two nodes, keeping roughly half the entries in this node
@@ -939,5 +1006,44 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_remove_infrastructure() {
+        // Test the basic remove infrastructure
+        let mut node = LeafNode::new(4);
+
+        // Insert some test data
+        node.insert_new_entry_at(0, 10, 100);
+        node.insert_new_entry_at(1, 20, 200);
+        node.insert_new_entry_at(2, 30, 300);
+
+        // Test removing existing key
+        let result = node.remove_key(&20);
+        assert_eq!(result, RemovalResult::Success(200));
+        assert_eq!(node.count, 2);
+        assert_eq!(node.get(&10), Some(&100));
+        assert_eq!(node.get(&20), None);
+        assert_eq!(node.get(&30), Some(&300));
+
+        // Test removing non-existing key
+        let result = node.remove_key(&99);
+        assert_eq!(result, RemovalResult::NotFound);
+        assert_eq!(node.count, 2);
+
+        // Test underflow detection
+        assert!(!node.is_underflow()); // Should have min_keys = 2, count = 2
+
+        // Remove another key to cause underflow
+        let result = node.remove_key(&10);
+        assert_eq!(result, RemovalResult::Underflow(100));
+        assert_eq!(node.count, 1);
+        assert!(node.is_underflow()); // Should have min_keys = 2, count = 1
+
+        // Remove last key to make node empty
+        let result = node.remove_key(&30);
+        assert_eq!(result, RemovalResult::NodeEmpty(300));
+        assert_eq!(node.count, 0);
+        assert!(node.is_empty());
     }
 }

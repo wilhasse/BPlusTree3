@@ -18,15 +18,16 @@ We'll implement remove operations in the current linked-list structure first, th
 - [x] All existing tests still pass
 - [x] Ready to implement remove infrastructure
 
-### Step 2: Add Remove Infrastructure
+### Step 2: Add Remove Infrastructure ✅
 
-**Status**: Not Started
+**Status**: Complete
 **Changes**:
 
-- [ ] Add underflow detection methods to LeafNode
-- [ ] Add sibling access methods (get_prev_sibling, get_next_sibling)
-- [ ] Create RemovalResult enum
-- [ ] Add basic remove_key method to LeafNode (without rebalancing)
+- [x] Add underflow detection methods to LeafNode (min_keys, is_underflow, can_give_key)
+- [x] Create RemovalResult enum with Success/NotFound/Underflow/NodeEmpty variants
+- [x] Add basic remove_key method to LeafNode (without rebalancing)
+- [x] Add comprehensive test for remove infrastructure
+- [ ] Add sibling access methods (get_prev_sibling, get_next_sibling) - will add when needed
 
 ### Step 3: Add Rebalancing Operations
 
