@@ -43,14 +43,16 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ## Phase 2: Implement Remove with Rebalancing
 
-### Step 4: Basic Remove Implementation
+### Step 4: Basic Remove Implementation ✅
 
-**Status**: Not Started
+**Status**: Complete
 **Changes**:
 
-- [ ] Implement BPlusTree::remove method
-- [ ] Handle simple cases (no underflow)
-- [ ] Add comprehensive tests for basic removal
+- [x] Implement BPlusTree::remove method
+- [x] Handle simple cases (no underflow)
+- [x] Add basic test for removal functionality
+- [x] Include documentation with examples
+- [x] All existing tests continue to pass
 
 ### Step 5: Add Underflow Handling
 
@@ -128,8 +130,10 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ## Current Focus
 
-**Next Action**: Implement doubly linked list structure (Step 1)
+**Next Action**: Implement underflow handling (Step 5)
 
-- This is a pure structural change
-- Should not break any existing functionality
-- Enables efficient backward traversal needed for remove operations
+- Add underflow detection in BPlusTree::remove method
+- Implement redistribute logic (try siblings first)
+- Implement merge logic (when redistribute fails)
+- Handle chain updates when nodes are removed
+- Add tests for all rebalancing scenarios

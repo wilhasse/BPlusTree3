@@ -671,9 +671,41 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         self.range(None, None)
     }
 
-    /// Removes a key from the tree, returning the value if it existed.
-    pub fn remove(&mut self, _key: &K) -> Option<V> {
-        unimplemented!("not yet implemented")
+    /// Removes a key from the tree, returning the associated value if the key was present.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bplustree3::BPlusTree;
+    ///
+    /// let mut tree = BPlusTree::new(3);
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    ///
+    /// assert_eq!(tree.remove(&1), Some("one"));
+    /// assert_eq!(tree.remove(&1), None); // Key no longer exists
+    /// assert_eq!(tree.get(&1), None);
+    /// ```
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        // Find the leaf node containing the key
+        let finder = LeafFinder::new(key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
+
+        // Attempt to remove the key from the leaf
+        match leaf.remove_key(key) {
+            RemovalResult::Success(value) => Some(value),
+            RemovalResult::NotFound => None,
+            RemovalResult::Underflow(value) => {
+                // TODO: Handle underflow in Step 5
+                // For now, just return the value (tree may be in invalid state)
+                Some(value)
+            }
+            RemovalResult::NodeEmpty(value) => {
+                // TODO: Handle empty node removal in Step 5
+                // For now, just return the value (tree may be in invalid state)
+                Some(value)
+            }
+        }
     }
 
     /// Returns the number of elements in the tree.
@@ -1255,6 +1287,24 @@ mod tests {
         node.insert_new_entry_at(2, 30, 300);
         assert!(!node.is_underflow());
         assert!(node.can_give_key()); // Above minimum, can give
+    }
+
+    #[test]
+    fn test_bplus_tree_remove_existing_key() {
+        let mut tree = BPlusTree::new(4);
+
+        // Insert some test data
+        tree.insert(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+
+        // Test removing existing key
+        assert_eq!(tree.remove(&20), Some(200));
+        assert_eq!(tree.get(&20), None);
+
+        // Verify other keys still exist
+        assert_eq!(tree.get(&10), Some(&100));
+        assert_eq!(tree.get(&30), Some(&300));
     }
 
     #[test]
