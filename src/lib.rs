@@ -280,7 +280,12 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Returns `true` if the node has fewer keys than the minimum required (underflow).
     fn is_underflow(&self) -> bool {
-        self.count < self.min_keys()
+        // Empty nodes are handled separately (not considered underflow)
+        if self.count == 0 {
+            false
+        } else {
+            self.count < self.min_keys()
+        }
     }
 
     /// Returns `true` if the node can give a key to a sibling (has more than minimum).
@@ -1121,30 +1126,51 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_remove_infrastructure() {
-        // Test the basic remove infrastructure
+    /// Helper function to create a test node with standard test data
+    fn create_test_node() -> LeafNode<i32, i32> {
         let mut node = LeafNode::new(4);
-
-        // Insert some test data
         node.insert_new_entry_at(0, 10, 100);
         node.insert_new_entry_at(1, 20, 200);
         node.insert_new_entry_at(2, 30, 300);
+        node
+    }
 
-        // Test removing existing key
+    #[test]
+    fn test_remove_existing_key_success() {
+        let mut node = create_test_node();
+
+        // Test removing existing key from middle
         let result = node.remove_key(&20);
         assert_eq!(result, RemovalResult::Success(200));
         assert_eq!(node.count, 2);
         assert_eq!(node.get(&10), Some(&100));
         assert_eq!(node.get(&20), None);
         assert_eq!(node.get(&30), Some(&300));
+    }
+
+    #[test]
+    fn test_remove_nonexistent_key() {
+        let mut node = create_test_node();
 
         // Test removing non-existing key
         let result = node.remove_key(&99);
         assert_eq!(result, RemovalResult::NotFound);
-        assert_eq!(node.count, 2);
+        assert_eq!(node.count, 3); // Count should remain unchanged
 
-        // Test underflow detection
+        // All original keys should still exist
+        assert_eq!(node.get(&10), Some(&100));
+        assert_eq!(node.get(&20), Some(&200));
+        assert_eq!(node.get(&30), Some(&300));
+    }
+
+    #[test]
+    fn test_remove_causes_underflow() {
+        let mut node = create_test_node();
+
+        // First remove one key to get to minimum
+        let result = node.remove_key(&20);
+        assert_eq!(result, RemovalResult::Success(200));
+        assert_eq!(node.count, 2);
         assert!(!node.is_underflow()); // Should have min_keys = 2, count = 2
 
         // Remove another key to cause underflow
@@ -1153,11 +1179,82 @@ mod tests {
         assert_eq!(node.count, 1);
         assert!(node.is_underflow()); // Should have min_keys = 2, count = 1
 
+        // Verify remaining key is still accessible
+        assert_eq!(node.get(&30), Some(&300));
+    }
+
+    #[test]
+    fn test_remove_last_key_makes_node_empty() {
+        let mut node = create_test_node();
+
+        // Remove all keys except one
+        node.remove_key(&20);
+        node.remove_key(&10);
+        assert_eq!(node.count, 1);
+
         // Remove last key to make node empty
         let result = node.remove_key(&30);
         assert_eq!(result, RemovalResult::NodeEmpty(300));
         assert_eq!(node.count, 0);
         assert!(node.is_empty());
+    }
+
+    #[test]
+    fn test_remove_first_key() {
+        let mut node = create_test_node();
+
+        // Test removing first key
+        let result = node.remove_key(&10);
+        assert_eq!(result, RemovalResult::Success(100));
+        assert_eq!(node.count, 2);
+        assert_eq!(node.get(&10), None);
+        assert_eq!(node.get(&20), Some(&200));
+        assert_eq!(node.get(&30), Some(&300));
+
+        // Verify order is maintained
+        assert_eq!(node.items[0].as_ref().unwrap().key, 20);
+        assert_eq!(node.items[1].as_ref().unwrap().key, 30);
+    }
+
+    #[test]
+    fn test_remove_last_key() {
+        let mut node = create_test_node();
+
+        // Test removing last key
+        let result = node.remove_key(&30);
+        assert_eq!(result, RemovalResult::Success(300));
+        assert_eq!(node.count, 2);
+        assert_eq!(node.get(&10), Some(&100));
+        assert_eq!(node.get(&20), Some(&200));
+        assert_eq!(node.get(&30), None);
+
+        // Verify order is maintained
+        assert_eq!(node.items[0].as_ref().unwrap().key, 10);
+        assert_eq!(node.items[1].as_ref().unwrap().key, 20);
+    }
+
+    #[test]
+    fn test_underflow_detection_methods() {
+        let mut node = LeafNode::new(4);
+
+        // Empty node should not be underflow (special case)
+        assert_eq!(node.min_keys(), 2);
+        assert!(!node.is_underflow()); // Empty nodes are handled separately
+
+        // Add one key - should be underflow
+        node.insert_new_entry_at(0, 10, 100);
+        assert!(node.is_underflow());
+        assert!(!node.can_give_key());
+
+        // Add second key - should reach minimum
+        node.insert_new_entry_at(1, 20, 200);
+        assert!(!node.is_underflow());
+        assert!(!node.can_give_key()); // At minimum, can't give
+
+        // Add third key - should be able to give
+        node.insert_new_entry_at(2, 30, 300);
+        assert!(!node.is_underflow());
+        assert!(node.can_give_key()); // Above minimum, can give
     }
 
     #[test]
