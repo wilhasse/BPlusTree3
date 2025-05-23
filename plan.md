@@ -29,16 +29,17 @@ We'll implement remove operations in the current linked-list structure first, th
 - [x] Add comprehensive test for remove infrastructure
 - [ ] Add sibling access methods (get_prev_sibling, get_next_sibling) - will add when needed
 
-### Step 3: Add Rebalancing Operations
+### Step 3: Add Rebalancing Operations ✅
 
-**Status**: Not Started
+**Status**: Complete
 **Changes**:
 
-- [ ] Implement redistribute_from_next_sibling
-- [ ] Implement redistribute_from_prev_sibling
-- [ ] Implement merge_with_next_sibling
-- [ ] Implement merge_with_prev_sibling
-- [ ] Add helper methods for moving entries between nodes
+- [x] Add helper methods for moving entries between nodes (take_first_entry, take_last_entry, add_first_entry, add_last_entry)
+- [x] Implement redistribute_from_next_sibling
+- [x] Implement merge_with_next_sibling
+- [x] Add comprehensive tests for rebalancing operations
+- [ ] Implement redistribute_from_prev_sibling (will add when needed for full remove implementation)
+- [ ] Add methods to find sibling nodes by traversal (will add when implementing main remove method)
 
 ## Phase 2: Implement Remove with Rebalancing
 

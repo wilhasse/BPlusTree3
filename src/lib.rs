@@ -321,6 +321,119 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
+    /// Takes the first entry from this node (removes and returns it).
+    /// Used for redistributing entries to siblings.
+    fn take_first_entry(&mut self) -> Option<Entry<K, V>> {
+        if self.count == 0 {
+            return None;
+        }
+
+        let first_entry = self.items[0].take();
+
+        // Shift all remaining elements left
+        for i in 0..self.count - 1 {
+            self.items[i] = self.items[i + 1].take();
+        }
+        self.count -= 1;
+
+        first_entry
+    }
+
+    /// Takes the last entry from this node (removes and returns it).
+    /// Used for redistributing entries to siblings.
+    fn take_last_entry(&mut self) -> Option<Entry<K, V>> {
+        if self.count == 0 {
+            return None;
+        }
+
+        self.count -= 1;
+        self.items[self.count].take()
+    }
+
+    /// Adds an entry to the beginning of this node.
+    /// Used when receiving entries from siblings during redistribution.
+    fn add_first_entry(&mut self, entry: Entry<K, V>) -> bool {
+        if self.is_full() {
+            return false;
+        }
+
+        // Shift all existing elements right
+        for i in (0..self.count).rev() {
+            self.items[i + 1] = self.items[i].take();
+        }
+
+        self.items[0] = Some(entry);
+        self.count += 1;
+        true
+    }
+
+    /// Adds an entry to the end of this node.
+    /// Used when receiving entries from siblings during redistribution.
+    fn add_last_entry(&mut self, entry: Entry<K, V>) -> bool {
+        if self.is_full() {
+            return false;
+        }
+
+        self.items[self.count] = Some(entry);
+        self.count += 1;
+        true
+    }
+
+    /// Attempts to redistribute entries from the next sibling to fix underflow.
+    /// Returns true if redistribution was successful, false otherwise.
+    fn redistribute_from_next_sibling(&mut self) -> bool {
+        // Check if we have a next sibling that can give entries
+        let can_redistribute = if let Some(ref next) = self.next {
+            next.can_give_key()
+        } else {
+            false
+        };
+
+        if !can_redistribute {
+            return false;
+        }
+
+        // Take an entry from the next sibling and add it to this node
+        if let Some(ref mut next) = self.next {
+            if let Some(entry) = next.take_first_entry() {
+                return self.add_last_entry(entry);
+            }
+        }
+
+        false
+    }
+
+    /// Merges this node with its next sibling.
+    /// All entries from the next sibling are moved to this node.
+    /// The next sibling is removed from the chain.
+    /// Returns true if merge was successful, false if no next sibling exists.
+    fn merge_with_next_sibling(&mut self) -> bool {
+        // Check if we have a next sibling
+        if self.next.is_none() {
+            return false;
+        }
+
+        // Take ownership of the next node
+        let mut next_node = match self.next.take() {
+            Some(node) => node,
+            None => return false,
+        };
+
+        // Move all entries from next_node to this node
+        while let Some(entry) = next_node.take_first_entry() {
+            if !self.add_last_entry(entry) {
+                // If we can't add more entries, we have a problem
+                // This shouldn't happen in a well-formed B+ tree
+                break;
+            }
+        }
+
+        // Update the chain: this.next = next_node.next
+        self.next = next_node.next.take();
+
+        true
+    }
+
     /// Splits this node into two nodes, keeping roughly half the entries in this node
     /// and moving the other half to a new node. The new node is linked into the chain.
     fn split(&mut self) {
@@ -1045,5 +1158,125 @@ mod tests {
         assert_eq!(result, RemovalResult::NodeEmpty(300));
         assert_eq!(node.count, 0);
         assert!(node.is_empty());
+    }
+
+    #[test]
+    fn test_rebalancing_operations() {
+        // Test helper methods for moving entries
+        let mut node1 = LeafNode::new(4);
+        let mut node2 = LeafNode::new(4);
+
+        // Add entries to node1
+        node1.insert_new_entry_at(0, 10, 100);
+        node1.insert_new_entry_at(1, 20, 200);
+        node1.insert_new_entry_at(2, 30, 300);
+
+        // Test take_first_entry
+        let entry = node1.take_first_entry().unwrap();
+        assert_eq!(entry.key, 10);
+        assert_eq!(entry.value, 100);
+        assert_eq!(node1.count, 2);
+        assert_eq!(node1.get(&10), None);
+        assert_eq!(node1.get(&20), Some(&200));
+
+        // Test take_last_entry
+        let entry = node1.take_last_entry().unwrap();
+        assert_eq!(entry.key, 30);
+        assert_eq!(entry.value, 300);
+        assert_eq!(node1.count, 1);
+        assert_eq!(node1.get(&30), None);
+        assert_eq!(node1.get(&20), Some(&200));
+
+        // Test add_first_entry
+        let new_entry = Entry { key: 5, value: 50 };
+        assert!(node2.add_first_entry(new_entry));
+        assert_eq!(node2.count, 1);
+        assert_eq!(node2.get(&5), Some(&50));
+
+        // Test add_last_entry
+        let new_entry = Entry {
+            key: 15,
+            value: 150,
+        };
+        assert!(node2.add_last_entry(new_entry));
+        assert_eq!(node2.count, 2);
+        assert_eq!(node2.get(&15), Some(&150));
+
+        // Verify order is maintained
+        assert_eq!(node2.items[0].as_ref().unwrap().key, 5);
+        assert_eq!(node2.items[1].as_ref().unwrap().key, 15);
+    }
+
+    #[test]
+    fn test_redistribute_from_next_sibling() {
+        // Create two nodes with a chain
+        let mut node1 = LeafNode::new(4);
+        let mut node2 = LeafNode::new(4);
+
+        // Node1 has underflow (1 entry, min_keys = 2)
+        node1.insert_new_entry_at(0, 10, 100);
+
+        // Node2 has extra entries (3 entries, can give 1)
+        node2.insert_new_entry_at(0, 20, 200);
+        node2.insert_new_entry_at(1, 30, 300);
+        node2.insert_new_entry_at(2, 40, 400);
+
+        // Link them
+        node1.next = Some(Box::new(node2));
+
+        // Test redistribution
+        assert!(node1.is_underflow());
+        assert!(node1.redistribute_from_next_sibling());
+
+        // Verify redistribution worked
+        assert!(!node1.is_underflow());
+        assert_eq!(node1.count, 2);
+        assert_eq!(node1.get(&10), Some(&100));
+        assert_eq!(node1.get(&20), Some(&200)); // Moved from node2
+
+        // Check node2 still has remaining entries
+        if let Some(ref node2) = node1.next {
+            assert_eq!(node2.count, 2);
+            assert_eq!(node2.get(&30), Some(&300));
+            assert_eq!(node2.get(&40), Some(&400));
+            assert_eq!(node2.get(&20), None); // Moved to node1
+        }
+    }
+
+    #[test]
+    fn test_merge_with_next_sibling() {
+        // Create two nodes with a chain
+        let mut node1 = LeafNode::new(4);
+        let mut node2 = LeafNode::new(4);
+
+        // Node1 has some entries
+        node1.insert_new_entry_at(0, 10, 100);
+        node1.insert_new_entry_at(1, 15, 150);
+
+        // Node2 has some entries
+        node2.insert_new_entry_at(0, 20, 200);
+        node2.insert_new_entry_at(1, 30, 300);
+
+        // Link them
+        node1.next = Some(Box::new(node2));
+
+        // Test merge
+        assert!(node1.merge_with_next_sibling());
+
+        // Verify merge worked
+        assert_eq!(node1.count, 4);
+        assert_eq!(node1.get(&10), Some(&100));
+        assert_eq!(node1.get(&15), Some(&150));
+        assert_eq!(node1.get(&20), Some(&200));
+        assert_eq!(node1.get(&30), Some(&300));
+
+        // Verify order is maintained
+        assert_eq!(node1.items[0].as_ref().unwrap().key, 10);
+        assert_eq!(node1.items[1].as_ref().unwrap().key, 15);
+        assert_eq!(node1.items[2].as_ref().unwrap().key, 20);
+        assert_eq!(node1.items[3].as_ref().unwrap().key, 30);
+
+        // Node2 should be removed from chain
+        assert!(node1.next.is_none());
     }
 }
