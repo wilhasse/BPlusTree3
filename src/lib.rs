@@ -708,6 +708,94 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         self.handle_underflow_at_key(key);
     }
 
+    /// Validates that the tree maintains all B+ tree invariants.
+    /// Returns Ok(()) if valid, Err(String) with description if invalid.
+    ///
+    /// Checks:
+    /// - All nodes have at least min_keys entries (except possibly root)
+    /// - All nodes have at most branching_factor entries
+    /// - All entries within nodes are sorted
+    /// - All entries across the tree are sorted
+    /// - No duplicate keys exist
+    /// - Chain linkage is correct
+    pub fn validate(&self) -> Result<(), String> {
+        let mut all_keys = Vec::new();
+        let mut current = Some(&self.root);
+        let mut node_count = 0;
+
+        while let Some(node) = current {
+            node_count += 1;
+
+            // Check node capacity constraints
+            if node.count > node.branching_factor {
+                return Err(format!(
+                    "Node {} has {} entries, exceeds branching factor {}",
+                    node_count, node.count, node.branching_factor
+                ));
+            }
+
+            // Check minimum keys constraint (except for single node tree)
+            if node_count > 1 && node.count < node.min_keys() {
+                return Err(format!(
+                    "Node {} has {} entries, below minimum {}",
+                    node_count,
+                    node.count,
+                    node.min_keys()
+                ));
+            }
+
+            // Check that entries within this node are sorted
+            for i in 0..node.count.saturating_sub(1) {
+                if let (Some(entry1), Some(entry2)) = (&node.items[i], &node.items[i + 1]) {
+                    if entry1.key >= entry2.key {
+                        return Err(format!(
+                            "Node {} entries not sorted: {:?} >= {:?} at positions {} and {}",
+                            node_count,
+                            entry1.key,
+                            entry2.key,
+                            i,
+                            i + 1
+                        ));
+                    }
+                }
+            }
+
+            // Collect all keys from this node
+            for i in 0..node.count {
+                if let Some(entry) = &node.items[i] {
+                    all_keys.push(entry.key.clone());
+                }
+            }
+
+            // Check for unused slots that should be None
+            for i in node.count..node.items.len() {
+                if node.items[i].is_some() {
+                    return Err(format!(
+                        "Node {} has entry at unused position {}",
+                        node_count, i
+                    ));
+                }
+            }
+
+            current = node.next.as_ref().map(|boxed| boxed.as_ref());
+        }
+
+        // Check that all keys across the tree are sorted (no duplicates, proper order)
+        for i in 0..all_keys.len().saturating_sub(1) {
+            if all_keys[i] >= all_keys[i + 1] {
+                return Err(format!(
+                    "Keys not globally sorted: {:?} >= {:?} at positions {} and {}",
+                    all_keys[i],
+                    all_keys[i + 1],
+                    i,
+                    i + 1
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
         let mut total = 0;
@@ -1305,6 +1393,10 @@ mod tests {
         // Verify other keys still exist
         assert_eq!(tree.get(&10), Some(&100));
         assert_eq!(tree.get(&30), Some(&300));
+
+        // Validate tree invariants
+        tree.validate()
+            .expect("Tree should maintain invariants after remove");
     }
 
     #[test]
@@ -1340,6 +1432,10 @@ mod tests {
                 key
             );
         }
+
+        // Validate tree invariants
+        tree.validate()
+            .expect("Tree should maintain invariants after underflow handling");
     }
 
     #[test]
