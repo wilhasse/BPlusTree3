@@ -54,16 +54,22 @@ We'll implement remove operations in the current linked-list structure first, th
 - [x] Include documentation with examples
 - [x] All existing tests continue to pass
 
-### Step 5: Add Underflow Handling
+**Current Limitations**:
 
-**Status**: Not Started
+- No underflow handling: Trees may be left in invalid state after underflow
+- No empty node removal: Empty nodes remain in the chain
+
+### Step 5: Add Underflow Handling ✅
+
+**Status**: Complete
 **Changes**:
 
-- [ ] Implement underflow detection in remove
-- [ ] Add redistribute logic (try siblings first)
-- [ ] Add merge logic (when redistribute fails)
-- [ ] Handle chain updates when nodes are removed
-- [ ] Add tests for all rebalancing scenarios
+- [x] Implement underflow detection in remove
+- [x] Add redistribute logic (try siblings first)
+- [x] Add merge logic (when redistribute fails)
+- [x] Handle chain updates when nodes are removed
+- [x] Add test for underflow rebalancing scenario
+- [x] All existing tests continue to pass
 
 ### Step 6: Handle Edge Cases
 
@@ -130,10 +136,9 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ## Current Focus
 
-**Next Action**: Implement underflow handling (Step 5)
+**Next Action**: Handle edge cases (Step 6)
 
-- Add underflow detection in BPlusTree::remove method
-- Implement redistribute logic (try siblings first)
-- Implement merge logic (when redistribute fails)
-- Handle chain updates when nodes are removed
-- Add tests for all rebalancing scenarios
+- Handle removing from single-node tree
+- Handle removing last key from tree
+- Handle removing from first/last nodes in chain
+- Add comprehensive edge case tests

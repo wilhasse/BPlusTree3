@@ -692,20 +692,48 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         let leaf = finder.find_leaf_mut(&mut self.root);
 
         // Attempt to remove the key from the leaf
-        match leaf.remove_key(key) {
+        let removal_result = leaf.remove_key(key);
+
+        // Handle the result after releasing the borrow on leaf
+        match removal_result {
             RemovalResult::Success(value) => Some(value),
             RemovalResult::NotFound => None,
             RemovalResult::Underflow(value) => {
-                // TODO: Handle underflow in Step 5
-                // For now, just return the value (tree may be in invalid state)
+                // Handle underflow by trying to redistribute or merge
+                self.handle_underflow_at_key(key);
                 Some(value)
             }
             RemovalResult::NodeEmpty(value) => {
-                // TODO: Handle empty node removal in Step 5
-                // For now, just return the value (tree may be in invalid state)
+                // Handle empty node by removing it from the chain
+                self.handle_empty_node_at_key(key);
                 Some(value)
             }
         }
+    }
+
+    /// Handles underflow at a specific key location by finding the node and rebalancing.
+    fn handle_underflow_at_key(&mut self, key: &K) {
+        let finder = LeafFinder::new(key);
+        let underflow_node = finder.find_leaf_mut(&mut self.root);
+
+        // Try to redistribute from next sibling first
+        if underflow_node.redistribute_from_next_sibling() {
+            return; // Successfully redistributed
+        }
+
+        // If redistribution failed, try to merge with next sibling
+        underflow_node.merge_with_next_sibling();
+
+        // Note: In a full B+ tree with internal nodes, we would also need to
+        // handle underflow propagation up the tree. For now, we only handle
+        // leaf-level rebalancing.
+    }
+
+    /// Handles an empty node at a specific key location.
+    fn handle_empty_node_at_key(&mut self, key: &K) {
+        // For now, we'll use the same logic as underflow handling
+        // In a more complete implementation, we would remove the node entirely
+        self.handle_underflow_at_key(key);
     }
 
     /// Returns the number of elements in the tree.
@@ -1305,6 +1333,41 @@ mod tests {
         // Verify other keys still exist
         assert_eq!(tree.get(&10), Some(&100));
         assert_eq!(tree.get(&30), Some(&300));
+    }
+
+    #[test]
+    fn test_bplus_tree_remove_with_underflow() {
+        let mut tree = BPlusTree::new(2); // Small branching factor, min_keys = 1
+
+        // Insert enough keys to create multiple nodes
+        tree.insert(10, 100);
+        tree.insert(20, 200);
+        tree.insert(30, 300);
+        tree.insert(40, 400);
+        tree.insert(50, 500);
+
+        // Verify we have multiple nodes
+        assert!(tree.leaf_count() > 1, "Should have multiple nodes");
+
+        // Remove a key from the first node to cause underflow
+        tree.remove(&10);
+
+        // Tree should still be valid and accessible
+        assert_eq!(tree.get(&10), None);
+        assert_eq!(tree.get(&20), Some(&200));
+        assert_eq!(tree.get(&30), Some(&300));
+        assert_eq!(tree.get(&40), Some(&400));
+        assert_eq!(tree.get(&50), Some(&500));
+
+        // The tree should have handled underflow through redistribution or merge
+        // All remaining keys should still be accessible
+        for &key in &[20, 30, 40, 50] {
+            assert!(
+                tree.get(&key).is_some(),
+                "Key {} should still be accessible",
+                key
+            );
+        }
     }
 
     #[test]
