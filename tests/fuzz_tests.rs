@@ -1,9 +1,19 @@
+//! Fuzz tests for BPlusTree
+//!
+//! These tests are marked with `#[ignore]` so they don't run during normal `cargo test`.
+//!
+//! To run fuzz tests:
+//! - All fuzz tests: `cargo test --test fuzz_tests -- --ignored`
+//! - Specific test: `cargo test fuzz_test_bplus_tree -- --ignored --nocapture`
+//! - With custom timing: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture`
+
 use bplustree3::BPlusTree;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::time::{Duration, Instant};
 
 #[test]
+#[ignore]
 fn fuzz_test_bplus_tree() {
     // Test with various branching factors
     for branching_factor in 2..=10 {
@@ -137,6 +147,7 @@ fn fuzz_test_bplus_tree() {
 }
 
 #[test]
+#[ignore]
 fn fuzz_test_with_random_keys() {
     // Test with random insertion order
     for branching_factor in [2, 3, 5, 8] {
@@ -245,6 +256,7 @@ fn fuzz_test_with_random_keys() {
 }
 
 #[test]
+#[ignore]
 fn fuzz_test_with_updates() {
     // Test updating existing keys
     for branching_factor in [2, 4, 7] {
@@ -312,12 +324,13 @@ fn fuzz_test_with_updates() {
 /// Timed fuzz test that runs for a specified duration.
 ///
 /// Usage:
-/// - Default (10 seconds): `cargo test fuzz_test_timed -- --nocapture`
-/// - Custom duration: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --nocapture`
-/// - Minutes: `FUZZ_TIME=5m cargo test fuzz_test_timed -- --nocapture`
-/// - Hours: `FUZZ_TIME=1h cargo test fuzz_test_timed -- --nocapture`
-/// - Milliseconds: `FUZZ_TIME=500ms cargo test fuzz_test_timed -- --nocapture`
+/// - Default (10 seconds): `cargo test fuzz_test_timed -- --ignored --nocapture`
+/// - Custom duration: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture`
+/// - Minutes: `FUZZ_TIME=5m cargo test fuzz_test_timed -- --ignored --nocapture`
+/// - Hours: `FUZZ_TIME=1h cargo test fuzz_test_timed -- --ignored --nocapture`
+/// - Milliseconds: `FUZZ_TIME=500ms cargo test fuzz_test_timed -- --ignored --nocapture`
 #[test]
+#[ignore]
 fn fuzz_test_timed() {
     // Parse time duration from environment variable or default to 10 seconds
     let duration_str = env::var("FUZZ_TIME").unwrap_or_else(|_| "10s".to_string());
