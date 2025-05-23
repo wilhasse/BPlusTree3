@@ -344,34 +344,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         first_entry
     }
 
-    /// Takes the last entry from this node (removes and returns it).
-    /// Used for redistributing entries to siblings.
-    fn take_last_entry(&mut self) -> Option<Entry<K, V>> {
-        if self.count == 0 {
-            return None;
-        }
-
-        self.count -= 1;
-        self.items[self.count].take()
-    }
-
-    /// Adds an entry to the beginning of this node.
-    /// Used when receiving entries from siblings during redistribution.
-    fn add_first_entry(&mut self, entry: Entry<K, V>) -> bool {
-        if self.is_full() {
-            return false;
-        }
-
-        // Shift all existing elements right
-        for i in (0..self.count).rev() {
-            self.items[i + 1] = self.items[i].take();
-        }
-
-        self.items[0] = Some(entry);
-        self.count += 1;
-        true
-    }
-
     /// Adds an entry to the end of this node.
     /// Used when receiving entries from siblings during redistribution.
     fn add_last_entry(&mut self, entry: Entry<K, V>) -> bool {
@@ -1389,32 +1361,27 @@ mod tests {
         assert_eq!(node1.get(&10), None);
         assert_eq!(node1.get(&20), Some(&200));
 
-        // Test take_last_entry
-        let entry = node1.take_last_entry().unwrap();
-        assert_eq!(entry.key, 30);
-        assert_eq!(entry.value, 300);
-        assert_eq!(node1.count, 1);
-        assert_eq!(node1.get(&30), None);
-        assert_eq!(node1.get(&20), Some(&200));
-
-        // Test add_first_entry
-        let new_entry = Entry { key: 5, value: 50 };
-        assert!(node2.add_first_entry(new_entry));
-        assert_eq!(node2.count, 1);
-        assert_eq!(node2.get(&5), Some(&50));
-
         // Test add_last_entry
         let new_entry = Entry {
             key: 15,
             value: 150,
         };
         assert!(node2.add_last_entry(new_entry));
-        assert_eq!(node2.count, 2);
+        assert_eq!(node2.count, 1);
         assert_eq!(node2.get(&15), Some(&150));
 
+        // Add another entry to test ordering
+        let new_entry = Entry {
+            key: 25,
+            value: 250,
+        };
+        assert!(node2.add_last_entry(new_entry));
+        assert_eq!(node2.count, 2);
+        assert_eq!(node2.get(&25), Some(&250));
+
         // Verify order is maintained
-        assert_eq!(node2.items[0].as_ref().unwrap().key, 5);
-        assert_eq!(node2.items[1].as_ref().unwrap().key, 15);
+        assert_eq!(node2.items[0].as_ref().unwrap().key, 15);
+        assert_eq!(node2.items[1].as_ref().unwrap().key, 25);
     }
 
     #[test]
