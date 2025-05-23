@@ -454,11 +454,8 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
 
     /// Returns a reference to the value corresponding to the key.
     pub fn get(&self, key: &K) -> Option<&V> {
-        // Use the LeafFinder to find the leaf node where the key should be
         let finder = LeafFinder::new(key);
         let leaf = finder.find_leaf(&self.root);
-
-        // Look up the key in the leaf node
         leaf.get(key)
     }
 
