@@ -1,124 +1,149 @@
 # BPlusTree Implementation Plan
 
-## Overall Strategy: Remove First, Then Internal Nodes
+## Overall Strategy: Internal Nodes with Get & Insert First
 
-We'll implement remove operations in the current linked-list structure first, then add internal nodes later. This allows us to master rebalancing algorithms in a simpler context before adding tree complexity.
+We'll implement BranchNodes (internal nodes) focusing on get & insert operations first, including all edge cases around splitting leaves. Remove operations will come later once the tree structure is solid.
 
-## Phase 1: Structural Preparation for Remove
+## Phase 1: BranchNode Foundation (Get & Insert Focus)
 
-### Step 1: Prepare for Remove Operations ✅
+### Step 1: Create Node Trait and BranchNode Structure ⏳ (Next)
 
-**Status**: Complete - Simplified approach
-**Why**: Remove operations need to access previous siblings for rebalancing
-**Decision**: Keep simple `Box<T>` ownership, find previous nodes by traversal when needed
-**Rationale**: Simpler ownership model, sufficient for remove operations
+**Goal**: Define polymorphic node structure for LeafNode and BranchNode
+**Test**: `test_branch_node_creation_and_basic_operations`
+
 **Changes**:
 
-- [x] ~~Add `prev` field to LeafNode (for future use, currently unused)~~ - Removed as unused
-- [x] All existing tests still pass
-- [x] Ready to implement remove infrastructure
+- [ ] Create `Node<K, V>` trait with common operations
+- [ ] Implement `BranchNode<K, V>` struct for internal nodes
+- [ ] Implement `Node` trait for both `LeafNode` and `BranchNode`
+- [ ] Test basic BranchNode creation and operations
 
-### Step 2: Add Remove Infrastructure ✅
+### Step 2: Update LeafFinder for Polymorphic Nodes ⏳
 
-**Status**: Complete
+**Goal**: Make LeafFinder work with both node types and track path
+**Test**: `test_leaf_finder_with_branch_nodes_simple`
+
 **Changes**:
 
-- [x] Add underflow detection methods to LeafNode (min_keys, is_underflow, can_give_key)
-- [x] Create RemovalResult enum with Success/NotFound/Underflow/NodeEmpty variants
-- [x] Add basic remove_key method to LeafNode (without rebalancing)
-- [x] Add comprehensive test for remove infrastructure
-- [ ] Add sibling access methods (get_prev_sibling, get_next_sibling) - will add when needed
+- [ ] Update LeafFinder to store traversal path
+- [ ] Modify find_leaf methods to accept trait objects
+- [ ] Handle both BranchNode and LeafNode traversal
+- [ ] Test path tracking through BranchNodes
 
-### Step 3: Add Rebalancing Operations ✅
+### Step 3: Update BPlusTree Root to Use Trait Objects ⏳
 
-**Status**: Complete
+**Goal**: Allow tree root to be either LeafNode or BranchNode
+**Test**: `test_tree_with_branch_root_basic_get`
+
 **Changes**:
 
-- [x] Add helper methods for moving entries between nodes (take_first_entry, take_last_entry, add_first_entry, add_last_entry)
-- [x] Implement redistribute_from_next_sibling
-- [x] Implement merge_with_next_sibling
-- [x] Add comprehensive tests for rebalancing operations
-- [ ] Implement redistribute_from_prev_sibling (will add when needed for full remove implementation)
-- [ ] Add methods to find sibling nodes by traversal (will add when implementing main remove method)
+- [ ] Change BPlusTree.leaves to root: Box<dyn Node<K, V>>
+- [ ] Update get() method to work with trait objects
+- [ ] Ensure existing functionality works with new structure
+- [ ] Test get operations through BranchNode root
 
-## Phase 2: Implement Remove with Rebalancing
+### Step 4: Implement BranchNode Key Navigation ⏳
 
-### Step 4: Basic Remove Implementation ✅
+**Goal**: Enable finding correct child nodes for keys
+**Test**: `test_branch_node_find_child_for_key`
 
-**Status**: Complete
 **Changes**:
 
-- [x] Implement BPlusTree::remove method
-- [x] Handle simple cases (no underflow)
-- [x] Add basic test for removal functionality
-- [x] Include documentation with examples
-- [x] All existing tests continue to pass
+- [ ] Add find_child_index method to BranchNode
+- [ ] Add get_child and get_child_mut methods
+- [ ] Test key-to-child mapping with various scenarios
+- [ ] Handle boundary conditions correctly
 
-**Current Limitations**:
+### Step 5: Implement Basic Insert Through BranchNodes ⏳
 
-- No underflow handling: Trees may be left in invalid state after underflow
-- No empty node removal: Empty nodes remain in the chain
+**Goal**: Support insertion that traverses BranchNodes to reach leaves
+**Test**: `test_insert_through_branch_node`
 
-### Step 5: Add Underflow Handling ✅
-
-**Status**: Complete
 **Changes**:
 
-- [x] Implement underflow detection in remove
-- [x] Add redistribute logic (try siblings first)
-- [x] Add merge logic (when redistribute fails)
-- [x] Handle chain updates when nodes are removed
-- [x] Add test for underflow rebalancing scenario
-- [x] All existing tests continue to pass
+- [ ] Update BPlusTree::insert to traverse BranchNodes
+- [ ] Ensure LeafFinder works correctly for insertions
+- [ ] Test inserting into existing leaves through BranchNode
+- [ ] Verify no splitting occurs yet (simple case)
 
-### Step 6: Handle Edge Cases ✅
+### Step 6: Implement Leaf Splitting with Parent Updates ⏳
 
-**Status**: Complete
+**Goal**: Handle leaf splits that require updating parent BranchNode
+**Test**: `test_leaf_split_updates_parent_branch`
+
 **Changes**:
 
-- [x] Handle removing from single-node tree
-- [x] Handle removing last key from tree
-- [x] Handle removing from first/last nodes in chain
-- [x] Add comprehensive edge case tests
-- [x] All edge cases pass with validation
-- [x] Current implementation already handles edge cases correctly
+- [ ] Detect when leaf split requires parent key update
+- [ ] Add separator key insertion to parent BranchNode
+- [ ] Handle BranchNode key insertion and shifting
+- [ ] Test that split leaves are properly linked to parent
 
-## Phase 3: Prepare for Internal Nodes (Future)
+### Step 7: Implement Root Promotion (Leaf to Branch) ⏳
 
-### Step 7: Extract Rebalancing Abstractions
+**Goal**: Convert single LeafNode root to BranchNode when it splits
+**Test**: `test_root_promotion_leaf_to_branch`
 
-**Status**: Not Started
 **Changes**:
 
-- [ ] Create Rebalanceable trait
-- [ ] Extract rebalancing logic into reusable components
-- [ ] Create Node trait for polymorphism
-- [ ] Refactor BPlusTree to use trait objects
+- [ ] Detect when root LeafNode needs to split
+- [ ] Create new BranchNode root with separator key
+- [ ] Link split leaves as children of new root
+- [ ] Update BPlusTree.root to point to BranchNode
 
-### Step 8: Add Internal Node Structure
+### Step 8: Implement BranchNode Splitting ⏳
 
-**Status**: Not Started
+**Goal**: Handle BranchNode overflow by splitting internal nodes
+**Test**: `test_branch_node_split_creates_new_level`
+
 **Changes**:
 
-- [ ] Implement IndexNode struct
-- [ ] Implement Node trait for IndexNode
-- [ ] Update insertion to create internal nodes
-- [ ] Extend rebalancing to handle internal nodes
+- [ ] Add split() method to BranchNode
+- [ ] Handle separator key promotion to parent
+- [ ] Create new tree level when root BranchNode splits
+- [ ] Test multi-level tree creation
+
+### Step 9: Comprehensive Insert Testing ⏳
+
+**Goal**: Ensure all insert scenarios work correctly
+**Test**: `test_comprehensive_insert_scenarios`
+
+**Changes**:
+
+- [ ] Test insertions causing multiple levels of splits
+- [ ] Verify tree maintains B+ tree invariants
+- [ ] Test with various branching factors
+- [ ] Ensure all existing tests still pass
+
+## Phase 2: Remove Operations (Future)
+
+### Step 10: Implement Remove Through BranchNodes ⏳
+
+**Goal**: Support remove operations in multi-level trees
+**Status**: Future work after get/insert is complete
+
+**Changes**:
+
+- [ ] Update remove to traverse BranchNodes
+- [ ] Handle underflow in leaves with BranchNode parents
+- [ ] Implement key removal from BranchNodes
+- [ ] Handle BranchNode underflow and merging
 
 ## Testing Strategy
 
 ### Existing Tests
 
 - All current tests must continue to pass after each step
-- Fuzz tests provide comprehensive validation
+- Focus on get & insert operations initially
+- Remove operation tests will be updated later
 
-### New Tests Needed
+### New Tests for BranchNodes
 
-- [x] ~~Doubly linked list traversal tests~~ - Not needed (using singly linked list)
-- [ ] Remove operation tests (basic cases)
-- [ ] Underflow and rebalancing tests
-- [ ] Edge case tests for remove
-- [ ] Performance tests for remove operations
+- [ ] BranchNode creation and basic operations
+- [ ] LeafFinder path tracking through BranchNodes
+- [ ] Get operations through multi-level trees
+- [ ] Insert operations with leaf splitting
+- [ ] Root promotion scenarios
+- [ ] BranchNode splitting and tree growth
 
 ## Implementation Notes
 
@@ -138,12 +163,11 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ## Current Focus
 
-**Next Action**: Remove implementation complete for linked-list structure
+**Next Action**: Implement Step 1 - Create Node Trait and BranchNode Structure
 
-All planned remove functionality has been successfully implemented:
+Ready to begin BranchNode implementation:
 
-- Basic remove operations work correctly
-- Underflow handling through redistribution and merge
-- Edge cases are handled properly
-- Comprehensive validation ensures tree invariants
-- Ready for Phase 3 (internal nodes) when needed
+- Remove operations are complete for linked-list structure
+- All existing tests pass and provide regression protection
+- Focus shifts to get & insert operations with internal nodes
+- Remove operations will be updated after BranchNode foundation is solid
