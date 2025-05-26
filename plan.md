@@ -412,10 +412,29 @@ We'll implement BranchNodes (internal nodes) focusing on get & insert operations
 
 ### Key Principles
 
-- Follow TDD: Write tests first, implement minimal code to pass
+- Follow TDD: Write tests first, implement code to pass, then generalize
+- After making test pass: Consider ways to simplify code so other tests will also pass
+- Goal: Simpler, more general code rather than minimal specific solutions
 - Tidy First: Separate structural changes from behavioral changes
 - Small steps: Each commit should leave all tests passing
 - Comprehensive validation: Use fuzz tests to catch edge cases
+
+### Implementation Strategy
+
+1. **One Test at a Time**: Implement exactly one failing test, then make it pass
+2. **Generalize After Passing**: After making test pass, consider simplifications that make other tests pass too
+3. **Seek General Solutions**: Prefer simpler, more general code over minimal specific implementations
+4. **Structural vs Behavioral**: Separate trait/struct definitions (structural) from algorithm implementations (behavioral)
+5. **Path Tracking**: LeafFinder path will be crucial for future remove operations
+6. **Backward Compatibility**: All existing tests must continue to pass
+
+### TDD Cycle with Generalization
+
+1. **Red**: Write a failing test for the next small increment of functionality
+2. **Green**: Write just enough code to make the test pass (may be specific/hacky)
+3. **Generalize**: Look for ways to simplify the code so it's more general and would handle other similar cases
+4. **Refactor**: Clean up the code while keeping all tests passing
+5. **Commit**: Commit when all tests pass and code is clean
 
 ### Risk Mitigation
 
