@@ -326,6 +326,7 @@ struct Entry<K, V> {
 }
 
 /// Common interface for both LeafNode and BranchNode
+#[cfg(test)]
 trait Node<K, V>: std::fmt::Debug {
     /// Returns true if the node contains no elements
     fn is_empty(&self) -> bool;
@@ -341,6 +342,7 @@ trait Node<K, V>: std::fmt::Debug {
 }
 
 /// Internal node in the B+ tree containing separator keys and child pointers
+#[cfg(test)]
 #[derive(Debug)]
 struct BranchNode<K, V> {
     /// Maximum number of keys this node can hold before splitting
@@ -353,6 +355,7 @@ struct BranchNode<K, V> {
     count: usize,
 }
 
+#[cfg(test)]
 impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K, V> {
     /// Creates a new branch node with the specified branching factor.
     fn new(branching_factor: usize) -> Self {
@@ -377,6 +380,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K,
     }
 
     /// Inserts a key and child into the branch node
+    #[allow(dead_code)]
     fn insert_key_child(&mut self, key: K, child: Box<dyn Node<K, V>>) {
         // For now, just insert at the end (simple implementation to make test pass)
         if self.count < self.branching_factor {
@@ -387,14 +391,51 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K,
     }
 
     /// Adds a child at the end (for the rightmost child that has no corresponding key)
+    #[allow(dead_code)]
     fn add_child(&mut self, child: Box<dyn Node<K, V>>) {
         // The rightmost child goes at index count (one more child than keys)
         if self.count < self.branching_factor {
             self.children[self.count] = Some(child);
         }
     }
+
+    /// Finds the child index where the given key should be located
+    fn find_child_index(&self, key: &K) -> usize {
+        let mut child_index = 0;
+        
+        // Iterate through valid keys to find the correct child
+        for i in 0..self.count {
+            if let Some(separator_key) = &self.keys[i] {
+                if key < separator_key {
+                    return child_index;
+                }
+                child_index = i + 1;
+            }
+        }
+        
+        child_index
+    }
+
+    /// Gets a reference to the child at the specified index
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node<K, V>>> {
+        if index <= self.count && index < self.children.len() {
+            self.children[index].as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Gets a mutable reference to the child at the specified index
+    fn get_child_mut(&mut self, index: usize) -> Option<&mut Box<dyn Node<K, V>>> {
+        if index <= self.count && index < self.children.len() {
+            self.children[index].as_mut()
+        } else {
+            None
+        }
+    }
 }
 
+#[cfg(test)]
 impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> for BranchNode<K, V> {
     fn is_empty(&self) -> bool {
         self.count == 0
@@ -549,6 +590,7 @@ impl<'a, K: Ord, V> LeafFinder<'a, K, V> {
 
     /// Finds the leaf node where the key should be located, tracking the path depth.
     /// Returns a reference to the leaf node and the depth of traversal.
+    #[cfg(test)]
     fn find_leaf_with_path<'b>(
         &self,
         node: &'b dyn Node<K, V>,
@@ -556,6 +598,7 @@ impl<'a, K: Ord, V> LeafFinder<'a, K, V> {
         self.find_leaf_with_path_recursive(node, 0)
     }
 
+    #[cfg(test)]
     fn find_leaf_with_path_recursive<'b>(
         &self,
         node: &'b dyn Node<K, V>,
@@ -623,6 +666,7 @@ enum RemovalResult<V> {
     NodeEmpty(V),
 }
 
+#[cfg(test)]
 impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> for LeafNode<K, V> {
     fn is_empty(&self) -> bool {
         self.count == 0
@@ -1614,6 +1658,61 @@ mod tests {
         let leaf_ptr3 = leaf3 as *const dyn Node<i32, i32> as *const LeafNode<i32, i32>;
         let leaf_node3 = unsafe { &*leaf_ptr3 };
         assert_eq!(leaf_node3.get(&25), None);
+    }
+
+    #[test]
+    fn test_branch_node_find_child_for_key() {
+        // Test finding the correct child index for various keys
+        let mut branch_node = BranchNode::new(4);
+        
+        // Set up a branch node with keys [10, 20, 30]
+        branch_node.keys[0] = Some(10);
+        branch_node.keys[1] = Some(20);
+        branch_node.keys[2] = Some(30);
+        branch_node.count = 3;
+        
+        // Test find_child_index for various keys
+        // Keys < 10 should go to child 0
+        assert_eq!(branch_node.find_child_index(&5), 0);
+        assert_eq!(branch_node.find_child_index(&9), 0);
+        
+        // Keys in [10, 20) should go to child 1
+        assert_eq!(branch_node.find_child_index(&10), 1);
+        assert_eq!(branch_node.find_child_index(&15), 1);
+        assert_eq!(branch_node.find_child_index(&19), 1);
+        
+        // Keys in [20, 30) should go to child 2
+        assert_eq!(branch_node.find_child_index(&20), 2);
+        assert_eq!(branch_node.find_child_index(&25), 2);
+        assert_eq!(branch_node.find_child_index(&29), 2);
+        
+        // Keys >= 30 should go to child 3
+        assert_eq!(branch_node.find_child_index(&30), 3);
+        assert_eq!(branch_node.find_child_index(&35), 3);
+        assert_eq!(branch_node.find_child_index(&100), 3);
+        
+        // Test with actual child nodes
+        let leaf0: LeafNode<i32, i32> = LeafNode::new(4);
+        let leaf1: LeafNode<i32, i32> = LeafNode::new(4);
+        let leaf2: LeafNode<i32, i32> = LeafNode::new(4);
+        let leaf3: LeafNode<i32, i32> = LeafNode::new(4);
+        
+        branch_node.children[0] = Some(Box::new(leaf0));
+        branch_node.children[1] = Some(Box::new(leaf1));
+        branch_node.children[2] = Some(Box::new(leaf2));
+        branch_node.children[3] = Some(Box::new(leaf3));
+        
+        // Test get_child
+        assert!(branch_node.get_child(0).is_some());
+        assert!(branch_node.get_child(1).is_some());
+        assert!(branch_node.get_child(2).is_some());
+        assert!(branch_node.get_child(3).is_some());
+        assert!(branch_node.get_child(4).is_none()); // Out of bounds
+        
+        // Test get_child_mut
+        assert!(branch_node.get_child_mut(0).is_some());
+        assert!(branch_node.get_child_mut(3).is_some());
+        assert!(branch_node.get_child_mut(4).is_none()); // Out of bounds
     }
 
     #[test]

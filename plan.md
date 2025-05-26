@@ -42,17 +42,17 @@ We'll implement BranchNodes (internal nodes) focusing on get & insert operations
 - [ ] Ensure existing functionality works with new structure (deferred)
 - [x] Test get operations through BranchNode root
 
-### Step 4: Implement BranchNode Key Navigation ⏳
+### Step 4: Implement BranchNode Key Navigation ✅
 
 **Goal**: Enable finding correct child nodes for keys
 **Test**: `test_branch_node_find_child_for_key`
 
 **Changes**:
 
-- [ ] Add find_child_index method to BranchNode
-- [ ] Add get_child and get_child_mut methods
-- [ ] Test key-to-child mapping with various scenarios
-- [ ] Handle boundary conditions correctly
+- [x] Add find_child_index method to BranchNode
+- [x] Add get_child and get_child_mut methods
+- [x] Test key-to-child mapping with various scenarios
+- [x] Handle boundary conditions correctly
 
 ### Step 5: Implement Basic Insert Through BranchNodes ⏳
 
