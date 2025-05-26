@@ -59,12 +59,19 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
         self.branching_factor
     }
 
-    /// Returns the number of leaf nodes in the tree (for testing)
+    /// Returns the number of leaf nodes in the tree.
+    ///
+    /// This method is primarily useful for testing, debugging, and monitoring
+    /// the internal structure of the tree.
     pub fn leaf_count(&self) -> usize {
         self.root.count_leaves()
     }
 
-    /// Returns the size of each leaf node (for testing)
+    /// Returns the size of each leaf node in the tree.
+    ///
+    /// This method is primarily useful for testing, debugging, and monitoring
+    /// the internal structure of the tree. The returned vector contains the
+    /// number of entries in each leaf node, in order from first to last.
     pub fn leaf_sizes(&self) -> Vec<usize> {
         self.root.get_leaf_sizes()
     }
