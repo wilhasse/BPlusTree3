@@ -6,7 +6,11 @@
       "Bash(cargo test)",
       "Bash(cargo clippy:*)",
       "Bash(cargo test:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cargo:*)",
+      "Bash(rg:*)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"LeafFinder::new\" --line-number)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"find_leaf_with_path\" --line-number -B2 -A2)"
     ],
     "deny": []
   }

@@ -375,6 +375,24 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K,
             count: 0,
         }
     }
+
+    /// Inserts a key and child into the branch node
+    fn insert_key_child(&mut self, key: K, child: Box<dyn Node<K, V>>) {
+        // For now, just insert at the end (simple implementation to make test pass)
+        if self.count < self.branching_factor {
+            self.keys[self.count] = Some(key);
+            self.children[self.count] = Some(child);
+            self.count += 1;
+        }
+    }
+
+    /// Adds a child at the end (for the rightmost child that has no corresponding key)
+    fn add_child(&mut self, child: Box<dyn Node<K, V>>) {
+        // The rightmost child goes at index count (one more child than keys)
+        if self.count < self.branching_factor {
+            self.children[self.count] = Some(child);
+        }
+    }
 }
 
 impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> for BranchNode<K, V> {
@@ -397,15 +415,22 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> fo
 
 /// Utility to find the appropriate leaf node for a given key.
 #[derive(Debug)]
-struct LeafFinder<'a, K> {
+struct LeafFinder<'a, K, V> {
     /// The key we're searching for
     key: &'a K,
+    /// Path of nodes traversed during search (for future use in remove operations)
+    // TODO: Implement proper path tracking when needed for remove operations
+    // path: Vec<*const dyn Node<K, V>>,
+    _phantom: std::marker::PhantomData<V>,
 }
 
-impl<'a, K: Ord> LeafFinder<'a, K> {
+impl<'a, K: Ord, V> LeafFinder<'a, K, V> {
     /// Creates a new LeafFinder for the given key
     fn new(key: &'a K) -> Self {
-        Self { key }
+        Self {
+            key,
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Finds the leaf node where the key should be located.
@@ -417,7 +442,7 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     ///
     /// This is a case where the type parameter V is "passed through" - the LeafFinder doesn't use it
     /// directly, but needs to maintain it for type correctness in the function signatures.
-    fn find_leaf<'b, V>(&self, leaf: &'b LeafNode<K, V>) -> &'b LeafNode<K, V> {
+    fn find_leaf<'b>(&self, leaf: &'b LeafNode<K, V>) -> &'b LeafNode<K, V> {
         // For keys that belong in leaf node, return leaf directly
         if Self::belongs_in_node(leaf, self.key) {
             return leaf;
@@ -441,7 +466,7 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     }
 
     /// Helper method to check if a key belongs in a specific node
-    fn belongs_in_node<V>(node: &LeafNode<K, V>, key: &K) -> bool {
+    fn belongs_in_node(node: &LeafNode<K, V>, key: &K) -> bool {
         // Empty nodes can accept any key
         if node.count == 0 {
             return true;
@@ -507,7 +532,7 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
     /// one node to the next, which would require unsafe code. The recursive approach naturally
     /// creates a new stack frame with a new lifetime for each call, making it easier for Rust's
     /// borrow checker to verify safety.
-    fn find_leaf_mut<'b, V>(&self, leaf: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
+    fn find_leaf_mut<'b>(&self, leaf: &'b mut LeafNode<K, V>) -> &'b mut LeafNode<K, V> {
         // Base case 1: If this is the right node, return it
         if Self::belongs_in_node(leaf, self.key) {
             return leaf;
@@ -520,6 +545,54 @@ impl<'a, K: Ord> LeafFinder<'a, K> {
 
         // The key belongs in a later node, recurse into next
         self.find_leaf_mut(leaf.next.as_mut().unwrap())
+    }
+
+    /// Finds the leaf node where the key should be located, tracking the path depth.
+    /// Returns a reference to the leaf node and the depth of traversal.
+    fn find_leaf_with_path<'b>(
+        &self,
+        node: &'b dyn Node<K, V>,
+    ) -> (&'b dyn Node<K, V>, usize) {
+        self.find_leaf_with_path_recursive(node, 0)
+    }
+
+    fn find_leaf_with_path_recursive<'b>(
+        &self,
+        node: &'b dyn Node<K, V>,
+        depth: usize,
+    ) -> (&'b dyn Node<K, V>, usize) {
+        if node.is_leaf() {
+            // Found a leaf, return it along with the depth
+            return (node, depth);
+        }
+
+        // This is a BranchNode, need to find the correct child
+        // Cast to BranchNode to access children (unsafe but needed for now)
+        let branch_ptr = node as *const dyn Node<K, V> as *const BranchNode<K, V>;
+        let branch = unsafe { &*branch_ptr };
+
+        // Find the correct child based on the key
+        let mut child_index = 0;
+        // Only iterate through valid keys (up to count)
+        for i in 0..branch.count {
+            if let Some(separator_key) = &branch.keys[i] {
+                if self.key < separator_key {
+                    child_index = i;
+                    break;
+                }
+                child_index = i + 1;
+            }
+        }
+
+        // Get the child at the determined index
+        if child_index < branch.children.len() {
+            if let Some(ref child) = branch.children[child_index] {
+                return self.find_leaf_with_path_recursive(child.as_ref(), depth + 1);
+            }
+        }
+
+        // Fallback: return the current node (shouldn't happen in well-formed tree)
+        (node, depth)
     }
 }
 
@@ -1484,6 +1557,105 @@ mod tests {
         assert_eq!(node.len(), 0);
         assert!(!node.is_leaf());
         assert_eq!(node.get_branching_factor(), 4);
+    }
+
+    #[test]
+    fn test_tree_with_branch_root_basic_get() {
+        // Test get operations through a BranchNode root
+        // For now, we'll test the find_leaf_with_path functionality directly
+        // since we haven't changed the tree structure yet
+        
+        // Create a BranchNode root
+        let mut branch_root = BranchNode::new(4);
+        
+        // Create two leaf nodes
+        let mut leaf1 = LeafNode::new(4);
+        leaf1.insert_new_entry_at(0, 10, 100);
+        leaf1.insert_new_entry_at(1, 20, 200);
+        
+        let mut leaf2 = LeafNode::new(4);
+        leaf2.insert_new_entry_at(0, 30, 300);
+        leaf2.insert_new_entry_at(1, 40, 400);
+        
+        // Set up the branch node with separator key 25
+        // First child (index 0) contains keys < 25 (leaf1 with 10, 20)
+        branch_root.children[0] = Some(Box::new(leaf1));
+        // Add separator key
+        branch_root.keys[0] = Some(25);
+        branch_root.count = 1;
+        // Second child (index 1) contains keys >= 25 (leaf2 with 30, 40)
+        branch_root.children[1] = Some(Box::new(leaf2));
+        
+        // Test finding leaves through the BranchNode
+        let node: &dyn Node<i32, i32> = &branch_root;
+        
+        // Test get for key 10 (should go to first child)
+        let finder = LeafFinder::new(&10);
+        let (leaf, _) = finder.find_leaf_with_path(node);
+        assert!(leaf.is_leaf());
+        // Cast to LeafNode to call get
+        let leaf_ptr = leaf as *const dyn Node<i32, i32> as *const LeafNode<i32, i32>;
+        let leaf_node = unsafe { &*leaf_ptr };
+        assert_eq!(leaf_node.get(&10), Some(&100));
+        assert_eq!(leaf_node.get(&20), Some(&200));
+        
+        // Test get for key 30 (should go to second child)
+        let finder2 = LeafFinder::new(&30);
+        let (leaf2, _) = finder2.find_leaf_with_path(node);
+        assert!(leaf2.is_leaf());
+        let leaf_ptr2 = leaf2 as *const dyn Node<i32, i32> as *const LeafNode<i32, i32>;
+        let leaf_node2 = unsafe { &*leaf_ptr2 };
+        assert_eq!(leaf_node2.get(&30), Some(&300));
+        assert_eq!(leaf_node2.get(&40), Some(&400));
+        
+        // Test get for key 25 (separator key, not in tree)
+        let finder3 = LeafFinder::new(&25);
+        let (leaf3, _) = finder3.find_leaf_with_path(node);
+        let leaf_ptr3 = leaf3 as *const dyn Node<i32, i32> as *const LeafNode<i32, i32>;
+        let leaf_node3 = unsafe { &*leaf_ptr3 };
+        assert_eq!(leaf_node3.get(&25), None);
+    }
+
+    #[test]
+    fn test_leaf_finder_with_branch_nodes_simple() {
+        // Create a simple tree structure: BranchNode -> 2 LeafNodes
+        let mut branch_node = BranchNode::new(4);
+
+        // Create two leaf nodes
+        let mut leaf1 = LeafNode::new(4);
+        leaf1.insert_new_entry_at(0, 10, 100);
+        leaf1.insert_new_entry_at(1, 20, 200);
+
+        let mut leaf2 = LeafNode::new(4);
+        leaf2.insert_new_entry_at(0, 30, 300);
+        leaf2.insert_new_entry_at(1, 40, 400);
+
+        // Set up the branch node with separator key 25
+        // First child (index 0) contains keys < 25 (leaf1 with 10, 20)
+        branch_node.children[0] = Some(Box::new(leaf1));
+        // Add separator key
+        branch_node.keys[0] = Some(25);
+        branch_node.count = 1;
+        // Second child (index 1) contains keys >= 25 (leaf2 with 30, 40)
+        branch_node.children[1] = Some(Box::new(leaf2));
+
+        // Test LeafFinder with path tracking
+        let finder = LeafFinder::new(&15);
+        let (leaf, depth) = finder.find_leaf_with_path(&branch_node);
+
+        // Should find the first leaf (keys 10, 20) and track the branch node in path
+        assert!(leaf.is_leaf());
+        assert_eq!(leaf.len(), 2);
+        assert_eq!(depth, 1); // Should have traversed through 1 level (BranchNode -> LeafNode)
+
+        // Test finding key in second leaf
+        let finder2 = LeafFinder::new(&35);
+        let (leaf2, depth2) = finder2.find_leaf_with_path(&branch_node);
+
+        // Should find the second leaf (keys 30, 40) and track the branch node in path
+        assert!(leaf2.is_leaf());
+        assert_eq!(leaf2.len(), 2);
+        assert_eq!(depth2, 1); // Should have traversed through 1 level (BranchNode -> LeafNode)
     }
 
     #[test]

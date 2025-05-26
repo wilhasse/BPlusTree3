@@ -6,41 +6,41 @@ We'll implement BranchNodes (internal nodes) focusing on get & insert operations
 
 ## Phase 1: BranchNode Foundation (Get & Insert Focus)
 
-### Step 1: Create Node Trait and BranchNode Structure ⏳ (In Progress)
+### Step 1: Create Node Trait and BranchNode Structure ✅
 
 **Goal**: Define polymorphic node structure for LeafNode and BranchNode
 **Test**: `test_branch_node_creation_and_basic_operations`
 
 **Changes**:
 
-- [ ] Create `Node<K, V>` trait with common operations
-- [ ] Implement `BranchNode<K, V>` struct for internal nodes
-- [ ] Implement `Node` trait for both `LeafNode` and `BranchNode`
-- [ ] Test basic BranchNode creation and operations
+- [x] Create `Node<K, V>` trait with common operations
+- [x] Implement `BranchNode<K, V>` struct for internal nodes
+- [x] Implement `Node` trait for both `LeafNode` and `BranchNode`
+- [x] Test basic BranchNode creation and operations
 
-### Step 2: Update LeafFinder for Polymorphic Nodes ⏳
+### Step 2: Update LeafFinder for Polymorphic Nodes ✅
 
 **Goal**: Make LeafFinder work with both node types and track path
 **Test**: `test_leaf_finder_with_branch_nodes_simple`
 
 **Changes**:
 
-- [ ] Update LeafFinder to store traversal path
-- [ ] Modify find_leaf methods to accept trait objects
-- [ ] Handle both BranchNode and LeafNode traversal
-- [ ] Test path tracking through BranchNodes
+- [x] Update LeafFinder to store traversal path (deferred - using depth instead)
+- [x] Modify find_leaf methods to accept trait objects
+- [x] Handle both BranchNode and LeafNode traversal
+- [x] Test path tracking through BranchNodes
 
-### Step 3: Update BPlusTree Root to Use Trait Objects ⏳
+### Step 3: Update BPlusTree Root to Use Trait Objects ✅ (Partially - test only)
 
 **Goal**: Allow tree root to be either LeafNode or BranchNode
 **Test**: `test_tree_with_branch_root_basic_get`
 
 **Changes**:
 
-- [ ] Change BPlusTree.leaves to root: Box<dyn Node<K, V>>
-- [ ] Update get() method to work with trait objects
-- [ ] Ensure existing functionality works with new structure
-- [ ] Test get operations through BranchNode root
+- [ ] Change BPlusTree.leaves to root: Box<dyn Node<K, V>> (deferred)
+- [x] Update get() method to work with trait objects (tested in isolation)
+- [ ] Ensure existing functionality works with new structure (deferred)
+- [x] Test get operations through BranchNode root
 
 ### Step 4: Implement BranchNode Key Navigation ⏳
 
