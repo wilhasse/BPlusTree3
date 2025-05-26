@@ -379,30 +379,10 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K,
         }
     }
 
-    /// Inserts a key and child into the branch node
-    #[allow(dead_code)]
-    fn insert_key_child(&mut self, key: K, child: Box<dyn Node<K, V>>) {
-        // For now, just insert at the end (simple implementation to make test pass)
-        if self.count < self.branching_factor {
-            self.keys[self.count] = Some(key);
-            self.children[self.count] = Some(child);
-            self.count += 1;
-        }
-    }
-
-    /// Adds a child at the end (for the rightmost child that has no corresponding key)
-    #[allow(dead_code)]
-    fn add_child(&mut self, child: Box<dyn Node<K, V>>) {
-        // The rightmost child goes at index count (one more child than keys)
-        if self.count < self.branching_factor {
-            self.children[self.count] = Some(child);
-        }
-    }
-
     /// Finds the child index where the given key should be located
     fn find_child_index(&self, key: &K) -> usize {
         let mut child_index = 0;
-        
+
         // Iterate through valid keys to find the correct child
         for i in 0..self.count {
             if let Some(separator_key) = &self.keys[i] {
@@ -412,7 +392,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K,
                 child_index = i + 1;
             }
         }
-        
+
         child_index
     }
 
@@ -591,10 +571,7 @@ impl<'a, K: Ord, V> LeafFinder<'a, K, V> {
     /// Finds the leaf node where the key should be located, tracking the path depth.
     /// Returns a reference to the leaf node and the depth of traversal.
     #[cfg(test)]
-    fn find_leaf_with_path<'b>(
-        &self,
-        node: &'b dyn Node<K, V>,
-    ) -> (&'b dyn Node<K, V>, usize) {
+    fn find_leaf_with_path<'b>(&self, node: &'b dyn Node<K, V>) -> (&'b dyn Node<K, V>, usize) {
         self.find_leaf_with_path_recursive(node, 0)
     }
 
@@ -1608,19 +1585,19 @@ mod tests {
         // Test get operations through a BranchNode root
         // For now, we'll test the find_leaf_with_path functionality directly
         // since we haven't changed the tree structure yet
-        
+
         // Create a BranchNode root
         let mut branch_root = BranchNode::new(4);
-        
+
         // Create two leaf nodes
         let mut leaf1 = LeafNode::new(4);
         leaf1.insert_new_entry_at(0, 10, 100);
         leaf1.insert_new_entry_at(1, 20, 200);
-        
+
         let mut leaf2 = LeafNode::new(4);
         leaf2.insert_new_entry_at(0, 30, 300);
         leaf2.insert_new_entry_at(1, 40, 400);
-        
+
         // Set up the branch node with separator key 25
         // First child (index 0) contains keys < 25 (leaf1 with 10, 20)
         branch_root.children[0] = Some(Box::new(leaf1));
@@ -1629,10 +1606,10 @@ mod tests {
         branch_root.count = 1;
         // Second child (index 1) contains keys >= 25 (leaf2 with 30, 40)
         branch_root.children[1] = Some(Box::new(leaf2));
-        
+
         // Test finding leaves through the BranchNode
         let node: &dyn Node<i32, i32> = &branch_root;
-        
+
         // Test get for key 10 (should go to first child)
         let finder = LeafFinder::new(&10);
         let (leaf, _) = finder.find_leaf_with_path(node);
@@ -1642,7 +1619,7 @@ mod tests {
         let leaf_node = unsafe { &*leaf_ptr };
         assert_eq!(leaf_node.get(&10), Some(&100));
         assert_eq!(leaf_node.get(&20), Some(&200));
-        
+
         // Test get for key 30 (should go to second child)
         let finder2 = LeafFinder::new(&30);
         let (leaf2, _) = finder2.find_leaf_with_path(node);
@@ -1651,7 +1628,7 @@ mod tests {
         let leaf_node2 = unsafe { &*leaf_ptr2 };
         assert_eq!(leaf_node2.get(&30), Some(&300));
         assert_eq!(leaf_node2.get(&40), Some(&400));
-        
+
         // Test get for key 25 (separator key, not in tree)
         let finder3 = LeafFinder::new(&25);
         let (leaf3, _) = finder3.find_leaf_with_path(node);
@@ -1664,51 +1641,51 @@ mod tests {
     fn test_branch_node_find_child_for_key() {
         // Test finding the correct child index for various keys
         let mut branch_node = BranchNode::new(4);
-        
+
         // Set up a branch node with keys [10, 20, 30]
         branch_node.keys[0] = Some(10);
         branch_node.keys[1] = Some(20);
         branch_node.keys[2] = Some(30);
         branch_node.count = 3;
-        
+
         // Test find_child_index for various keys
         // Keys < 10 should go to child 0
         assert_eq!(branch_node.find_child_index(&5), 0);
         assert_eq!(branch_node.find_child_index(&9), 0);
-        
+
         // Keys in [10, 20) should go to child 1
         assert_eq!(branch_node.find_child_index(&10), 1);
         assert_eq!(branch_node.find_child_index(&15), 1);
         assert_eq!(branch_node.find_child_index(&19), 1);
-        
+
         // Keys in [20, 30) should go to child 2
         assert_eq!(branch_node.find_child_index(&20), 2);
         assert_eq!(branch_node.find_child_index(&25), 2);
         assert_eq!(branch_node.find_child_index(&29), 2);
-        
+
         // Keys >= 30 should go to child 3
         assert_eq!(branch_node.find_child_index(&30), 3);
         assert_eq!(branch_node.find_child_index(&35), 3);
         assert_eq!(branch_node.find_child_index(&100), 3);
-        
+
         // Test with actual child nodes
         let leaf0: LeafNode<i32, i32> = LeafNode::new(4);
         let leaf1: LeafNode<i32, i32> = LeafNode::new(4);
         let leaf2: LeafNode<i32, i32> = LeafNode::new(4);
         let leaf3: LeafNode<i32, i32> = LeafNode::new(4);
-        
+
         branch_node.children[0] = Some(Box::new(leaf0));
         branch_node.children[1] = Some(Box::new(leaf1));
         branch_node.children[2] = Some(Box::new(leaf2));
         branch_node.children[3] = Some(Box::new(leaf3));
-        
+
         // Test get_child
         assert!(branch_node.get_child(0).is_some());
         assert!(branch_node.get_child(1).is_some());
         assert!(branch_node.get_child(2).is_some());
         assert!(branch_node.get_child(3).is_some());
         assert!(branch_node.get_child(4).is_none()); // Out of bounds
-        
+
         // Test get_child_mut
         assert!(branch_node.get_child_mut(0).is_some());
         assert!(branch_node.get_child_mut(3).is_some());
