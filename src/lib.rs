@@ -1,5 +1,316 @@
 //! BPlusTree library.
 
+#[derive(Debug, Clone)]
+pub struct BPlusTree<K, V> {
+    /// Maximum number of entries in each node
+    branching_factor: usize,
+    /// Root node of the tree
+    root: LeafNode<K, V>,
+}
+
+impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
+    /// Creates an empty `BPlusTree` with the specified branching factor.
+    pub fn new(branching_factor: usize) -> Self {
+        Self {
+            branching_factor,
+            root: LeafNode::new(branching_factor),
+        }
+    }
+
+    // Helper method to expose the root node for testing
+    #[cfg(test)]
+    fn get_root(&self) -> &LeafNode<K, V> {
+        &self.root
+    }
+
+    // Helper method to expose the root node for testing
+    #[cfg(test)]
+    fn get_root_mut(&mut self) -> &mut LeafNode<K, V> {
+        &mut self.root
+    }
+
+    /// Helper method to print the entire node chain for debugging
+    pub fn print_node_chain(&self) {
+        let mut node_num = 1;
+        let mut current = &self.root;
+
+        loop {
+            // Print the current node's keys
+            print!("Node {}: [", node_num);
+            for i in 0..current.count {
+                if let Some(ref entry) = current.items[i] {
+                    print!("{:?} ", entry.key);
+                }
+            }
+            println!("]");
+
+            // Move to the next node if available
+            if let Some(ref next) = current.next {
+                current = next;
+                node_num += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Returns the branching factor of the tree.
+    pub fn branching_factor(&self) -> usize {
+        self.branching_factor
+    }
+
+    /// Returns the number of leaf nodes in the tree (for testing)
+    pub fn leaf_count(&self) -> usize {
+        self.root.count_leaves()
+    }
+
+    /// Returns the size of each leaf node (for testing)
+    pub fn leaf_sizes(&self) -> Vec<usize> {
+        self.root.get_leaf_sizes()
+    }
+
+    /// Inserts a key-value pair into the tree.
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        // We need to clone the key for the search reference due to Rust's borrowing rules
+        let search_key = key.clone();
+
+        // Find the leaf where this key belongs
+        let finder = LeafFinder::new(&search_key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
+        let (pos, maybe_existing_index) = leaf.find_position(&key);
+        if let Some(existing_index) = maybe_existing_index {
+            return leaf.update_existing_key(existing_index, value);
+        }
+
+        // If leaf has space, insert directly
+        if !leaf.is_full() {
+            // Key doesn't exist, insert new entry (assumes there's room)
+            leaf.insert_new_entry_at(pos, key, value);
+            return None;
+        }
+
+        // Leaf is full, split it
+        leaf.split();
+
+        // Now find the appropriate leaf for insertion (either the original or the new one)
+        let finder = LeafFinder::new(&search_key);
+        // tricky to start at the current leaf. Won't work once we move to a real tree
+        let target_leaf = finder.find_leaf_mut(leaf);
+
+        // Key definitely doesn't exist
+        let (pos, _) = target_leaf.find_position(&key);
+
+        // Assume there's room
+        // Kinda funky there's two insert_new_entry_at calls
+        target_leaf.insert_new_entry_at(pos, key, value);
+        None
+    }
+
+    /// Returns a reference to the value corresponding to the key.
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let finder = LeafFinder::new(key);
+        let leaf = finder.find_leaf(&self.root);
+        leaf.get(key)
+    }
+
+    /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
+    /// If min_key is None, starts from the smallest key.
+    /// If max_key is None, goes up to the largest key.
+    pub fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
+        // If min_key is provided, use LeafFinder to find the starting leaf
+        let start_leaf = if let Some(min) = min_key {
+            let finder = LeafFinder::new(min);
+            finder.find_leaf(&self.root)
+        } else {
+            // If no min_key, start from the root
+            &self.root
+        };
+
+        // Start range search from the identified leaf
+        start_leaf.range(min_key, max_key)
+    }
+
+    /// Returns a slice of the tree containing all key-value pairs in sorted order.
+    pub fn slice(&self) -> Vec<(&K, &V)> {
+        self.range(None, None)
+    }
+
+    /// Removes a key from the tree, returning the associated value if the key was present.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bplustree3::BPlusTree;
+    ///
+    /// let mut tree = BPlusTree::new(3);
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    ///
+    /// assert_eq!(tree.remove(&1), Some("one"));
+    /// assert_eq!(tree.remove(&1), None); // Key no longer exists
+    /// assert_eq!(tree.get(&1), None);
+    /// ```
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        // Find the leaf node containing the key
+        let finder = LeafFinder::new(key);
+        let leaf = finder.find_leaf_mut(&mut self.root);
+
+        // Attempt to remove the key from the leaf
+        let removal_result = leaf.remove_key(key);
+
+        // Handle the result after releasing the borrow on leaf
+        match removal_result {
+            RemovalResult::Success(value) => Some(value),
+            RemovalResult::NotFound => None,
+            RemovalResult::Underflow(value) => {
+                // Handle underflow by trying to redistribute or merge
+                self.handle_underflow_at_key(key);
+                Some(value)
+            }
+            RemovalResult::NodeEmpty(value) => {
+                // Handle empty node by removing it from the chain
+                self.handle_empty_node_at_key(key);
+                Some(value)
+            }
+        }
+    }
+
+    /// Handles underflow at a specific key location by finding the node and rebalancing.
+    fn handle_underflow_at_key(&mut self, key: &K) {
+        let finder = LeafFinder::new(key);
+        let underflow_node = finder.find_leaf_mut(&mut self.root);
+
+        // Try to redistribute from next sibling first
+        if underflow_node.redistribute_from_next_sibling() {
+            return; // Successfully redistributed
+        }
+
+        // If redistribution failed, try to merge with next sibling
+        underflow_node.merge_with_next_sibling();
+
+        // Note: In a full B+ tree with internal nodes, we would also need to
+        // handle underflow propagation up the tree. For now, we only handle
+        // leaf-level rebalancing.
+    }
+
+    /// Handles an empty node at a specific key location.
+    fn handle_empty_node_at_key(&mut self, key: &K) {
+        // For now, we'll use the same logic as underflow handling
+        // In a more complete implementation, we would remove the node entirely
+        self.handle_underflow_at_key(key);
+    }
+
+    /// Validates that the tree maintains all B+ tree invariants.
+    /// Returns Ok(()) if valid, Err(String) with description if invalid.
+    ///
+    /// Checks:
+    /// - All nodes have at least min_keys entries (except possibly root)
+    /// - All nodes have at most branching_factor entries
+    /// - All entries within nodes are sorted
+    /// - All entries across the tree are sorted
+    /// - No duplicate keys exist
+    /// - Chain linkage is correct
+    pub fn validate(&self) -> Result<(), String> {
+        let mut all_keys = Vec::new();
+        let mut current = Some(&self.root);
+        let mut node_count = 0;
+
+        while let Some(node) = current {
+            node_count += 1;
+
+            // Check node capacity constraints
+            if node.count > node.branching_factor {
+                return Err(format!(
+                    "Node {} has {} entries, exceeds branching factor {}",
+                    node_count, node.count, node.branching_factor
+                ));
+            }
+
+            // Check minimum keys constraint (except for single node tree)
+            if node_count > 1 && node.count < node.min_keys() {
+                return Err(format!(
+                    "Node {} has {} entries, below minimum {}",
+                    node_count,
+                    node.count,
+                    node.min_keys()
+                ));
+            }
+
+            // Check that entries within this node are sorted
+            for i in 0..node.count.saturating_sub(1) {
+                if let (Some(entry1), Some(entry2)) = (&node.items[i], &node.items[i + 1]) {
+                    if entry1.key >= entry2.key {
+                        return Err(format!(
+                            "Node {} entries not sorted: {:?} >= {:?} at positions {} and {}",
+                            node_count,
+                            entry1.key,
+                            entry2.key,
+                            i,
+                            i + 1
+                        ));
+                    }
+                }
+            }
+
+            // Collect all keys from this node
+            for i in 0..node.count {
+                if let Some(entry) = &node.items[i] {
+                    all_keys.push(entry.key.clone());
+                }
+            }
+
+            // Check for unused slots that should be None
+            for i in node.count..node.items.len() {
+                if node.items[i].is_some() {
+                    return Err(format!(
+                        "Node {} has entry at unused position {}",
+                        node_count, i
+                    ));
+                }
+            }
+
+            current = node.next.as_ref().map(|boxed| boxed.as_ref());
+        }
+
+        // Check that all keys across the tree are sorted (no duplicates, proper order)
+        for i in 0..all_keys.len().saturating_sub(1) {
+            if all_keys[i] >= all_keys[i + 1] {
+                return Err(format!(
+                    "Keys not globally sorted: {:?} >= {:?} at positions {} and {}",
+                    all_keys[i],
+                    all_keys[i + 1],
+                    i,
+                    i + 1
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns the number of elements in the tree.
+    pub fn len(&self) -> usize {
+        let mut total = 0;
+        let mut current = &self.root;
+
+        // Add count from the root
+        total += current.len();
+
+        // Add counts from all linked nodes
+        while let Some(ref next_node) = current.next {
+            total += next_node.len();
+            current = next_node;
+        }
+
+        total
+    }
+
+    /// Returns `true` if the tree contains no elements.
+    pub fn is_empty(&self) -> bool {
+        self.root.is_empty()
+    }
+}
+
 /// A key-value entry in a leaf node.
 #[derive(Debug, Clone)]
 struct Entry<K, V> {
@@ -500,317 +811,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
 
         result
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BPlusTree<K, V> {
-    /// Maximum number of entries in each node
-    branching_factor: usize,
-    /// Root node of the tree
-    root: LeafNode<K, V>,
-}
-
-impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
-    /// Creates an empty `BPlusTree` with the specified branching factor.
-    pub fn new(branching_factor: usize) -> Self {
-        Self {
-            branching_factor,
-            root: LeafNode::new(branching_factor),
-        }
-    }
-
-    // Helper method to expose the root node for testing
-    #[cfg(test)]
-    fn get_root(&self) -> &LeafNode<K, V> {
-        &self.root
-    }
-
-    // Helper method to expose the root node for testing
-    #[cfg(test)]
-    fn get_root_mut(&mut self) -> &mut LeafNode<K, V> {
-        &mut self.root
-    }
-
-    /// Helper method to print the entire node chain for debugging
-    pub fn print_node_chain(&self) {
-        let mut node_num = 1;
-        let mut current = &self.root;
-
-        loop {
-            // Print the current node's keys
-            print!("Node {}: [", node_num);
-            for i in 0..current.count {
-                if let Some(ref entry) = current.items[i] {
-                    print!("{:?} ", entry.key);
-                }
-            }
-            println!("]");
-
-            // Move to the next node if available
-            if let Some(ref next) = current.next {
-                current = next;
-                node_num += 1;
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Returns the branching factor of the tree.
-    pub fn branching_factor(&self) -> usize {
-        self.branching_factor
-    }
-
-    /// Returns the number of leaf nodes in the tree (for testing)
-    pub fn leaf_count(&self) -> usize {
-        self.root.count_leaves()
-    }
-
-    /// Returns the size of each leaf node (for testing)
-    pub fn leaf_sizes(&self) -> Vec<usize> {
-        self.root.get_leaf_sizes()
-    }
-
-    /// Inserts a key-value pair into the tree.
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        // We need to clone the key for the search reference due to Rust's borrowing rules
-        let search_key = key.clone();
-
-        // Find the leaf where this key belongs
-        let finder = LeafFinder::new(&search_key);
-        let leaf = finder.find_leaf_mut(&mut self.root);
-        let (pos, maybe_existing_index) = leaf.find_position(&key);
-        if let Some(existing_index) = maybe_existing_index {
-            return leaf.update_existing_key(existing_index, value);
-        }
-
-        // If leaf has space, insert directly
-        if !leaf.is_full() {
-            // Key doesn't exist, insert new entry (assumes there's room)
-            leaf.insert_new_entry_at(pos, key, value);
-            return None;
-        }
-
-        // Leaf is full, split it
-        leaf.split();
-
-        // Now find the appropriate leaf for insertion (either the original or the new one)
-        let finder = LeafFinder::new(&search_key);
-        // tricky to start at the current leaf. Won't work once we move to a real tree
-        let target_leaf = finder.find_leaf_mut(leaf);
-
-        // Key definitely doesn't exist
-        let (pos, _) = target_leaf.find_position(&key);
-
-        // Assume there's room
-        // Kinda funky there's two insert_new_entry_at calls
-        target_leaf.insert_new_entry_at(pos, key, value);
-        None
-    }
-
-    /// Returns a reference to the value corresponding to the key.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let finder = LeafFinder::new(key);
-        let leaf = finder.find_leaf(&self.root);
-        leaf.get(key)
-    }
-
-    /// Returns all key-value pairs in the range [min_key, max_key] in sorted order.
-    /// If min_key is None, starts from the smallest key.
-    /// If max_key is None, goes up to the largest key.
-    pub fn range(&self, min_key: Option<&K>, max_key: Option<&K>) -> Vec<(&K, &V)> {
-        // If min_key is provided, use LeafFinder to find the starting leaf
-        let start_leaf = if let Some(min) = min_key {
-            let finder = LeafFinder::new(min);
-            finder.find_leaf(&self.root)
-        } else {
-            // If no min_key, start from the root
-            &self.root
-        };
-
-        // Start range search from the identified leaf
-        start_leaf.range(min_key, max_key)
-    }
-
-    /// Returns a slice of the tree containing all key-value pairs in sorted order.
-    pub fn slice(&self) -> Vec<(&K, &V)> {
-        self.range(None, None)
-    }
-
-    /// Removes a key from the tree, returning the associated value if the key was present.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree3::BPlusTree;
-    ///
-    /// let mut tree = BPlusTree::new(3);
-    /// tree.insert(1, "one");
-    /// tree.insert(2, "two");
-    ///
-    /// assert_eq!(tree.remove(&1), Some("one"));
-    /// assert_eq!(tree.remove(&1), None); // Key no longer exists
-    /// assert_eq!(tree.get(&1), None);
-    /// ```
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        // Find the leaf node containing the key
-        let finder = LeafFinder::new(key);
-        let leaf = finder.find_leaf_mut(&mut self.root);
-
-        // Attempt to remove the key from the leaf
-        let removal_result = leaf.remove_key(key);
-
-        // Handle the result after releasing the borrow on leaf
-        match removal_result {
-            RemovalResult::Success(value) => Some(value),
-            RemovalResult::NotFound => None,
-            RemovalResult::Underflow(value) => {
-                // Handle underflow by trying to redistribute or merge
-                self.handle_underflow_at_key(key);
-                Some(value)
-            }
-            RemovalResult::NodeEmpty(value) => {
-                // Handle empty node by removing it from the chain
-                self.handle_empty_node_at_key(key);
-                Some(value)
-            }
-        }
-    }
-
-    /// Handles underflow at a specific key location by finding the node and rebalancing.
-    fn handle_underflow_at_key(&mut self, key: &K) {
-        let finder = LeafFinder::new(key);
-        let underflow_node = finder.find_leaf_mut(&mut self.root);
-
-        // Try to redistribute from next sibling first
-        if underflow_node.redistribute_from_next_sibling() {
-            return; // Successfully redistributed
-        }
-
-        // If redistribution failed, try to merge with next sibling
-        underflow_node.merge_with_next_sibling();
-
-        // Note: In a full B+ tree with internal nodes, we would also need to
-        // handle underflow propagation up the tree. For now, we only handle
-        // leaf-level rebalancing.
-    }
-
-    /// Handles an empty node at a specific key location.
-    fn handle_empty_node_at_key(&mut self, key: &K) {
-        // For now, we'll use the same logic as underflow handling
-        // In a more complete implementation, we would remove the node entirely
-        self.handle_underflow_at_key(key);
-    }
-
-    /// Validates that the tree maintains all B+ tree invariants.
-    /// Returns Ok(()) if valid, Err(String) with description if invalid.
-    ///
-    /// Checks:
-    /// - All nodes have at least min_keys entries (except possibly root)
-    /// - All nodes have at most branching_factor entries
-    /// - All entries within nodes are sorted
-    /// - All entries across the tree are sorted
-    /// - No duplicate keys exist
-    /// - Chain linkage is correct
-    pub fn validate(&self) -> Result<(), String> {
-        let mut all_keys = Vec::new();
-        let mut current = Some(&self.root);
-        let mut node_count = 0;
-
-        while let Some(node) = current {
-            node_count += 1;
-
-            // Check node capacity constraints
-            if node.count > node.branching_factor {
-                return Err(format!(
-                    "Node {} has {} entries, exceeds branching factor {}",
-                    node_count, node.count, node.branching_factor
-                ));
-            }
-
-            // Check minimum keys constraint (except for single node tree)
-            if node_count > 1 && node.count < node.min_keys() {
-                return Err(format!(
-                    "Node {} has {} entries, below minimum {}",
-                    node_count,
-                    node.count,
-                    node.min_keys()
-                ));
-            }
-
-            // Check that entries within this node are sorted
-            for i in 0..node.count.saturating_sub(1) {
-                if let (Some(entry1), Some(entry2)) = (&node.items[i], &node.items[i + 1]) {
-                    if entry1.key >= entry2.key {
-                        return Err(format!(
-                            "Node {} entries not sorted: {:?} >= {:?} at positions {} and {}",
-                            node_count,
-                            entry1.key,
-                            entry2.key,
-                            i,
-                            i + 1
-                        ));
-                    }
-                }
-            }
-
-            // Collect all keys from this node
-            for i in 0..node.count {
-                if let Some(entry) = &node.items[i] {
-                    all_keys.push(entry.key.clone());
-                }
-            }
-
-            // Check for unused slots that should be None
-            for i in node.count..node.items.len() {
-                if node.items[i].is_some() {
-                    return Err(format!(
-                        "Node {} has entry at unused position {}",
-                        node_count, i
-                    ));
-                }
-            }
-
-            current = node.next.as_ref().map(|boxed| boxed.as_ref());
-        }
-
-        // Check that all keys across the tree are sorted (no duplicates, proper order)
-        for i in 0..all_keys.len().saturating_sub(1) {
-            if all_keys[i] >= all_keys[i + 1] {
-                return Err(format!(
-                    "Keys not globally sorted: {:?} >= {:?} at positions {} and {}",
-                    all_keys[i],
-                    all_keys[i + 1],
-                    i,
-                    i + 1
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Returns the number of elements in the tree.
-    pub fn len(&self) -> usize {
-        let mut total = 0;
-        let mut current = &self.root;
-
-        // Add count from the root
-        total += current.len();
-
-        // Add counts from all linked nodes
-        while let Some(ref next_node) = current.next {
-            total += next_node.len();
-            current = next_node;
-        }
-
-        total
-    }
-
-    /// Returns `true` if the tree contains no elements.
-    pub fn is_empty(&self) -> bool {
-        self.root.is_empty()
     }
 }
 
