@@ -147,8 +147,6 @@ struct LeafNode<K, V> {
     count: usize,
     /// Reference to the next leaf node in the linked list
     next: Option<Box<LeafNode<K, V>>>,
-    /// Reference to the previous leaf node in the linked list
-    prev: Option<Box<LeafNode<K, V>>>,
 }
 
 /// Result of a removal operation on a leaf node
@@ -178,7 +176,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             items,
             count: 0,
             next: None,
-            prev: None,
         }
     }
 
@@ -429,8 +426,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.count = split_point;
 
         // Link new node into the chain (new_node's next = self.next, self.next = new_node)
-        // TODO: For true doubly linked list, we need to update backward pointers too
-        // This requires a different ownership model (Rc<RefCell<T>> or raw pointers)
         new_node.next = self.next.take();
         self.next = Some(new_node);
     }

@@ -14,7 +14,7 @@ We'll implement remove operations in the current linked-list structure first, th
 **Rationale**: Simpler ownership model, sufficient for remove operations
 **Changes**:
 
-- [x] Add `prev` field to LeafNode (for future use, currently unused)
+- [x] ~~Add `prev` field to LeafNode (for future use, currently unused)~~ - Removed as unused
 - [x] All existing tests still pass
 - [x] Ready to implement remove infrastructure
 
@@ -114,7 +114,7 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ### New Tests Needed
 
-- [ ] Doubly linked list traversal tests
+- [x] ~~Doubly linked list traversal tests~~ - Not needed (using singly linked list)
 - [ ] Remove operation tests (basic cases)
 - [ ] Underflow and rebalancing tests
 - [ ] Edge case tests for remove
@@ -131,7 +131,7 @@ We'll implement remove operations in the current linked-list structure first, th
 
 ### Risk Mitigation
 
-- Doubly linked list changes are structural - low risk
+- ~~Doubly linked list changes are structural - low risk~~ - Using singly linked list
 - Remove implementation is high complexity - implement incrementally
 - Maintain existing API compatibility throughout
 - Use fuzz tests to validate against BTreeMap behavior
