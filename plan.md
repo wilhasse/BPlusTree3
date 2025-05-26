@@ -6,7 +6,7 @@ We'll implement BranchNodes (internal nodes) focusing on get & insert operations
 
 ## Phase 1: BranchNode Foundation (Get & Insert Focus)
 
-### Step 1: Create Node Trait and BranchNode Structure ⏳ (Next)
+### Step 1: Create Node Trait and BranchNode Structure ⏳ (In Progress)
 
 **Goal**: Define polymorphic node structure for LeafNode and BranchNode
 **Test**: `test_branch_node_creation_and_basic_operations`

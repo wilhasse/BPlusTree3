@@ -8,7 +8,7 @@ pub struct BPlusTree<K, V> {
     leaves: LeafNode<K, V>,
 }
 
-impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BPlusTree<K, V> {
+impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTree<K, V> {
     /// Creates an empty `BPlusTree` with the specified branching factor.
     pub fn new(branching_factor: usize) -> Self {
         Self {
@@ -325,6 +325,76 @@ struct Entry<K, V> {
     value: V,
 }
 
+/// Common interface for both LeafNode and BranchNode
+trait Node<K, V>: std::fmt::Debug {
+    /// Returns true if the node contains no elements
+    fn is_empty(&self) -> bool;
+
+    /// Returns the number of elements in the node
+    fn len(&self) -> usize;
+
+    /// Returns true if this is a leaf node, false if it's a branch node
+    fn is_leaf(&self) -> bool;
+
+    /// Returns the branching factor for this node
+    fn get_branching_factor(&self) -> usize;
+}
+
+/// Internal node in the B+ tree containing separator keys and child pointers
+#[derive(Debug)]
+struct BranchNode<K, V> {
+    /// Maximum number of keys this node can hold before splitting
+    branching_factor: usize,
+    /// Separator keys that guide navigation to children
+    keys: Vec<Option<K>>,
+    /// Child node pointers (one more child than keys)
+    children: Vec<Option<Box<dyn Node<K, V>>>>,
+    /// Number of valid keys in the keys array
+    count: usize,
+}
+
+impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BranchNode<K, V> {
+    /// Creates a new branch node with the specified branching factor.
+    fn new(branching_factor: usize) -> Self {
+        // Initialize the keys vector with None values up to branching_factor
+        let mut keys = Vec::with_capacity(branching_factor);
+        for _ in 0..branching_factor {
+            keys.push(None);
+        }
+
+        // Initialize the children vector with None values (branching_factor + 1 children)
+        let mut children = Vec::with_capacity(branching_factor + 1);
+        for _ in 0..=branching_factor {
+            children.push(None);
+        }
+
+        Self {
+            branching_factor,
+            keys,
+            children,
+            count: 0,
+        }
+    }
+}
+
+impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> for BranchNode<K, V> {
+    fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn is_leaf(&self) -> bool {
+        false
+    }
+
+    fn get_branching_factor(&self) -> usize {
+        self.branching_factor
+    }
+}
+
 /// Utility to find the appropriate leaf node for a given key.
 #[derive(Debug)]
 struct LeafFinder<'a, K> {
@@ -478,6 +548,24 @@ enum RemovalResult<V> {
     Underflow(V),
     /// Key was removed and node is now empty (should be removed from chain)
     NodeEmpty(V),
+}
+
+impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> for LeafNode<K, V> {
+    fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn is_leaf(&self) -> bool {
+        true
+    }
+
+    fn get_branching_factor(&self) -> usize {
+        self.branching_factor
+    }
 }
 
 impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
@@ -1377,6 +1465,25 @@ mod tests {
         node.insert_new_entry_at(2, 30, 300);
         assert!(!node.is_underflow());
         assert!(node.can_give_key()); // Above minimum, can give
+    }
+
+    #[test]
+    fn test_branch_node_creation_and_basic_operations() {
+        // Test creating a BranchNode with branching factor
+        let branch_node: BranchNode<i32, i32> = BranchNode::new(4);
+
+        // Test basic operations
+        assert!(branch_node.is_empty());
+        assert_eq!(branch_node.len(), 0);
+        assert!(!branch_node.is_leaf());
+        assert_eq!(branch_node.get_branching_factor(), 4);
+
+        // Test Node trait implementation
+        let node: &dyn Node<i32, i32> = &branch_node;
+        assert!(node.is_empty());
+        assert_eq!(node.len(), 0);
+        assert!(!node.is_leaf());
+        assert_eq!(node.get_branching_factor(), 4);
     }
 
     #[test]
