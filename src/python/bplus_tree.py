@@ -58,7 +58,7 @@ class BPlusTreeMap:
 
     def __len__(self) -> int:
         """Return number of key-value pairs"""
-        return self._size
+        return len(self.leaves)
 
     def __bool__(self) -> bool:
         """Return True if tree is not empty"""
