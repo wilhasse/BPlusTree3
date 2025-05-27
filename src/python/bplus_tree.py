@@ -62,7 +62,7 @@ class BPlusTreeMap:
 
     def __bool__(self) -> bool:
         """Return True if tree is not empty"""
-        return self._size > 0
+        return len(self) > 0
 
     def __delitem__(self, key: Any) -> None:
         """Delete a key (dict-like API)"""
