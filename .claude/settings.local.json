@@ -17,7 +17,8 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"impl.*Node.*for LeafNode\" -n)",
       "Bash(mkdir:*)",
       "Bash(python -m pytest test_bplus_tree.py -v)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(python -m pytest test_bplus_tree.py::TestSetItemSplitting::test_overflow -v)"
     ],
     "deny": []
   }

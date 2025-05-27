@@ -22,11 +22,34 @@ class BPlusTreeMap:
         # For now, just handle the simple case of inserting into a leaf root
         if self.root.is_leaf():
             leaf = self.root
-            old_value = leaf.insert(key, value)
-            if old_value is None:
+            
+            # Check if we need to split before inserting
+            if leaf.is_full():
+                # Find position for the new key
+                pos, exists = leaf.find_position(key)
+                
+                # If key exists, just update (no split needed)
+                if exists:
+                    leaf.values[pos] = value
+                    return
+                
+                # Split the leaf
+                new_leaf = leaf.split()
+                
+                # Determine which leaf should receive the new key
+                if new_leaf.keys and key >= new_leaf.keys[0]:
+                    # Insert into new leaf
+                    new_leaf.insert(key, value)
+                else:
+                    # Insert into original leaf
+                    leaf.insert(key, value)
+                
                 self._size += 1
-
-            # TODO: Handle splitting when leaf is full
+            else:
+                # Normal insertion
+                old_value = leaf.insert(key, value)
+                if old_value is None:
+                    self._size += 1
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""
@@ -37,14 +60,20 @@ class BPlusTreeMap:
 
     def get(self, key: Any, default: Any = None) -> Any:
         """Get value for a key with optional default"""
-        # Navigate to the correct leaf
-        node = self.root
-        while not node.is_leaf():
-            node = node.get_child(key)
-
-        # Get from leaf
-        value = node.get(key)
-        return value if value is not None else default
+        # For now, since we only have leaf nodes at the root level,
+        # search through the linked list of leaves
+        current = self.leaves
+        while current is not None:
+            value = current.get(key)
+            if value is not None:
+                return value
+            # If this leaf's keys are all smaller than our key, check next
+            if current.keys and key > current.keys[-1]:
+                current = current.next
+            else:
+                # Key would be in this leaf if it existed
+                break
+        return default
 
     def __contains__(self, key: Any) -> bool:
         """Check if key exists (for 'in' operator)"""
@@ -52,7 +81,7 @@ class BPlusTreeMap:
 
     def __len__(self) -> int:
         """Return number of key-value pairs"""
-        return len(self.leaves)
+        return self._size
 
     def __bool__(self) -> bool:
         """Return True if tree is not empty"""
@@ -77,6 +106,17 @@ class BPlusTreeMap:
         """Return an iterator over (key, value) pairs"""
         # TODO: Implement item iteration
         raise NotImplementedError("Item iteration not yet implemented")
+
+    """Testing only"""
+
+    def leaf_count(self) -> int:
+        """Return the number of leaf nodes"""
+        count = 0
+        node = self.leaves
+        while node is not None:
+            count += 1
+            node = node.next
+        return count
 
 
 class Node(ABC):
@@ -165,6 +205,28 @@ class LeafNode(Node):
             self.keys.pop(pos)
             return self.values.pop(pos)
         return None
+    
+    def split(self) -> 'LeafNode':
+        """Split this leaf node, returning the new right node"""
+        # Find the midpoint
+        mid = len(self.keys) // 2
+        
+        # Create new leaf for right half
+        new_leaf = LeafNode(self.capacity)
+        
+        # Move right half of keys/values to new leaf
+        new_leaf.keys = self.keys[mid:]
+        new_leaf.values = self.values[mid:]
+        
+        # Keep left half in this leaf
+        self.keys = self.keys[:mid]
+        self.values = self.values[:mid]
+        
+        # Update linked list pointers
+        new_leaf.next = self.next
+        self.next = new_leaf
+        
+        return new_leaf
 
 
 class BranchNode(Node):
