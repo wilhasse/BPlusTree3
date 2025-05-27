@@ -14,7 +14,10 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"trait Node\" -n)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"struct BranchNode\" -n)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"BranchNode::new\" -n)",
-      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"impl.*Node.*for LeafNode\" -n)"
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"impl.*Node.*for LeafNode\" -n)",
+      "Bash(mkdir:*)",
+      "Bash(python -m pytest test_bplus_tree.py -v)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }
