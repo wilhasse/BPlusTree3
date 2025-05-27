@@ -48,13 +48,7 @@ class BPlusTreeMap:
 
     def __contains__(self, key: Any) -> bool:
         """Check if key exists (for 'in' operator)"""
-        # Navigate to the correct leaf
-        node = self.root
-        while not node.is_leaf():
-            node = node.get_child(key)
-
-        # Check in leaf
-        return node.get(key) is not None
+        return self.get(key) is not None
 
     def __len__(self) -> int:
         """Return number of key-value pairs"""
