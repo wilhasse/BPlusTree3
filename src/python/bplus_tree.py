@@ -22,40 +22,40 @@ class BPlusTreeMap:
         # For now, just handle the simple case of inserting into a leaf root
         if self.root.is_leaf():
             leaf = self.root
-            
+
             # Check if we need to split before inserting
             if leaf.is_full():
                 # Find position for the new key
                 pos, exists = leaf.find_position(key)
-                
+
                 # If key exists, just update (no split needed)
                 if exists:
                     leaf.values[pos] = value
                     return
-                
+
                 # Split the leaf
                 new_leaf = leaf.split()
-                
+
                 # Create a new branch node as root
                 branch = BranchNode(self.capacity)
-                
+
                 # The separator key is the first key of the right leaf
                 separator_key = new_leaf.keys[0]
                 branch.keys.append(separator_key)
-                
+
                 # Add the two leaves as children
                 branch.children.append(leaf)
                 branch.children.append(new_leaf)
-                
+
                 # Update root
                 self.root = branch
-                
+
                 # Now insert the new key into the appropriate leaf
                 if key >= separator_key:
                     new_leaf.insert(key, value)
                 else:
                     leaf.insert(key, value)
-                
+
                 self._size += 1
             else:
                 # Normal insertion
@@ -76,7 +76,7 @@ class BPlusTreeMap:
         node = self.root
         while not node.is_leaf():
             node = node.get_child(key)
-        
+
         # Get from leaf
         value = node.get(key)
         return value if value is not None else default
@@ -87,7 +87,7 @@ class BPlusTreeMap:
 
     def __len__(self) -> int:
         """Return number of key-value pairs"""
-        return self._size
+        return self.leaves.key_count()
 
     def __bool__(self) -> bool:
         """Return True if tree is not empty"""
@@ -211,28 +211,32 @@ class LeafNode(Node):
             self.keys.pop(pos)
             return self.values.pop(pos)
         return None
-    
-    def split(self) -> 'LeafNode':
+
+    def split(self) -> "LeafNode":
         """Split this leaf node, returning the new right node"""
         # Find the midpoint
         mid = len(self.keys) // 2
-        
+
         # Create new leaf for right half
         new_leaf = LeafNode(self.capacity)
-        
+
         # Move right half of keys/values to new leaf
         new_leaf.keys = self.keys[mid:]
         new_leaf.values = self.values[mid:]
-        
+
         # Keep left half in this leaf
         self.keys = self.keys[:mid]
         self.values = self.values[:mid]
-        
+
         # Update linked list pointers
         new_leaf.next = self.next
         self.next = new_leaf
-        
+
         return new_leaf
+
+    def key_count(self) -> int:
+        """Count all keys in this leaf and all following leaves"""
+        return len(self) + (0 if self.next is None else self.next.key_count())
 
 
 class BranchNode(Node):

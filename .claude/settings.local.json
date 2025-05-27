@@ -18,7 +18,8 @@
       "Bash(mkdir:*)",
       "Bash(python -m pytest test_bplus_tree.py -v)",
       "Bash(git reset:*)",
-      "Bash(python -m pytest test_bplus_tree.py::TestSetItemSplitting::test_overflow -v)"
+      "Bash(python -m pytest test_bplus_tree.py::TestSetItemSplitting::test_overflow -v)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }
