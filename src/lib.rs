@@ -439,9 +439,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Node<K, V> fo
 struct LeafFinder<'a, K, V> {
     /// The key we're searching for
     key: &'a K,
-    /// Path of nodes traversed during search (for future use in remove operations)
-    // TODO: Implement proper path tracking when needed for remove operations
-    // path: Vec<*const dyn Node<K, V>>,
     _phantom: std::marker::PhantomData<V>,
 }
 
