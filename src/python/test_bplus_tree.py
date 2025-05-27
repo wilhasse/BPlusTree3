@@ -89,6 +89,8 @@ class TestSetItemSplitting:
         assert tree[2] == "two"
         assert tree[3] == "three"
 
+        assert not tree.root.is_leaf()
+
 
 class TestLeafNode:
     """Test LeafNode operations"""

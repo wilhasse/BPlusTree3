@@ -36,12 +36,24 @@ class BPlusTreeMap:
                 # Split the leaf
                 new_leaf = leaf.split()
                 
-                # Determine which leaf should receive the new key
-                if new_leaf.keys and key >= new_leaf.keys[0]:
-                    # Insert into new leaf
+                # Create a new branch node as root
+                branch = BranchNode(self.capacity)
+                
+                # The separator key is the first key of the right leaf
+                separator_key = new_leaf.keys[0]
+                branch.keys.append(separator_key)
+                
+                # Add the two leaves as children
+                branch.children.append(leaf)
+                branch.children.append(new_leaf)
+                
+                # Update root
+                self.root = branch
+                
+                # Now insert the new key into the appropriate leaf
+                if key >= separator_key:
                     new_leaf.insert(key, value)
                 else:
-                    # Insert into original leaf
                     leaf.insert(key, value)
                 
                 self._size += 1
@@ -60,20 +72,14 @@ class BPlusTreeMap:
 
     def get(self, key: Any, default: Any = None) -> Any:
         """Get value for a key with optional default"""
-        # For now, since we only have leaf nodes at the root level,
-        # search through the linked list of leaves
-        current = self.leaves
-        while current is not None:
-            value = current.get(key)
-            if value is not None:
-                return value
-            # If this leaf's keys are all smaller than our key, check next
-            if current.keys and key > current.keys[-1]:
-                current = current.next
-            else:
-                # Key would be in this leaf if it existed
-                break
-        return default
+        # Navigate to the correct leaf
+        node = self.root
+        while not node.is_leaf():
+            node = node.get_child(key)
+        
+        # Get from leaf
+        value = node.get(key)
+        return value if value is not None else default
 
     def __contains__(self, key: Any) -> bool:
         """Check if key exists (for 'in' operator)"""
