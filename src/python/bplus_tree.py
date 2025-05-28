@@ -6,12 +6,6 @@ import bisect
 from typing import Any, Optional, List, Tuple, Union
 from abc import ABC, abstractmethod
 
-try:
-    from ._invariant_checker import _BPlusTreeInvariantChecker
-except ImportError:
-    # For when the module is run directly
-    from _invariant_checker import _BPlusTreeInvariantChecker
-
 
 class BPlusTreeMap:
     """B+ Tree with Python dict-like API"""
@@ -27,7 +21,6 @@ class BPlusTreeMap:
         original = LeafNode(self.capacity)
         self.leaves: LeafNode = original
         self.root: Node = original
-        self._invariant_checker = _BPlusTreeInvariantChecker(capacity)
 
     @classmethod
     def from_sorted_items(cls, items, capacity: int = 128):
@@ -461,10 +454,6 @@ class BPlusTreeMap:
             count += 1
             node = node.next
         return count
-
-    def invariants(self) -> bool:
-        """Check that all B+ tree invariants hold"""
-        return self._invariant_checker.check_invariants(self.root, self.leaves)
 
 
 class Node(ABC):

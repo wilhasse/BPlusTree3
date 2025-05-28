@@ -4,6 +4,13 @@ Test to expose the missing invariant check for minimum children
 """
 
 from bplus_tree import BPlusTreeMap
+from _invariant_checker import BPlusTreeInvariantChecker
+
+
+def check_invariants(tree: BPlusTreeMap) -> bool:
+    """Helper function to check tree invariants"""
+    checker = BPlusTreeInvariantChecker(tree.capacity)
+    return checker.check_invariants(tree.root, tree.leaves)
 
 
 def test_invariant_checker_catches_single_child():
@@ -15,20 +22,20 @@ def test_invariant_checker_catches_single_child():
         tree[i] = f"value_{i}"
 
     print("After insertions:")
-    print(f"Invariants: {tree.invariants()}")
+    print(f"Invariants: {check_invariants(tree)}")
 
     # Force the tree into a state with detailed inspection
     print("\nDeleting items to create problematic structure...")
 
     for i in [1, 3, 5, 7]:
         del tree[i]
-        print(f"After deleting {i}: invariants={tree.invariants()}")
+        print(f"After deleting {i}: invariants={check_invariants(tree)}")
         _print_tree_structure(tree.root, 0)
 
     # This should potentially reveal single-child parents
     for i in [0, 2, 4]:
         del tree[i]
-        print(f"After deleting {i}: invariants={tree.invariants()}")
+        print(f"After deleting {i}: invariants={check_invariants(tree)}")
         _print_tree_structure(tree.root, 0)
 
 

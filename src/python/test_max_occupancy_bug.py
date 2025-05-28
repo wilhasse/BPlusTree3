@@ -2,6 +2,13 @@
 
 import pytest
 from bplus_tree import BPlusTreeMap
+from _invariant_checker import BPlusTreeInvariantChecker
+
+
+def check_invariants(tree: BPlusTreeMap) -> bool:
+    """Helper function to check tree invariants"""
+    checker = BPlusTreeInvariantChecker(tree.capacity)
+    return checker.check_invariants(tree.root, tree.leaves)
 
 
 class TestMaxOccupancyBug:
@@ -15,12 +22,12 @@ class TestMaxOccupancyBug:
         for i in range(1, 31):
             tree[i] = f"value_{i}"
 
-        assert tree.invariants(), "Tree should be valid after insertions"
+        assert check_invariants(tree), "Tree should be valid after insertions"
 
         # Delete every 3rd key and check when invariants break
         for i in range(1, 31, 3):
             del tree[i]
-            if not tree.invariants():
+            if not check_invariants(tree):
                 print(f"Invariants broken after deleting key {i}")
                 print(f"Deleted {(i-1)//3 + 1} keys total")
                 # Check root structure
@@ -50,7 +57,7 @@ class TestMaxOccupancyBug:
 
         for i, key in enumerate(keys_to_delete):
             del tree[key]
-            valid = tree.invariants()
+            valid = check_invariants(tree)
             print(f"After deleting {key} (deletion #{i+1}): valid={valid}")
 
             if not valid and not tree.root.is_leaf():
@@ -108,13 +115,13 @@ class TestMaxOccupancyBug:
         # Delete keys one by one
         for i in range(1, 40, 3):
             # Check before
-            was_valid = tree.invariants()
+            was_valid = check_invariants(tree)
 
             # Delete
             del tree[i]
 
             # Check after
-            is_valid = tree.invariants()
+            is_valid = check_invariants(tree)
 
             if was_valid and not is_valid:
                 print(f"Deletion of key {i} broke invariants!")

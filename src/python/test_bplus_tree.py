@@ -4,6 +4,13 @@ Tests for B+ Tree implementation
 
 import pytest
 from bplus_tree import BPlusTreeMap, LeafNode, BranchNode
+from _invariant_checker import BPlusTreeInvariantChecker
+
+
+def check_invariants(tree: BPlusTreeMap) -> bool:
+    """Helper function to check tree invariants"""
+    checker = BPlusTreeInvariantChecker(tree.capacity)
+    return checker.check_invariants(tree.root, tree.leaves)
 
 
 class TestBasicOperations:
@@ -14,7 +21,7 @@ class TestBasicOperations:
         tree = BPlusTreeMap(capacity=4)
         assert len(tree) == 0
         assert not tree  # Should be falsy when empty
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_insert_and_get_single_item(self):
         """Test inserting and retrieving a single item"""
@@ -25,7 +32,7 @@ class TestBasicOperations:
         assert tree  # Should be truthy when not empty
         assert tree[1] == "one"
         assert tree.get(1) == "one"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_insert_multiple_items(self):
         """Test inserting multiple items"""
@@ -38,7 +45,7 @@ class TestBasicOperations:
         assert tree[1] == "one"
         assert tree[2] == "two"
         assert tree[3] == "three"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_update_existing_key(self):
         """Test updating an existing key"""
@@ -48,7 +55,7 @@ class TestBasicOperations:
 
         assert len(tree) == 1  # Size shouldn't change
         assert tree[1] == "ONE"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_contains_operator(self):
         """Test the 'in' operator"""
@@ -59,7 +66,7 @@ class TestBasicOperations:
         assert 1 in tree
         assert 2 in tree
         assert 3 not in tree
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_get_with_default(self):
         """Test get() with default value"""
@@ -69,7 +76,7 @@ class TestBasicOperations:
         assert tree.get(1) == "one"
         assert tree.get(2) is None
         assert tree.get(2, "default") == "default"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_key_error_on_missing_key(self):
         """Test that KeyError is raised for missing keys"""
@@ -79,7 +86,7 @@ class TestBasicOperations:
         with pytest.raises(KeyError):
             _ = tree[2]
 
-        assert tree.invariants()
+        assert check_invariants(tree)
 
 
 class TestSetItemSplitting:
@@ -94,7 +101,7 @@ class TestSetItemSplitting:
         tree[4] = "four"
         tree[5] = "five"
 
-        assert tree.invariants()
+        assert check_invariants(tree)
         assert len(tree) == 5
         assert tree[1] == "one"
         assert tree[2] == "two"
@@ -117,7 +124,7 @@ class TestSetItemSplitting:
         tree[8] = "eight"
 
         # Check correctness via invariants instead of exact structure
-        assert tree.invariants()
+        assert check_invariants(tree)
         assert len(tree) == 8
         assert tree[1] == "one"
         assert tree[2] == "two"
@@ -142,7 +149,7 @@ class TestSetItemSplitting:
         for i in range(20):
             tree[i] = f"value_{i}"
             # Check invariants after each insertion
-            assert tree.invariants(), f"Invariants violated after inserting {i}"
+            assert check_invariants(tree), f"Invariants violated after inserting {i}"
 
         # Verify all items are retrievable
         for i in range(20):
@@ -155,7 +162,7 @@ class TestSetItemSplitting:
         # Insert enough items to force multiple levels of splits
         for i in range(50):
             tree[i] = f"value_{i}"
-            assert tree.invariants(), f"Invariants violated after inserting {i}"
+            assert check_invariants(tree), f"Invariants violated after inserting {i}"
 
         # Verify all items are still retrievable
         for i in range(50):
@@ -254,7 +261,7 @@ class TestRemoval:
         # Tree should be empty
         assert len(tree) == 0
         assert 1 not in tree
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Should raise KeyError when trying to get removed item
         with pytest.raises(KeyError):
@@ -277,7 +284,7 @@ class TestRemoval:
         assert 3 in tree
         assert tree[1] == "one"
         assert tree[3] == "three"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Remove another item
         del tree[1]
@@ -287,14 +294,14 @@ class TestRemoval:
         assert 1 not in tree
         assert 3 in tree
         assert tree[3] == "three"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Remove last item
         del tree[3]
 
         # Tree should be empty
         assert len(tree) == 0
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_remove_nonexistent_key_raises_error(self):
         """Test that removing a non-existent key raises KeyError"""
@@ -310,7 +317,7 @@ class TestRemoval:
         assert len(tree) == 2
         assert tree[1] == "one"
         assert tree[2] == "two"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_remove_from_tree_with_branch_root(self):
         """Test removing an item when root is a branch node"""
@@ -334,7 +341,7 @@ class TestRemoval:
         assert tree[3] == "value_3"
         assert tree[4] == "value_4"
         assert tree[5] == "value_5"
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_remove_multiple_from_tree_with_branches(self):
         """Test removing multiple items from a tree with branch nodes"""
@@ -363,7 +370,7 @@ class TestRemoval:
         assert 3 not in tree
         assert 6 not in tree
 
-        assert tree.invariants()
+        assert check_invariants(tree)
 
     def test_collapse_root_when_empty(self):
         """Test that tree height collapses when root branch becomes empty"""
@@ -386,7 +393,7 @@ class TestRemoval:
 
         # At this point, some leaves should be empty and removed
         # The tree should still be valid
-        assert tree.invariants()
+        assert check_invariants(tree)
         assert len(tree) == 2
         assert tree[4] == "four"
         assert tree[5] == "five"
@@ -467,7 +474,7 @@ class TestNodeUnderflow:
         tree[5] = "five"  # This creates a branch node
 
         # Verify we start with a valid tree
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Delete items from one leaf to make it underfull
         del tree[1]
@@ -475,7 +482,7 @@ class TestNodeUnderflow:
 
         # Our current deletion implementation actually handles this well
         # by removing empty leaves, so invariants should still hold
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # The tree should still be functionally correct even if invariants are violated
         assert len(tree) == 3
@@ -696,14 +703,14 @@ class TestSiblingRedistribution:
             tree[i] = f"value_{i}"
 
         # Verify tree structure before deletion
-        assert tree.invariants()
+        assert check_invariants(tree)
         initial_structure = tree.leaf_count()
 
         # Delete an item that should trigger underflow handling
         del tree[1]
 
         # Tree should still be valid (may have fewer leaves due to merging)
-        assert tree.invariants()
+        assert check_invariants(tree)
         assert tree.leaf_count() <= initial_structure  # Merging may reduce leaf count
 
         # Verify remaining keys
@@ -721,14 +728,14 @@ class TestSiblingRedistribution:
             tree[key] = f"value_{key}"
 
         # Check the initial structure - this should create leaves with uneven distribution
-        assert tree.invariants()
+        assert check_invariants(tree)
         initial_leaf_count = tree.leaf_count()
 
         # Delete a key to create underflow where redistribution should be possible
         del tree[10]
 
         # Tree should remain valid and potentially maintain leaf count via redistribution
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Verify remaining keys are accessible
         remaining_keys = [20, 30, 40, 50, 60, 70]
@@ -746,7 +753,7 @@ class TestSiblingRedistribution:
             tree[key] = f"value_{key}"
 
         # Verify initial state
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Find a leaf that will become underfull after deletion
         # With capacity=4, min_keys=2, so deleting from a leaf with 2 keys should trigger redistribution
@@ -754,12 +761,12 @@ class TestSiblingRedistribution:
 
         # Delete multiple keys from one area to create underflow
         del tree[5]  # This should work without redistribution
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # Continue deleting to potentially trigger redistribution
         # The exact behavior depends on the tree structure, but it should remain valid
         del tree[10]
-        assert tree.invariants()
+        assert check_invariants(tree)
         assert len(tree) == initial_len - 2
 
         # Verify remaining keys are still accessible
@@ -824,14 +831,14 @@ class TestNodeMerging:
             tree[i] = f"value_{i}"
 
         # Verify initial state
-        assert tree.invariants()
+        assert check_invariants(tree)
         initial_leaf_count = tree.leaf_count()
 
         # Delete enough keys to force merging
         keys_to_delete = [1, 2, 3, 4]
         for key in keys_to_delete:
             del tree[key]
-            assert tree.invariants()  # Should remain valid after each deletion
+            assert check_invariants(tree)  # Should remain valid after each deletion
 
         # Tree should have fewer leaves after merging
         final_leaf_count = tree.leaf_count()
@@ -851,7 +858,7 @@ class TestNodeMerging:
             tree[i] = f"value_{i}"
 
         # Verify initial state
-        assert tree.invariants()
+        assert check_invariants(tree)
         initial_structure = tree.leaf_count()
 
         # Delete some keys to potentially cause cascading merges
@@ -859,7 +866,7 @@ class TestNodeMerging:
         for key in keys_to_delete:
             del tree[key]
             # Tree should remain valid after each deletion
-            assert tree.invariants()
+            assert check_invariants(tree)
 
         # Verify remaining keys
         remaining_keys = list(range(6, 16))
@@ -879,12 +886,12 @@ class TestNodeMerging:
         for key in keys:
             tree[key] = f"value_{key}"
 
-        assert tree.invariants()
+        assert check_invariants(tree)
         initial_leaf_count = tree.leaf_count()
 
         # Delete one key - this should trigger redistribution, not merging
         del tree[10]
-        assert tree.invariants()
+        assert check_invariants(tree)
 
         # If redistribution worked, we should have same number of leaves
         # If merging happened, we'd have fewer leaves

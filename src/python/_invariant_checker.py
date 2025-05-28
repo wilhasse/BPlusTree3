@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .bplus_tree import Node, LeafNode, BranchNode
 
 
-class _BPlusTreeInvariantChecker:
+class BPlusTreeInvariantChecker:
     """
     Private class for validating B+ tree invariants.
 
