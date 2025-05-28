@@ -271,36 +271,63 @@ class BPlusTreeMap:
             left_sibling = parent.children[child_index - 1]
 
             if child.is_leaf():
-                # Leaf merging
-                left_sibling.merge_with_right(child)
-                # Remove the merged child and its separator
-                parent.children.pop(child_index)
-                parent.keys.pop(child_index - 1)
+                # Check if merging would exceed capacity
+                total_keys = len(left_sibling.keys) + len(child.keys)
+                if total_keys <= self.capacity:
+                    # Safe to merge
+                    left_sibling.merge_with_right(child)
+                    # Remove the merged child and its separator
+                    parent.children.pop(child_index)
+                    parent.keys.pop(child_index - 1)
+                else:
+                    # Cannot merge without exceeding capacity - leave nodes separate
+                    # This preserves tree structure but may leave underfull nodes
+                    pass
             else:
-                # Branch merging
-                separator_key = parent.keys[child_index - 1]
-                left_sibling.merge_with_right(child, separator_key)
-                # Remove the merged child and its separator
-                parent.children.pop(child_index)
-                parent.keys.pop(child_index - 1)
+                # Check if merging would exceed capacity
+                total_keys = len(left_sibling.keys) + len(child.keys) + 1  # +1 for separator
+                total_children = len(left_sibling.children) + len(child.children)
+                if total_keys <= self.capacity and total_children <= self.capacity + 1:
+                    # Safe to merge
+                    separator_key = parent.keys[child_index - 1]
+                    left_sibling.merge_with_right(child, separator_key)
+                    # Remove the merged child and its separator
+                    parent.children.pop(child_index)
+                    parent.keys.pop(child_index - 1)
+                else:
+                    # Cannot merge without exceeding capacity - leave nodes separate
+                    pass
 
         elif child_index < len(parent.children) - 1:
             # Merge with right sibling
             right_sibling = parent.children[child_index + 1]
 
             if child.is_leaf():
-                # Leaf merging
-                child.merge_with_right(right_sibling)
-                # Remove the merged sibling and its separator
-                parent.children.pop(child_index + 1)
-                parent.keys.pop(child_index)
+                # Check if merging would exceed capacity
+                total_keys = len(child.keys) + len(right_sibling.keys)
+                if total_keys <= self.capacity:
+                    # Safe to merge
+                    child.merge_with_right(right_sibling)
+                    # Remove the merged sibling and its separator
+                    parent.children.pop(child_index + 1)
+                    parent.keys.pop(child_index)
+                else:
+                    # Cannot merge without exceeding capacity - leave nodes separate
+                    pass
             else:
-                # Branch merging
-                separator_key = parent.keys[child_index]
-                child.merge_with_right(right_sibling, separator_key)
-                # Remove the merged sibling and its separator
-                parent.children.pop(child_index + 1)
-                parent.keys.pop(child_index)
+                # Check if merging would exceed capacity
+                total_keys = len(child.keys) + len(right_sibling.keys) + 1  # +1 for separator
+                total_children = len(child.children) + len(right_sibling.children)
+                if total_keys <= self.capacity and total_children <= self.capacity + 1:
+                    # Safe to merge
+                    separator_key = parent.keys[child_index]
+                    child.merge_with_right(right_sibling, separator_key)
+                    # Remove the merged sibling and its separator
+                    parent.children.pop(child_index + 1)
+                    parent.keys.pop(child_index)
+                else:
+                    # Cannot merge without exceeding capacity - leave nodes separate
+                    pass
         else:
             # Edge case: child has no siblings (parent has only one child)
             # This can happen in complex deletion scenarios
