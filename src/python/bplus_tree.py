@@ -219,12 +219,7 @@ class BPlusTreeMap:
             # Child is underfull (including completely empty), try redistribution or merging
             self._handle_underflow(node, child_index)
 
-            # After handling child underflow, check if parent became underfull
-            # This can happen when merging removes a child from the parent
-            if node != self.root and node.is_underfull():
-                # Parent is now underfull, but we can't handle it here since we need
-                # the parent's parent. This will be handled by the recursive call chain.
-                pass
+            # If parent became underfull it will be handled by the calling recursive call.
 
         # Handle root collapse: if root has only one child, make that child the new root
         if node == self.root and not node.is_leaf() and len(node.children) == 1:
