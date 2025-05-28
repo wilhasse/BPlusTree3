@@ -241,6 +241,42 @@ class TestRemoval:
         # Should raise KeyError when trying to get removed item
         with pytest.raises(KeyError):
             _ = tree[1]
+    
+    def test_remove_multiple_items_from_leaf_root(self):
+        """Test removing multiple items when root is a leaf"""
+        tree = BPlusTreeMap(capacity=4)
+        tree[1] = "one"
+        tree[2] = "two"
+        tree[3] = "three"
+        
+        # Remove items
+        del tree[2]
+        
+        # Check state after first removal
+        assert len(tree) == 2
+        assert 1 in tree
+        assert 2 not in tree
+        assert 3 in tree
+        assert tree[1] == "one"
+        assert tree[3] == "three"
+        assert tree.invariants()
+        
+        # Remove another item
+        del tree[1]
+        
+        # Check state after second removal
+        assert len(tree) == 1
+        assert 1 not in tree
+        assert 3 in tree
+        assert tree[3] == "three"
+        assert tree.invariants()
+        
+        # Remove last item
+        del tree[3]
+        
+        # Tree should be empty
+        assert len(tree) == 0
+        assert tree.invariants()
 
 
 class TestBranchNode:
