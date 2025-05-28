@@ -2,6 +2,7 @@
 B+ Tree implementation in Python with dict-like API
 """
 
+import bisect
 from typing import Any, Optional, List, Tuple, Union
 from abc import ABC, abstractmethod
 
@@ -647,18 +648,10 @@ class LeafNode(Node):
         Find where a key should be inserted.
         Returns (position, exists) where exists is True if key already exists.
         """
-        # Binary search for the position
-        left, right = 0, len(self.keys)
-        while left < right:
-            mid = (left + right) // 2
-            if self.keys[mid] < key:
-                left = mid + 1
-            else:
-                right = mid
-
-        # Check if key exists at this position
-        exists = left < len(self.keys) and self.keys[left] == key
-        return left, exists
+        # Use optimized bisect module for binary search
+        pos = bisect.bisect_left(self.keys, key)
+        exists = pos < len(self.keys) and self.keys[pos] == key
+        return pos, exists
 
     def insert(self, key: Any, value: Any) -> Optional[Any]:
         """
@@ -793,14 +786,8 @@ class BranchNode(Node):
         if len(self.keys) != len(self.children) - 1:
             raise ValueError(f"Invalid branch structure: {len(self.keys)} keys, {len(self.children)} children")
         
-        # Binary search for the child
-        left, right = 0, len(self.keys)
-        while left < right:
-            mid = (left + right) // 2
-            if key < self.keys[mid]:
-                right = mid
-            else:
-                left = mid + 1
+        # Use optimized bisect module for binary search
+        left = bisect.bisect_right(self.keys, key)
         
         # Validate result
         if left >= len(self.children):
