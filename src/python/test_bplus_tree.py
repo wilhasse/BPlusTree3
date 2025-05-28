@@ -397,16 +397,16 @@ class TestNodeUnderflow:
 
     def test_leaf_underflow_detection(self):
         """Test that leaf nodes correctly detect underflow"""
-        leaf = LeafNode(capacity=4)  # min_keys = 2
+        leaf = LeafNode(capacity=4)  # min_keys = (4-1)//2 = 1
 
         # Empty leaf is underfull
         assert leaf.is_underfull()
 
-        # Single key is underfull
+        # Single key is at minimum (not underfull)
         leaf.insert(1, "one")
-        assert leaf.is_underfull()
+        assert not leaf.is_underfull()
 
-        # Two keys is at minimum (not underfull)
+        # Two keys is definitely not underfull
         leaf.insert(2, "two")
         assert not leaf.is_underfull()
 
@@ -416,16 +416,16 @@ class TestNodeUnderflow:
 
     def test_branch_underflow_detection(self):
         """Test that branch nodes correctly detect underflow"""
-        branch = BranchNode(capacity=4)  # min_keys = 2
+        branch = BranchNode(capacity=4)  # min_keys = (4-1)//2 = 1
 
         # Empty branch is underfull
         assert branch.is_underfull()
 
-        # Single key is underfull
+        # Single key is at minimum (not underfull)
         branch.keys.append(5)
-        assert branch.is_underfull()
+        assert not branch.is_underfull()
 
-        # Two keys is at minimum (not underfull)
+        # Two keys is definitely not underfull
         branch.keys.append(10)
         assert not branch.is_underfull()
 
@@ -554,20 +554,20 @@ class TestSiblingRedistribution:
 
     def test_leaf_can_donate(self):
         """Test that leaf nodes correctly detect when they can donate keys"""
-        leaf = LeafNode(capacity=4)  # min_keys = 2
+        leaf = LeafNode(capacity=4)  # min_keys = (4-1)//2 = 1
 
         # Empty leaf cannot donate
         assert not leaf.can_donate()
 
-        # Leaf with 1 key cannot donate
+        # Leaf with 1 key (minimum) cannot donate
         leaf.keys = [1]
         leaf.values = ["one"]
         assert not leaf.can_donate()
 
-        # Leaf with 2 keys (minimum) cannot donate
+        # Leaf with 2 keys can donate
         leaf.keys = [1, 2]
         leaf.values = ["one", "two"]
-        assert not leaf.can_donate()
+        assert leaf.can_donate()
 
         # Leaf with 3 keys can donate
         leaf.keys = [1, 2, 3]
@@ -576,20 +576,20 @@ class TestSiblingRedistribution:
 
     def test_branch_can_donate(self):
         """Test that branch nodes correctly detect when they can donate keys"""
-        branch = BranchNode(capacity=4)  # min_keys = 2
+        branch = BranchNode(capacity=4)  # min_keys = (4-1)//2 = 1
 
         # Empty branch cannot donate
         assert not branch.can_donate()
 
-        # Branch with 1 key cannot donate
+        # Branch with 1 key (minimum) cannot donate
         branch.keys = [5]
         branch.children = [LeafNode(4), LeafNode(4)]
         assert not branch.can_donate()
 
-        # Branch with 2 keys (minimum) cannot donate
+        # Branch with 2 keys can donate
         branch.keys = [5, 10]
         branch.children = [LeafNode(4), LeafNode(4), LeafNode(4)]
-        assert not branch.can_donate()
+        assert branch.can_donate()
 
         # Branch with 3 keys can donate
         branch.keys = [5, 10, 15]

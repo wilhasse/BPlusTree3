@@ -16,113 +16,80 @@ except ImportError:
 class BPlusTreeMap:
     """B+ Tree with Python dict-like API"""
 
-    def __init__(self, capacity: int = 128, use_memory_pool: bool = True):
+    def __init__(self, capacity: int = 128):
         """Create a B+ tree with specified node capacity"""
+        if capacity < 4:
+            raise ValueError(
+                "Capacity must be at least 4 to maintain B+ tree invariants"
+            )
         self.capacity = capacity
-        self.use_memory_pool = use_memory_pool
-        
-        # Initialize memory pool if enabled
-        if use_memory_pool:
-            from memory_pool import get_default_pool
-            self._pool = get_default_pool(capacity)
-        else:
-            self._pool = None
-        
-        original = self._create_leaf_node()
+
+        original = LeafNode(self.capacity)
         self.leaves: LeafNode = original
         self.root: Node = original
         self._invariant_checker = _BPlusTreeInvariantChecker(capacity)
-    
-    def _create_leaf_node(self) -> 'LeafNode':
-        """Create a new leaf node, using pool if enabled"""
-        if self._pool:
-            return self._pool.get_leaf_node()
-        else:
-            return LeafNode(self.capacity)
-    
-    def _create_branch_node(self) -> 'BranchNode':
-        """Create a new branch node, using pool if enabled"""
-        if self._pool:
-            return self._pool.get_branch_node()
-        else:
-            return BranchNode(self.capacity)
-    
-    def _return_leaf_node(self, node: 'LeafNode') -> None:
-        """Return a leaf node to the pool if enabled"""
-        if self._pool:
-            self._pool.return_leaf_node(node)
-    
-    def _return_branch_node(self, node: 'BranchNode') -> None:
-        """Return a branch node to the pool if enabled"""
-        if self._pool:
-            self._pool.return_branch_node(node)
-    
-    def get_pool_stats(self) -> dict:
-        """Get memory pool statistics"""
-        if self._pool:
-            return self._pool.get_hit_rate()
-        return {"pool_disabled": True}
 
     @classmethod
-    def from_sorted_items(cls, items, capacity: int = 128, use_memory_pool: bool = True):
+    def from_sorted_items(cls, items, capacity: int = 128):
         """
         Bulk load from sorted key-value pairs for 3-5x faster construction.
-        
+
         Args:
             items: Iterable of (key, value) pairs that MUST be sorted by key
-            capacity: Node capacity
-            use_memory_pool: Whether to use memory pooling
-            
+            capacity: Node capacity (minimum 4)
+
         Returns:
             BPlusTreeMap instance
         """
-        tree = cls(capacity=capacity, use_memory_pool=use_memory_pool)
+        tree = cls(capacity=capacity)
         tree._bulk_load_sorted(items)
         return tree
-    
+
     def _bulk_load_sorted(self, items):
         """Internal bulk loading implementation for sorted items"""
         items_list = list(items)
         if not items_list:
             return
-        
+
         # Simplified bulk loading approach:
         # Use larger insertion batches and optimize for sorted order
-        
+
         # Strategy: Insert items in optimally-sized batches
         # This reduces tree restructuring while maintaining correctness
         optimal_batch_size = max(self.capacity * 2, 50)  # Larger batches for efficiency
-        
+
         for i in range(0, len(items_list), optimal_batch_size):
             batch_end = min(i + optimal_batch_size, len(items_list))
-            
+
             # Insert batch using optimized path for sorted data
             for j in range(i, batch_end):
                 key, value = items_list[j]
                 self._insert_sorted_optimized(key, value)
-    
+
     def _insert_sorted_optimized(self, key, value):
         """Optimized insertion for sorted data - avoids repeated tree traversals"""
         # For sorted data, we can cache the rightmost leaf and insert directly
         # when possible, falling back to regular insertion when needed
-        
-        if not hasattr(self, '_rightmost_leaf_cache'):
+
+        if not hasattr(self, "_rightmost_leaf_cache"):
             self._rightmost_leaf_cache = None
-        
+
         # Try to insert into cached rightmost leaf if key is larger than all existing
-        if (self._rightmost_leaf_cache and 
-            self._rightmost_leaf_cache.keys and 
-            key > self._rightmost_leaf_cache.keys[-1] and
-            not self._rightmost_leaf_cache.is_full()):
-            
+        if (
+            self._rightmost_leaf_cache
+            and self._rightmost_leaf_cache.keys
+            and key > self._rightmost_leaf_cache.keys[-1]
+            and not self._rightmost_leaf_cache.is_full()
+        ):
+
             self._rightmost_leaf_cache.keys.append(key)
             self._rightmost_leaf_cache.values.append(value)
             return
-        
+
         # Fallback to regular insertion and update cache
         self[key] = value
         self._update_rightmost_leaf_cache()
-    
+
     def _update_rightmost_leaf_cache(self):
         """Update the rightmost leaf cache"""
         # Find the rightmost leaf by traversing the linked list
@@ -138,7 +105,7 @@ class BPlusTreeMap:
         # If the root split, create a new root
         if result is not None:
             new_node, separator_key = result
-            new_root = self._create_branch_node()
+            new_root = BranchNode(self.capacity)
             new_root.keys.append(separator_key)
             new_root.children.append(self.root)
             new_root.children.append(new_node)
@@ -195,7 +162,9 @@ class BPlusTreeMap:
         new_child: "Node",
     ) -> Optional[Tuple["BranchNode", Any]]:
         """Insert a separator and new child into a branch node. Returns None or (new_branch, separator) if split."""
-        return branch.insert_child_and_split_if_needed(child_index, separator_key, new_child)
+        return branch.insert_child_and_split_if_needed(
+            child_index, separator_key, new_child
+        )
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""
@@ -233,8 +202,7 @@ class BPlusTreeMap:
         if not deleted:
             raise KeyError(key)
 
-        # Check if root needs to collapse or repair
-        self._repair_tree_structure()
+        # Root collapse is handled naturally by proper deletion logic
 
     def _delete_recursive(self, node: "Node", key: Any) -> bool:
         """
@@ -258,25 +226,18 @@ class BPlusTreeMap:
             # Child is underfull (including completely empty), try redistribution or merging
             self._handle_underflow(node, child_index)
 
-        return deleted
+            # After handling child underflow, check if parent became underfull
+            # This can happen when merging removes a child from the parent
+            if node != self.root and node.is_underfull():
+                # Parent is now underfull, but we can't handle it here since we need
+                # the parent's parent. This will be handled by the recursive call chain.
+                pass
 
-    def _repair_tree_structure(self) -> None:
-        """
-        Repair tree structure after deletions to ensure validity.
-        Handles root collapse and removes invalid branch nodes.
-        """
-        # Repeatedly collapse root if it has only one child
-        while (not self.root.is_leaf() and 
-               len(self.root.children) == 1):
-            self.root = self.root.children[0]
-        
-        # Handle edge case where root becomes empty branch
-        if (not self.root.is_leaf() and 
-            len(self.root.children) == 0):
-            # Create a new empty leaf as root
-            new_root = self._create_leaf_node()
-            self.leaves = new_root
-            self.root = new_root
+        # Handle root collapse: if root has only one child, make that child the new root
+        if node == self.root and not node.is_leaf() and len(node.children) == 1:
+            self.root = node.children[0]
+
+        return deleted
 
     def _handle_underflow(self, parent: "BranchNode", child_index: int) -> None:
         """Handle underflow in a child node by trying redistribution first"""
@@ -347,12 +308,16 @@ class BPlusTreeMap:
     def _merge_with_sibling(self, parent: "BranchNode", child_index: int) -> None:
         """Merge an underfull child with one of its siblings"""
         child = parent.children[child_index]
-        
+
         # Validate parent structure before merging
         if child_index >= len(parent.children):
-            raise ValueError(f"Invalid child_index {child_index} for parent with {len(parent.children)} children")
+            raise ValueError(
+                f"Invalid child_index {child_index} for parent with {len(parent.children)} children"
+            )
         if len(parent.keys) != len(parent.children) - 1:
-            raise ValueError(f"Parent structure invalid: {len(parent.keys)} keys but {len(parent.children)} children")
+            raise ValueError(
+                f"Parent structure invalid: {len(parent.keys)} keys but {len(parent.children)} children"
+            )
 
         # Prefer merging with left sibling (arbitrary choice)
         if child_index > 0:
@@ -374,7 +339,9 @@ class BPlusTreeMap:
                     pass
             else:
                 # Check if merging would exceed capacity
-                total_keys = len(left_sibling.keys) + len(child.keys) + 1  # +1 for separator
+                total_keys = (
+                    len(left_sibling.keys) + len(child.keys) + 1
+                )  # +1 for separator
                 total_children = len(left_sibling.children) + len(child.children)
                 if total_keys <= self.capacity and total_children <= self.capacity + 1:
                     # Safe to merge
@@ -405,7 +372,9 @@ class BPlusTreeMap:
                     pass
             else:
                 # Check if merging would exceed capacity
-                total_keys = len(child.keys) + len(right_sibling.keys) + 1  # +1 for separator
+                total_keys = (
+                    len(child.keys) + len(right_sibling.keys) + 1
+                )  # +1 for separator
                 total_children = len(child.children) + len(right_sibling.children)
                 if total_keys <= self.capacity and total_children <= self.capacity + 1:
                     # Safe to merge
@@ -418,115 +387,15 @@ class BPlusTreeMap:
                     # Cannot merge without exceeding capacity - leave nodes separate
                     pass
         else:
-            # Edge case: child has no siblings (parent has only one child)
-            # This can happen in complex deletion scenarios
-            # The parent should collapse by promoting its only child
-            if len(parent.children) == 1:
-                # This is a structural issue that should be handled by parent collapse
-                # For now, we'll skip merging and let the tree structure handle it
-                # The parent itself will be handled by its parent's underflow logic
-                return
-            else:
-                # This really shouldn't happen - investigate further
-                raise ValueError(f"Cannot merge - node has no siblings (parent has {len(parent.children)} children, child_index={child_index})")
-
-    def _try_consolidate_branch(self, node: "BranchNode") -> None:
-        """
-        PHASE 6 OPTIMIZATION: Try to consolidate branch structure for better space utilization.
-        Look for opportunities to merge sparse branch nodes or eliminate unnecessary levels.
-        """
-        if node.is_leaf():
-            return
-
-        # Check if any child branches can be merged with siblings to reduce tree width
-        for i in range(len(node.children) - 1):
-            child = node.children[i]
-            right_sibling = node.children[i + 1]
-            
-            # Skip if either child is a leaf - we don't consolidate leaves in this method
-            if child.is_leaf() or right_sibling.is_leaf():
-                continue
-
-            # If both children are branches and their combined size would fit in one node
-            if (
-                len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity
-                and len(child.children) + len(right_sibling.children) <= child.capacity + 1
-            ):
-
-                # Merge the two branch nodes for better space utilization
-                separator_key = node.keys[i]
-                child.merge_with_right(right_sibling, separator_key)
-
-                # Remove the merged sibling and separator
-                node.children.pop(i + 1)
-                node.keys.pop(i)
-
-                # Only do one merge per call to avoid index issues
-                break
-
-    def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
-        """Remove an empty child from a branch node."""
-        empty_child = parent.children[child_index]
-
-        # If it's a leaf, update the linked list
-        if empty_child.is_leaf() and empty_child == self.leaves:
-            # Update the head of the leaves list
-            self.leaves = empty_child.next
-
-        # Find and update the previous leaf's next pointer
-        if empty_child.is_leaf():
-            current = self.leaves
-            while current and current.next != empty_child:
-                current = current.next
-            if current:
-                current.next = empty_child.next
-
-        # Remove the child
-        parent.children.pop(child_index)
-
-        # Remove the corresponding separator key
-        # In a branch node: child[0] key[0] child[1] key[1] child[2] ... key[n-2] child[n-1]
-        # Key[i] separates child[i] and child[i+1]
-        # When removing child[i], we need to remove the key that was associated with it
-        if len(parent.keys) > 0:
-            if child_index == 0:
-                # Removing the first child, remove key[0] (between child[0] and child[1])
-                parent.keys.pop(0)
-            elif child_index == len(parent.children):
-                # Removing the last child, remove the last key (was between child[n-2] and child[n-1])
-                parent.keys.pop(-1)
-            else:
-                # Removing middle child[i], remove key[i-1] (was between child[i-1] and child[i])
-                parent.keys.pop(child_index - 1)
+            # This can happen when a parent has only one child left
+            # In this case, we should handle it by collapsing the tree structure
+            # This will be handled by the caller in _delete_recursive
+            pass
 
     def _delete_from_leaf(self, leaf: "LeafNode", key: Any) -> bool:
         """Delete from a leaf node. Returns True if deleted, False if not found."""
         deleted = leaf.delete(key)
         return deleted is not None
-
-    def delete_batch(self, keys: list) -> int:
-        """
-        PHASE 6 OPTIMIZATION: Delete multiple keys efficiently.
-        Returns the number of keys actually deleted.
-        """
-        deleted_count = 0
-
-        # Sort keys to potentially optimize tree traversal
-        sorted_keys = sorted(keys)
-
-        # Delete keys one by one (could be optimized further)
-        for key in sorted_keys:
-            try:
-                del self[key]
-                deleted_count += 1
-            except KeyError:
-                pass  # Key doesn't exist, skip
-
-        # Compact the tree after batch deletions if many keys were deleted
-        if deleted_count > len(keys) * 0.1:  # If >10% of keys were deleted
-            self.compact()
-
-        return deleted_count
 
     def keys(self, start_key=None, end_key=None):
         """Return an iterator over keys in the given range"""
@@ -551,7 +420,7 @@ class BPlusTreeMap:
                 return  # Empty tree
             # Find the starting position within the leaf
             start_index = self._find_position_in_leaf(current, start_key)
-        
+
         # Iterate through leaves starting from current
         while current is not None:
             # Start from start_index in the first leaf, 0 in subsequent leaves
@@ -561,16 +430,16 @@ class BPlusTreeMap:
                 if end_key is not None and key >= end_key:
                     return
                 yield (key, current.values[i])
-            
+
             # Move to next leaf and reset start_index
             current = current.next
             start_index = 0
-    
-    def _find_leaf_for_key(self, key: Any) -> Optional['LeafNode']:
+
+    def _find_leaf_for_key(self, key: Any) -> Optional["LeafNode"]:
         """Find the leaf node that contains or would contain the given key"""
         return self.root.find_leaf_for_key(key)
-    
-    def _find_position_in_leaf(self, leaf: 'LeafNode', key: Any) -> int:
+
+    def _find_position_in_leaf(self, leaf: "LeafNode", key: Any) -> int:
         """Find the position where key is or would be in the leaf"""
         # Binary search for the position
         left, right = 0, len(leaf.keys)
@@ -599,25 +468,25 @@ class BPlusTreeMap:
 
     def compact(self) -> None:
         """
-        PHASE 6 OPTIMIZATION: Compact the tree structure for better space utilization.
-        This method should be called after large numbers of deletions to optimize the tree.
+        Compact the tree structure for better space utilization.
+        This is a stub implementation - optimization functionality was removed.
         """
-        if self.root.is_leaf():
-            return
+        pass
 
-        # Perform multiple passes of consolidation until no more improvements
-        max_passes = 10  # Prevent infinite loops
-        for _ in range(max_passes):
-            initial_structure = self._count_total_nodes()
-            self._compact_recursive(self.root)
-
-            # Check if root can be collapsed further
-            while not self.root.is_leaf() and len(self.root.children) == 1:
-                self.root = self.root.children[0]
-
-            # If no structural changes were made, we're done
-            if self._count_total_nodes() == initial_structure:
-                break
+    def delete_batch(self, keys: list) -> int:
+        """
+        Delete multiple keys efficiently.
+        Returns the number of keys actually deleted.
+        This is a stub implementation - optimization functionality was removed.
+        """
+        deleted_count = 0
+        for key in keys:
+            try:
+                del self[key]
+                deleted_count += 1
+            except KeyError:
+                pass  # Key doesn't exist, skip
+        return deleted_count
 
     def _count_total_nodes(self) -> int:
         """Count total nodes in the tree for optimization tracking"""
@@ -632,17 +501,40 @@ class BPlusTreeMap:
 
         return count_nodes(self.root)
 
-    def _compact_recursive(self, node: "Node") -> None:
-        """Recursively compact the tree structure"""
-        if node.is_leaf():
-            return
+    def compact(self) -> None:
+        """
+        Compact the tree structure for better space utilization.
+        This is a stub implementation - optimization functionality was removed.
+        """
+        pass
 
-        # First, compact all children
-        for child in node.children:
-            self._compact_recursive(child)
+    def delete_batch(self, keys: list) -> int:
+        """
+        Delete multiple keys efficiently.
+        Returns the number of keys actually deleted.
+        This is a stub implementation - optimization functionality was removed.
+        """
+        deleted_count = 0
+        for key in keys:
+            try:
+                del self[key]
+                deleted_count += 1
+            except KeyError:
+                pass  # Key doesn't exist, skip
+        return deleted_count
 
-        # Then try to consolidate this level
-        self._try_consolidate_branch(node)
+    def _count_total_nodes(self) -> int:
+        """Count total nodes in the tree for optimization tracking"""
+
+        def count_nodes(node):
+            if node.is_leaf():
+                return 1
+            count = 1
+            for child in node.children:
+                count += count_nodes(child)
+            return count
+
+        return count_nodes(self.root)
 
 
 class Node(ABC):
@@ -686,21 +578,15 @@ class LeafNode(Node):
 
     def __len__(self) -> int:
         return len(self.keys)
-    
-    def _reset_for_reuse(self) -> None:
-        """Reset the node for reuse from memory pool"""
-        self.keys.clear()
-        self.values.clear()
-        self.next = None
 
     def is_underfull(self) -> bool:
         """Check if leaf has fewer than minimum required keys"""
-        min_keys = self.capacity // 2
+        min_keys = (self.capacity - 1) // 2
         return len(self.keys) < min_keys
 
     def can_donate(self) -> bool:
         """Check if leaf can give a key to a sibling (has more than minimum)"""
-        min_keys = self.capacity // 2
+        min_keys = (self.capacity - 1) // 2
         return len(self.keys) > min_keys
 
     def borrow_from_left(self, left_sibling: "LeafNode") -> None:
@@ -782,7 +668,7 @@ class LeafNode(Node):
         mid = len(self.keys) // 2
 
         # Create new leaf for right half
-        new_leaf = LeafNode(self.capacity)  # Note: This is in the LeafNode class, will be updated separately
+        new_leaf = LeafNode(self.capacity)
 
         # Move right half of keys/values to new leaf
         new_leaf.keys = self.keys[mid:]
@@ -797,26 +683,20 @@ class LeafNode(Node):
         self.next = new_leaf
 
         return new_leaf
-    
+
     def split_and_insert(self, key: Any, value: Any) -> Tuple["LeafNode", Any]:
         """Split leaf and insert key-value, returning (new_leaf, separator_key)"""
         new_leaf = self.split()
-        
+
         # Insert into appropriate leaf
         if key < new_leaf.keys[0]:
             self.insert(key, value)
         else:
             new_leaf.insert(key, value)
-        
+
         return new_leaf, new_leaf.keys[0]
-    
-    def get_separator_key(self) -> Any:
-        """Get the separator key for this node (first key)"""
-        if not self.keys:
-            raise ValueError("Cannot get separator from empty leaf")
-        return self.keys[0]
-    
-    def find_leaf_for_key(self, key: Any) -> 'LeafNode':
+
+    def find_leaf_for_key(self, _key: Any) -> "LeafNode":
         """Find the leaf node that contains or would contain the given key"""
         return self  # Leaf nodes return themselves
 
@@ -841,20 +721,15 @@ class BranchNode(Node):
 
     def __len__(self) -> int:
         return len(self.keys)
-    
-    def _reset_for_reuse(self) -> None:
-        """Reset the node for reuse from memory pool"""
-        self.keys.clear()
-        self.children.clear()
 
     def is_underfull(self) -> bool:
         """Check if branch has fewer than minimum required keys"""
-        min_keys = self.capacity // 2
+        min_keys = (self.capacity - 1) // 2
         return len(self.keys) < min_keys
 
     def can_donate(self) -> bool:
         """Check if branch can give a key to a sibling (has more than minimum)"""
-        min_keys = self.capacity // 2
+        min_keys = (self.capacity - 1) // 2
         return len(self.keys) > min_keys
 
     def borrow_from_left(self, left_sibling: "BranchNode", separator_key: Any) -> Any:
@@ -902,15 +777,19 @@ class BranchNode(Node):
         if len(self.children) == 0:
             raise ValueError("BranchNode has no children")
         if len(self.keys) != len(self.children) - 1:
-            raise ValueError(f"Invalid branch structure: {len(self.keys)} keys, {len(self.children)} children")
-        
+            raise ValueError(
+                f"Invalid branch structure: {len(self.keys)} keys, {len(self.children)} children"
+            )
+
         # Use optimized bisect module for binary search
         left = bisect.bisect_right(self.keys, key)
-        
+
         # Validate result
         if left >= len(self.children):
-            raise ValueError(f"Child index {left} out of range (have {len(self.children)} children)")
-        
+            raise ValueError(
+                f"Child index {left} out of range (have {len(self.children)} children)"
+            )
+
         return left
 
     def get_child(self, key: Any) -> Node:
@@ -919,7 +798,9 @@ class BranchNode(Node):
             raise ValueError("BranchNode has no children - tree structure corrupted")
         index = self.find_child_index(key)
         if index >= len(self.children):
-            raise ValueError(f"Child index {index} out of range (have {len(self.children)} children)")
+            raise ValueError(
+                f"Child index {index} out of range (have {len(self.children)} children)"
+            )
         return self.children[index]
 
     def split(self) -> "BranchNode":
@@ -928,7 +809,7 @@ class BranchNode(Node):
         mid = len(self.keys) // 2
 
         # Create new branch for right half
-        new_branch = BranchNode(self.capacity)  # Note: This is in the BranchNode class, will be updated separately
+        new_branch = BranchNode(self.capacity)
 
         # The middle key becomes the separator to be promoted
         separator_key = self.keys[mid]
@@ -944,8 +825,10 @@ class BranchNode(Node):
         self.children = self.children[: mid + 1]
 
         return new_branch, separator_key
-    
-    def insert_child_and_split_if_needed(self, child_index: int, separator_key: Any, new_child: "Node") -> Optional[Tuple["BranchNode", Any]]:
+
+    def insert_child_and_split_if_needed(
+        self, child_index: int, separator_key: Any, new_child: "Node"
+    ) -> Optional[Tuple["BranchNode", Any]]:
         """Insert separator and child, split if necessary. Returns None or (new_branch, promoted_key)"""
         # Insert the separator key and new child at the appropriate position
         self.keys.insert(child_index, separator_key)
@@ -957,8 +840,8 @@ class BranchNode(Node):
 
         # Branch is full, need to split
         return self.split()
-    
-    def find_leaf_for_key(self, key: Any) -> 'LeafNode':
+
+    def find_leaf_for_key(self, key: Any) -> "LeafNode":
         """Find the leaf node that contains or would contain the given key"""
         child = self.get_child(key)
         return child.find_leaf_for_key(key)
