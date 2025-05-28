@@ -316,6 +316,33 @@ class TestRemoval:
         assert tree[3] == "value_3"
         assert tree[4] == "value_4"
         assert tree.invariants()
+    
+    def test_remove_multiple_from_tree_with_branches(self):
+        """Test removing multiple items from a tree with branch nodes"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Insert more items to ensure we have multiple levels
+        for i in range(1, 8):
+            tree[i] = f"value_{i}"
+        
+        # Remove items in various orders
+        del tree[3]
+        del tree[6]
+        del tree[1]
+        
+        # Check remaining items
+        assert len(tree) == 4
+        assert tree[2] == "value_2"
+        assert tree[4] == "value_4"
+        assert tree[5] == "value_5"
+        assert tree[7] == "value_7"
+        
+        # Check removed items are gone
+        assert 1 not in tree
+        assert 3 not in tree
+        assert 6 not in tree
+        
+        assert tree.invariants()
 
 
 class TestBranchNode:
