@@ -37,7 +37,12 @@ class BPlusTreeMap:
             return
 
         # Check if we need to split before inserting
-        if leaf.is_full():
+        if not leaf.is_full():
+            # Normal insertion
+            old_value = leaf.insert(key, value)
+            if old_value is None:
+                self._size += 1
+        else:
             # Split the leaf
             new_leaf = leaf.split()
             
@@ -62,11 +67,6 @@ class BPlusTreeMap:
                 self._insert_into_parent(path, leaf, separator_key, new_leaf)
 
             self._size += 1
-        else:
-            # Normal insertion
-            old_value = leaf.insert(key, value)
-            if old_value is None:
-                self._size += 1
 
     def _insert_into_parent(
         self,
