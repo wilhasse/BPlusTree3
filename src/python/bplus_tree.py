@@ -185,16 +185,7 @@ class BPlusTreeMap:
             return None
 
         # Leaf is full, need to split
-        new_leaf = leaf.split()
-
-        # Insert the key into the appropriate leaf
-        if key < new_leaf.keys[0]:
-            leaf.insert(key, value)
-        else:
-            new_leaf.insert(key, value)
-
-        # Return the new leaf and separator
-        return new_leaf, new_leaf.keys[0]
+        return leaf.split_and_insert(key, value)
 
     def _insert_into_branch(
         self,
@@ -204,17 +195,7 @@ class BPlusTreeMap:
         new_child: "Node",
     ) -> Optional[Tuple["BranchNode", Any]]:
         """Insert a separator and new child into a branch node. Returns None or (new_branch, separator) if split."""
-        # Insert the separator key and new child at the appropriate position
-        branch.keys.insert(child_index, separator_key)
-        branch.children.insert(child_index + 1, new_child)
-
-        # If branch is not full, we're done
-        if not branch.is_full():
-            return None
-
-        # Branch is full, need to split
-        new_branch, promoted_key = branch.split()
-        return new_branch, promoted_key
+        return branch.insert_child_and_split_if_needed(child_index, separator_key, new_child)
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""
@@ -587,10 +568,7 @@ class BPlusTreeMap:
     
     def _find_leaf_for_key(self, key: Any) -> Optional['LeafNode']:
         """Find the leaf node that contains or would contain the given key"""
-        node = self.root
-        while not node.is_leaf():
-            node = node.get_child(key)
-        return node
+        return self.root.find_leaf_for_key(key)
     
     def _find_position_in_leaf(self, leaf: 'LeafNode', key: Any) -> int:
         """Find the position where key is or would be in the leaf"""
@@ -819,6 +797,28 @@ class LeafNode(Node):
         self.next = new_leaf
 
         return new_leaf
+    
+    def split_and_insert(self, key: Any, value: Any) -> Tuple["LeafNode", Any]:
+        """Split leaf and insert key-value, returning (new_leaf, separator_key)"""
+        new_leaf = self.split()
+        
+        # Insert into appropriate leaf
+        if key < new_leaf.keys[0]:
+            self.insert(key, value)
+        else:
+            new_leaf.insert(key, value)
+        
+        return new_leaf, new_leaf.keys[0]
+    
+    def get_separator_key(self) -> Any:
+        """Get the separator key for this node (first key)"""
+        if not self.keys:
+            raise ValueError("Cannot get separator from empty leaf")
+        return self.keys[0]
+    
+    def find_leaf_for_key(self, key: Any) -> 'LeafNode':
+        """Find the leaf node that contains or would contain the given key"""
+        return self  # Leaf nodes return themselves
 
     def key_count(self) -> int:
         """Count all keys in this leaf and all following leaves"""
@@ -944,3 +944,21 @@ class BranchNode(Node):
         self.children = self.children[: mid + 1]
 
         return new_branch, separator_key
+    
+    def insert_child_and_split_if_needed(self, child_index: int, separator_key: Any, new_child: "Node") -> Optional[Tuple["BranchNode", Any]]:
+        """Insert separator and child, split if necessary. Returns None or (new_branch, promoted_key)"""
+        # Insert the separator key and new child at the appropriate position
+        self.keys.insert(child_index, separator_key)
+        self.children.insert(child_index + 1, new_child)
+
+        # If branch is not full after insertion, we're done
+        if not self.is_full():
+            return None
+
+        # Branch is full, need to split
+        return self.split()
+    
+    def find_leaf_for_key(self, key: Any) -> 'LeafNode':
+        """Find the leaf node that contains or would contain the given key"""
+        child = self.get_child(key)
+        return child.find_leaf_for_key(key)
