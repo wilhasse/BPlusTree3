@@ -25,7 +25,8 @@
       "Bash(python -m pytest test_bplus_tree.py -k test_split_then_add -xvs)",
       "Bash(python -m pytest test_bplus_tree.py -xvs)",
       "Bash(python:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

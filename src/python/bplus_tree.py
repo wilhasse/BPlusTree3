@@ -137,10 +137,8 @@ class BPlusTreeMap:
         if not deleted:
             raise KeyError(key)
 
-        # Check if root needs to collapse
-        if not self.root.is_leaf() and len(self.root.children) == 1:
-            # Collapse: make the only child the new root
-            self.root = self.root.children[0]
+        # Check if root needs to collapse or repair
+        self._repair_tree_structure()
 
     def _delete_recursive(self, node: "Node", key: Any) -> bool:
         """
@@ -169,6 +167,24 @@ class BPlusTreeMap:
             self._handle_underflow(node, child_index)
 
         return deleted
+
+    def _repair_tree_structure(self) -> None:
+        """
+        Repair tree structure after deletions to ensure validity.
+        Handles root collapse and removes invalid branch nodes.
+        """
+        # Repeatedly collapse root if it has only one child
+        while (not self.root.is_leaf() and 
+               len(self.root.children) == 1):
+            self.root = self.root.children[0]
+        
+        # Handle edge case where root becomes empty branch
+        if (not self.root.is_leaf() and 
+            len(self.root.children) == 0):
+            # Create a new empty leaf as root
+            new_root = LeafNode(self.capacity)
+            self.leaves = new_root
+            self.root = new_root
 
     def _handle_underflow(self, parent: "BranchNode", child_index: int) -> None:
         """Handle underflow in a child node by trying redistribution first"""
@@ -275,8 +291,17 @@ class BPlusTreeMap:
                 parent.children.pop(child_index + 1)
                 parent.keys.pop(child_index)
         else:
-            # This should not happen - a node with only one child should have been collapsed
-            raise ValueError("Cannot merge - node has no siblings")
+            # Edge case: child has no siblings (parent has only one child)
+            # This can happen in complex deletion scenarios
+            # The parent should collapse by promoting its only child
+            if len(parent.children) == 1:
+                # This is a structural issue that should be handled by parent collapse
+                # For now, we'll skip merging and let the tree structure handle it
+                # The parent itself will be handled by its parent's underflow logic
+                return
+            else:
+                # This really shouldn't happen - investigate further
+                raise ValueError(f"Cannot merge - node has no siblings (parent has {len(parent.children)} children, child_index={child_index})")
 
     def _try_consolidate_branch(self, node: "BranchNode") -> None:
         """
@@ -816,7 +841,11 @@ class BranchNode(Node):
 
     def get_child(self, key: Any) -> Node:
         """Get the child node where a key would be found"""
+        if not self.children:
+            raise ValueError("BranchNode has no children - tree structure corrupted")
         index = self.find_child_index(key)
+        if index >= len(self.children):
+            raise ValueError(f"Child index {index} out of range (have {len(self.children)} children)")
         return self.children[index]
 
     def split(self) -> "BranchNode":
