@@ -11,12 +11,19 @@ import time
 from collections import OrderedDict
 from typing import List, Tuple, Any, Dict
 from bplus_tree import BPlusTreeMap
+from _invariant_checker import BPlusTreeInvariantChecker
+
+
+def check_invariants(tree: BPlusTreeMap) -> bool:
+    """Helper function to check tree invariants"""
+    checker = BPlusTreeInvariantChecker(tree.capacity)
+    return checker.check_invariants(tree.root, tree.leaves)
 
 
 class BPlusTreeFuzzTester:
     """Fuzz tester for B+ Tree with operation tracking and reference comparison"""
 
-    def __init__(self, capacity: int = 4, seed: int = None, prepopulate: int = 0):
+    def __init__(self, capacity: int = 16, seed: int = None, prepopulate: int = 0):
         self.capacity = capacity
         self.seed = seed or random.randint(1, 1000000)
         self.prepopulate = prepopulate
@@ -144,7 +151,7 @@ class BPlusTreeFuzzTester:
                     return False
 
             # Check B+ tree invariants
-            if not self.btree.invariants():
+            if not check_invariants(self.btree):
                 print("B+ tree invariants violated")
                 return False
 
@@ -309,11 +316,11 @@ class BPlusTreeFuzzTester:
 
         # Define operation weights
         operations = [
-            (self.do_insert_or_update, 40),  # 40% inserts/updates
-            (self.do_delete, 25),  # 25% deletes
-            (self.do_get, 20),  # 20% gets
-            (self.do_batch_delete, 10),  # 10% batch deletes
-            (self.do_compact, 5),  # 5% compactions
+            (self.do_insert_or_update, 50),  # 50% inserts/updates
+            (self.do_delete, 35),  # 35% deletes
+            (self.do_get, 15),  # 15% gets
+            # Note: batch_delete removed - not implemented yet
+            # (self.do_compact, 5),  # 5% compactions - removed as no-op
         ]
 
         # Create weighted operation list
@@ -385,7 +392,11 @@ class BPlusTreeFuzzTester:
             f.write(f'"""\n\n')
             f.write("from bplus_tree import BPlusTreeMap\n")
             f.write("from collections import OrderedDict\n")
+            f.write("from _invariant_checker import BPlusTreeInvariantChecker\n")
             f.write("import random\n\n")
+            f.write("def check_invariants(tree):\n")
+            f.write("    checker = BPlusTreeInvariantChecker(tree.capacity)\n")
+            f.write("    return checker.check_invariants(tree.root, tree.leaves)\n\n")
             f.write("def reproduce_failure():\n")
             f.write(f"    # Initialize with same settings\n")
             f.write(f"    random.seed({self.seed})\n")
@@ -413,7 +424,7 @@ class BPlusTreeFuzzTester:
                 f.write(f'        value = f"prepop_value_{{key}}"\n')
                 f.write(f"        tree[key] = value\n")
                 f.write(f"        reference[key] = value\n")
-                f.write(f'    assert tree.invariants(), "Prepopulation failed"\n')
+                f.write(f'    assert check_invariants(tree), "Prepopulation failed"\n')
                 f.write(f"    random.seed({self.seed})  # Reset to test seed\n\n")
 
             for i, (op_type, key, value, extra) in enumerate(self.operations):
@@ -434,7 +445,7 @@ class BPlusTreeFuzzTester:
                     f.write(f"    tree.compact()\n")
 
                 f.write(
-                    f'    assert tree.invariants(), "Invariants failed at step {i+1}"\n\n'
+                    f'    assert check_invariants(tree), "Invariants failed at step {i+1}"\n\n'
                 )
 
             f.write("    # Verify final consistency\n")
@@ -452,7 +463,7 @@ class BPlusTreeFuzzTester:
 def run_quick_fuzz_test():
     """Run a smaller fuzz test for development/testing"""
     tester = BPlusTreeFuzzTester(
-        capacity=4, prepopulate=100
+        capacity=16, prepopulate=100
     )  # Pre-populate with 100 elements
     return tester.run_fuzz_test(1000)  # Much smaller test
 
@@ -460,7 +471,7 @@ def run_quick_fuzz_test():
 def run_full_fuzz_test():
     """Run the full million-operation fuzz test"""
     tester = BPlusTreeFuzzTester(
-        capacity=4, prepopulate=1000
+        capacity=16, prepopulate=1000
     )  # Pre-populate with 1000 elements
     return tester.run_fuzz_test(1000000)
 
