@@ -20,27 +20,29 @@ MIN_BULK_LOAD_BATCH_SIZE = 50
 
 class BPlusTreeError(Exception):
     """Base exception for B+ tree operations."""
+
     pass
 
 
 class InvalidCapacityError(BPlusTreeError):
     """Raised when an invalid capacity is specified."""
+
     pass
 
 
 class BPlusTreeMap:
     """B+ Tree implementation with Python dict-like API.
-    
+
     A B+ tree is a self-balancing tree data structure that maintains sorted data
     and allows searches, sequential access, insertions, and deletions in O(log n).
     Unlike B trees, all values are stored in leaf nodes, which are linked together
     for efficient range queries.
-    
+
     Attributes:
         capacity: Maximum number of keys per node.
         root: The root node of the tree.
         leaves: The leftmost leaf node (head of linked list).
-    
+
     Example:
         >>> tree = BPlusTreeMap(capacity=32)
         >>> tree[1] = "one"
@@ -55,10 +57,10 @@ class BPlusTreeMap:
 
     def __init__(self, capacity: int = DEFAULT_CAPACITY) -> None:
         """Create a B+ tree with specified node capacity.
-        
+
         Args:
             capacity: Maximum number of keys per node (minimum 4).
-            
+
         Raises:
             InvalidCapacityError: If capacity is less than 4.
         """
@@ -74,7 +76,9 @@ class BPlusTreeMap:
         self.root: Node = original
 
     @classmethod
-    def from_sorted_items(cls, items, capacity: int = DEFAULT_CAPACITY) -> "BPlusTreeMap":
+    def from_sorted_items(
+        cls, items, capacity: int = DEFAULT_CAPACITY
+    ) -> "BPlusTreeMap":
         """Bulk load from sorted key-value pairs for 3-5x faster construction.
 
         Args:
@@ -83,7 +87,7 @@ class BPlusTreeMap:
 
         Returns:
             BPlusTreeMap instance with loaded data.
-            
+
         Raises:
             InvalidCapacityError: If capacity is less than 4.
         """
@@ -97,8 +101,7 @@ class BPlusTreeMap:
         if not items_list:
             return
         optimal_batch_size = max(
-            self.capacity * BULK_LOAD_BATCH_MULTIPLIER, 
-            MIN_BULK_LOAD_BATCH_SIZE
+            self.capacity * BULK_LOAD_BATCH_MULTIPLIER, MIN_BULK_LOAD_BATCH_SIZE
         )
 
         for i in range(0, len(items_list), optimal_batch_size):
@@ -110,7 +113,7 @@ class BPlusTreeMap:
 
     def _insert_sorted_optimized(self, key: Any, value: Any) -> None:
         """Optimized insertion for sorted data - avoids repeated tree traversals.
-        
+
         Args:
             key: The key to insert.
             value: The value to associate with the key.
@@ -137,7 +140,7 @@ class BPlusTreeMap:
 
     def __setitem__(self, key: Any, value: Any) -> None:
         """Set a key-value pair (dict-like API).
-        
+
         Args:
             key: The key to insert or update.
             value: The value to associate with the key.
@@ -214,11 +217,11 @@ class BPlusTreeMap:
 
     def get(self, key: Any, default: Any = None) -> Any:
         """Get value for a key with optional default.
-        
+
         Args:
             key: The key to look up.
             default: Value to return if key not found (default: None).
-            
+
         Returns:
             The value associated with the key, or default if not found.
         """
@@ -246,8 +249,6 @@ class BPlusTreeMap:
         deleted = self._delete_recursive(self.root, key)
         if not deleted:
             raise KeyError(key)
-
-        # Root collapse is handled naturally by proper deletion logic
 
     def _delete_recursive(self, node: "Node", key: Any) -> bool:
         """
@@ -511,7 +512,7 @@ class BPlusTreeMap:
 
 class Node(ABC):
     """Abstract base class for B+ tree nodes.
-    
+
     This class defines the interface that both leaf and branch nodes must implement.
     All nodes in the B+ tree have a capacity limit and can check if they are full
     or underfull (for maintaining tree invariants during deletions).
@@ -540,10 +541,10 @@ class Node(ABC):
 
 class LeafNode(Node):
     """Leaf node containing key-value pairs.
-    
+
     Leaf nodes are where all actual key-value pairs are stored in a B+ tree.
     They are linked together to form a doubly-linked list for efficient range queries.
-    
+
     Attributes:
         capacity: Maximum number of keys this node can hold.
         keys: Sorted list of keys.
@@ -692,15 +693,15 @@ class LeafNode(Node):
 
 class BranchNode(Node):
     """Internal (branch) node containing keys and child pointers.
-    
+
     Branch nodes guide the search through the tree. They contain separator keys
     and pointers to child nodes. For n keys, there are n+1 children.
-    
+
     Attributes:
         capacity: Maximum number of keys this node can hold.
         keys: Sorted list of separator keys.
         children: List of child nodes (leaves or other branches).
-    
+
     Invariants:
         - len(children) == len(keys) + 1
         - All keys in children[i] < keys[i]
