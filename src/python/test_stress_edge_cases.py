@@ -165,28 +165,28 @@ class TestStressEdgeCases:
     def test_capacity_boundary_conditions(self):
         """Test operations right at capacity boundaries"""
         for capacity in [4, 8, 16, 32]:
-            with pytest.subtest(capacity=capacity):
-                tree = BPlusTreeMap(capacity=capacity)
+            # Test each capacity separately
+            tree = BPlusTreeMap(capacity=capacity)
 
-                # Fill exactly to capacity
-                for i in range(capacity):
-                    tree[i] = f"value_{i}"
+            # Fill exactly to capacity
+            for i in range(capacity):
+                tree[i] = f"value_{i}"
 
-                assert check_invariants(
-                    tree
-                ), f"Tree at capacity {capacity} should be valid"
+            assert check_invariants(
+                tree
+            ), f"Tree at capacity {capacity} should be valid"
 
-                # Add one more to trigger split
-                tree[capacity] = f"value_{capacity}"
-                assert check_invariants(
-                    tree
-                ), f"Tree after split at capacity {capacity} should be valid"
+            # Add one more to trigger split
+            tree[capacity] = f"value_{capacity}"
+            assert check_invariants(
+                tree
+            ), f"Tree after split at capacity {capacity} should be valid"
 
-                # Delete back to capacity
-                del tree[capacity]
-                assert check_invariants(
-                    tree
-                ), f"Tree after delete at capacity {capacity} should be valid"
+            # Delete back to capacity
+            del tree[capacity]
+            assert check_invariants(
+                tree
+            ), f"Tree after delete at capacity {capacity} should be valid"
 
     def test_deep_tree_stress(self):
         """Create a deep tree and stress test it"""
