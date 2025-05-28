@@ -222,6 +222,27 @@ class TestLeafNode:
         assert leaf.find_position(35) == (3, False)  # After all
 
 
+class TestRemoval:
+    """Test B+ tree removal operations"""
+    
+    def test_remove_single_item_from_leaf_root(self):
+        """Test removing a single item when root is a leaf"""
+        tree = BPlusTreeMap(capacity=4)
+        tree[1] = "one"
+        
+        # Remove the item
+        del tree[1]
+        
+        # Tree should be empty
+        assert len(tree) == 0
+        assert 1 not in tree
+        assert tree.invariants()
+        
+        # Should raise KeyError when trying to get removed item
+        with pytest.raises(KeyError):
+            _ = tree[1]
+
+
 class TestBranchNode:
     """Test BranchNode operations"""
 

@@ -133,8 +133,14 @@ class BPlusTreeMap:
 
     def __delitem__(self, key: Any) -> None:
         """Delete a key (dict-like API)"""
-        # TODO: Implement deletion
-        raise NotImplementedError("Deletion not yet implemented")
+        # For now, handle only the simple case of deleting from a leaf root
+        if self.root.is_leaf():
+            deleted = self.root.delete(key)
+            if deleted is None:
+                raise KeyError(key)
+        else:
+            # TODO: Handle deletion from tree with branch nodes
+            raise NotImplementedError("Deletion from trees with branch nodes not yet implemented")
 
     def keys(self):
         """Return an iterator over keys"""
