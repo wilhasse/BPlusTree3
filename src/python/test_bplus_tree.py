@@ -91,6 +91,20 @@ class TestSetItemSplitting:
 
         assert not tree.root.is_leaf()
 
+    def test_split_then_add(self):
+        tree = BPlusTreeMap(capacity=2)
+        tree[1] = "one"
+        tree[2] = "two"
+        tree[3] = "three"
+        tree[4] = "four"
+
+        assert tree.leaf_count() == 2
+        assert len(tree) == 4
+        assert tree[1] == "one"
+        assert tree[2] == "two"
+        assert tree[3] == "three"
+        assert tree[4] == "four"
+
 
 class TestLeafNode:
     """Test LeafNode operations"""

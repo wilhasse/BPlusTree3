@@ -19,49 +19,116 @@ class BPlusTreeMap:
 
     def __setitem__(self, key: Any, value: Any) -> None:
         """Set a key-value pair (dict-like API)"""
-        # For now, just handle the simple case of inserting into a leaf root
-        if self.root.is_leaf():
-            leaf = self.root
+        # Navigate to the correct leaf, keeping track of path
+        path = []
+        node = self.root
+        while not node.is_leaf():
+            path.append(node)
+            node = node.get_child(key)
 
-            # Check if we need to split before inserting
-            if leaf.is_full():
-                # Find position for the new key
-                pos, exists = leaf.find_position(key)
+        leaf = node
 
-                # If key exists, just update (no split needed)
-                if exists:
-                    leaf.values[pos] = value
-                    return
+        # Try to insert
+        pos, exists = leaf.find_position(key)
 
-                # Split the leaf
-                new_leaf = leaf.split()
+        # If key exists, just update (no split needed)
+        if exists:
+            leaf.values[pos] = value
+            return
 
-                # Create a new branch node as root
+        # Check if we need to split before inserting
+        if leaf.is_full():
+            # First, insert the key into a temporary list to determine split point
+            temp_keys = leaf.keys.copy()
+            temp_values = leaf.values.copy()
+
+            # Find where to insert
+            insert_pos = 0
+            for i, k in enumerate(temp_keys):
+                if key < k:
+                    insert_pos = i
+                    break
+                insert_pos = i + 1
+
+            temp_keys.insert(insert_pos, key)
+            temp_values.insert(insert_pos, value)
+
+            # Now split the temporary list
+            # For better balance, use ceiling division when we have odd number
+            mid = (len(temp_keys) + 1) // 2
+
+            # Update the current leaf with left half
+            leaf.keys = temp_keys[:mid]
+            leaf.values = temp_values[:mid]
+
+            # Create new leaf with right half
+            new_leaf = LeafNode(leaf.capacity)
+            new_leaf.keys = temp_keys[mid:]
+            new_leaf.values = temp_values[mid:]
+
+            # Update linked list
+            new_leaf.next = leaf.next
+            leaf.next = new_leaf
+
+            # Get separator key
+            separator_key = new_leaf.keys[0]
+
+            # If this is the root, create a new branch root
+            if leaf == self.root:
                 branch = BranchNode(self.capacity)
-
-                # The separator key is the first key of the right leaf
-                separator_key = new_leaf.keys[0]
                 branch.keys.append(separator_key)
-
-                # Add the two leaves as children
                 branch.children.append(leaf)
                 branch.children.append(new_leaf)
-
-                # Update root
                 self.root = branch
-
-                # Now insert the new key into the appropriate leaf
-                if key >= separator_key:
-                    new_leaf.insert(key, value)
-                else:
-                    leaf.insert(key, value)
-
-                self._size += 1
             else:
-                # Normal insertion
-                old_value = leaf.insert(key, value)
-                if old_value is None:
-                    self._size += 1
+                # Propagate the split up the tree
+                self._insert_into_parent(path, leaf, separator_key, new_leaf)
+
+            self._size += 1
+        else:
+            # Normal insertion
+            old_value = leaf.insert(key, value)
+            if old_value is None:
+                self._size += 1
+
+    def _insert_into_parent(
+        self,
+        path: List["BranchNode"],
+        left_child: "Node",
+        separator_key: Any,
+        right_child: "Node",
+    ) -> None:
+        """Insert a separator key and new child into parent after a split"""
+        if not path:
+            # No parent exists, need to create new root
+            branch = BranchNode(self.capacity)
+            branch.keys.append(separator_key)
+            branch.children.append(left_child)
+            branch.children.append(right_child)
+            self.root = branch
+            return
+
+        parent = path[-1]
+
+        # Find where to insert the separator key
+        pos = 0
+        for i, key in enumerate(parent.keys):
+            if separator_key < key:
+                pos = i
+                break
+            pos = i + 1
+
+        # Insert the separator key and new child
+        parent.keys.insert(pos, separator_key)
+        # The right child goes after the position of the separator key
+        # Find the index of left_child in parent.children
+        left_index = parent.children.index(left_child)
+        parent.children.insert(left_index + 1, right_child)
+
+        # Check if parent needs to split
+        if parent.is_full():
+            # TODO: Handle parent splitting (not needed for current test)
+            pass
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""

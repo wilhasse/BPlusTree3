@@ -19,7 +19,12 @@
       "Bash(python -m pytest test_bplus_tree.py -v)",
       "Bash(git reset:*)",
       "Bash(python -m pytest test_bplus_tree.py::TestSetItemSplitting::test_overflow -v)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(python -m pytest test_bplus_tree.py::TestSetItemSplitting::test_split_then_add -v)",
+      "Bash(python -m pytest test_bplus_tree.py::TestBPlusTreeMap::test_split_then_add -xvs)",
+      "Bash(python -m pytest test_bplus_tree.py -k test_split_then_add -xvs)",
+      "Bash(python -m pytest test_bplus_tree.py -xvs)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
