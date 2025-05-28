@@ -19,7 +19,7 @@ class BPlusTreeMap:
     def __setitem__(self, key: Any, value: Any) -> None:
         """Set a key-value pair (dict-like API)"""
         result = self._insert_recursive(self.root, key, value)
-        
+
         # If the root split, create a new root
         if result is not None:
             new_node, separator_key = result
@@ -28,8 +28,10 @@ class BPlusTreeMap:
             new_root.children.append(self.root)
             new_root.children.append(new_node)
             self.root = new_root
-    
-    def _insert_recursive(self, node: "Node", key: Any, value: Any) -> Optional[Tuple["Node", Any]]:
+
+    def _insert_recursive(
+        self, node: "Node", key: Any, value: Any
+    ) -> Optional[Tuple["Node", Any]]:
         """
         Recursively insert a key-value pair into the tree.
         Returns None for a simple insertion, or (new_node, separator_key) if a split occurred.
@@ -41,57 +43,63 @@ class BPlusTreeMap:
             # Recursive case: find the right child and recurse
             child_index = node.find_child_index(key)
             child = node.children[child_index]
-            
-            result = self._insert_recursive(child, key, value)
-            
-            # If no split occurred in the child, we're done
-            if result is None:
+
+            # Recursively insert and check if child split
+            split_result = self._insert_recursive(child, key, value)
+            if split_result is None:
                 return None
-            
-            # Handle the split from the child
-            new_child, separator_key = result
+
+            # Child split, handle it
+            new_child, separator_key = split_result
             return self._insert_into_branch(node, child_index, separator_key, new_child)
-    
-    def _insert_into_leaf(self, leaf: "LeafNode", key: Any, value: Any) -> Optional[Tuple["LeafNode", Any]]:
+
+    def _insert_into_leaf(
+        self, leaf: "LeafNode", key: Any, value: Any
+    ) -> Optional[Tuple["LeafNode", Any]]:
         """Insert into a leaf node. Returns None or (new_leaf, separator) if split."""
         pos, exists = leaf.find_position(key)
-        
+
         # If key exists, just update (no split needed)
         if exists:
             leaf.values[pos] = value
             return None
-        
+
         # If leaf is not full, simple insertion
         if not leaf.is_full():
             leaf.insert(key, value)
             return None
-        
+
         # Leaf is full, need to split
         new_leaf = leaf.split()
-        
+
         # Insert the key into the appropriate leaf
         if key < new_leaf.keys[0]:
             leaf.insert(key, value)
         else:
             new_leaf.insert(key, value)
-        
+
         # Return the new leaf and separator
         return new_leaf, new_leaf.keys[0]
-    
-    def _insert_into_branch(self, branch: "BranchNode", child_index: int, separator_key: Any, new_child: "Node") -> Optional[Tuple["BranchNode", Any]]:
+
+    def _insert_into_branch(
+        self,
+        branch: "BranchNode",
+        child_index: int,
+        separator_key: Any,
+        new_child: "Node",
+    ) -> Optional[Tuple["BranchNode", Any]]:
         """Insert a separator and new child into a branch node. Returns None or (new_branch, separator) if split."""
         # Insert the separator key and new child at the appropriate position
         branch.keys.insert(child_index, separator_key)
         branch.children.insert(child_index + 1, new_child)
-        
+
         # If branch is not full, we're done
         if not branch.is_full():
             return None
-        
+
         # Branch is full, need to split
         new_branch, promoted_key = branch.split()
         return new_branch, promoted_key
-
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""
@@ -427,21 +435,21 @@ class BranchNode(Node):
         """Split this branch node, returning the new right node"""
         # Find the midpoint
         mid = len(self.keys) // 2
-        
+
         # Create new branch for right half
         new_branch = BranchNode(self.capacity)
-        
+
         # The middle key becomes the separator to be promoted
         separator_key = self.keys[mid]
-        
+
         # Move right half of keys to new branch (excluding the middle key)
-        new_branch.keys = self.keys[mid + 1:]
-        
+        new_branch.keys = self.keys[mid + 1 :]
+
         # Move corresponding children to new branch
-        new_branch.children = self.children[mid + 1:]
-        
+        new_branch.children = self.children[mid + 1 :]
+
         # Keep left half in this branch
         self.keys = self.keys[:mid]
-        self.children = self.children[:mid + 1]
-        
+        self.children = self.children[: mid + 1]
+
         return new_branch, separator_key
