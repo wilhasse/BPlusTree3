@@ -293,6 +293,29 @@ class TestRemoval:
         assert tree[1] == "one"
         assert tree[2] == "two"
         assert tree.invariants()
+    
+    def test_remove_from_tree_with_branch_root(self):
+        """Test removing an item when root is a branch node"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Insert enough items to create a branch root
+        for i in range(1, 5):
+            tree[i] = f"value_{i}"
+        
+        # Verify we have a branch root
+        assert not tree.root.is_leaf()
+        assert len(tree) == 4
+        
+        # Remove an item
+        del tree[2]
+        
+        # Check the item was removed
+        assert len(tree) == 3
+        assert 2 not in tree
+        assert tree[1] == "value_1"
+        assert tree[3] == "value_3"
+        assert tree[4] == "value_4"
+        assert tree.invariants()
 
 
 class TestBranchNode:

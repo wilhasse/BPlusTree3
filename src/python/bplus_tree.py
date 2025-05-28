@@ -133,14 +133,30 @@ class BPlusTreeMap:
 
     def __delitem__(self, key: Any) -> None:
         """Delete a key (dict-like API)"""
-        # For now, handle only the simple case of deleting from a leaf root
-        if self.root.is_leaf():
-            deleted = self.root.delete(key)
-            if deleted is None:
-                raise KeyError(key)
-        else:
-            # TODO: Handle deletion from tree with branch nodes
-            raise NotImplementedError("Deletion from trees with branch nodes not yet implemented")
+        deleted = self._delete_recursive(self.root, key)
+        if not deleted:
+            raise KeyError(key)
+    
+    def _delete_recursive(self, node: "Node", key: Any) -> bool:
+        """
+        Recursively delete a key from the tree.
+        Returns True if the key was found and deleted, False otherwise.
+        """
+        if node.is_leaf():
+            # Base case: delete from leaf
+            return self._delete_from_leaf(node, key)
+        
+        # Recursive case: find the correct child and recurse
+        child_index = node.find_child_index(key)
+        child = node.children[child_index]
+        
+        # Recursively delete from child
+        return self._delete_recursive(child, key)
+    
+    def _delete_from_leaf(self, leaf: "LeafNode", key: Any) -> bool:
+        """Delete from a leaf node. Returns True if deleted, False if not found."""
+        deleted = leaf.delete(key)
+        return deleted is not None
 
     def keys(self):
         """Return an iterator over keys"""
