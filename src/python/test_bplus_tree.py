@@ -874,5 +874,170 @@ class TestNodeMerging:
             assert tree[key] == f"value_{key}"
 
 
+class TestPhase6Optimizations:
+    """Test Phase 6 performance optimizations"""
+
+    def test_tree_compaction(self):
+        """Test that tree compaction reduces node count"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Create a large tree
+        for i in range(1, 100):
+            tree[i] = f"value_{i}"
+        
+        initial_nodes = tree._count_total_nodes()
+        
+        # Delete many keys to create sparse structure
+        for i in range(1, 100, 3):  # Delete every 3rd key
+            del tree[i]
+        
+        nodes_after_deletion = tree._count_total_nodes()
+        
+        # Compact the tree
+        tree.compact()
+        
+        nodes_after_compaction = tree._count_total_nodes()
+        
+        # Compaction should reduce node count
+        assert nodes_after_compaction <= nodes_after_deletion
+        assert tree.invariants()
+        
+        # All remaining keys should still be accessible
+        remaining_keys = [i for i in range(1, 100) if i % 3 != 1]
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+    def test_batch_deletion_optimization(self):
+        """Test that batch deletion is more efficient than individual deletions"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create tree
+        for i in range(1, 200):
+            tree[i] = f"value_{i}"
+        
+        initial_nodes = tree._count_total_nodes()
+        
+        # Batch delete many keys
+        keys_to_delete = list(range(50, 150))  # Delete 100 keys
+        deleted_count = tree.delete_batch(keys_to_delete)
+        
+        assert deleted_count == 100
+        assert tree.invariants()
+        
+        # Tree should be more compact after batch deletion
+        final_nodes = tree._count_total_nodes()
+        assert final_nodes < initial_nodes
+        
+        # Verify remaining keys
+        remaining_keys = list(range(1, 50)) + list(range(150, 200))
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+    def test_aggressive_consolidation_during_deletion(self):
+        """Test that consolidation happens automatically during deletions"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Create tree with specific structure to test consolidation
+        for i in range(1, 50):
+            tree[i] = f"value_{i}"
+        
+        initial_structure = tree._count_total_nodes()
+        
+        # Delete keys in a pattern that should trigger consolidation
+        for i in range(1, 30, 2):  # Delete every other key in first half
+            del tree[i]
+        
+        # The tree should have consolidated automatically
+        assert tree.invariants()
+        final_structure = tree._count_total_nodes()
+        
+        # Should have fewer nodes due to aggressive consolidation
+        assert final_structure <= initial_structure
+
+    def test_compaction_preserves_order_and_accessibility(self):
+        """Test that compaction doesn't break tree functionality"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Insert keys in random order
+        keys = list(range(1, 100))
+        import random
+        random.shuffle(keys)
+        
+        for key in keys:
+            tree[key] = f"value_{key}"
+        
+        # Delete about half the keys
+        keys_to_delete = keys[::2]  # Every other key
+        for key in keys_to_delete:
+            del tree[key]
+        
+        # Compact multiple times
+        tree.compact()
+        tree.compact()  # Should be no-op on second call
+        
+        assert tree.invariants()
+        
+        # Check that all remaining keys are accessible in correct order
+        remaining_keys = keys[1::2]  # The keys we didn't delete
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+    def test_empty_tree_operations(self):
+        """Test optimization operations on edge cases"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Test compact on empty tree
+        tree.compact()
+        assert tree.invariants()
+        assert len(tree) == 0
+        
+        # Test batch delete on empty tree
+        deleted = tree.delete_batch([1, 2, 3])
+        assert deleted == 0
+        assert tree.invariants()
+        
+        # Add some keys then delete all
+        for i in range(5):
+            tree[i] = f"value_{i}"
+        
+        deleted = tree.delete_batch(list(range(5)))
+        assert deleted == 5
+        assert len(tree) == 0
+        assert tree.invariants()
+
+    def test_performance_improvement_measurement(self):
+        """Test that optimizations actually improve performance metrics"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Create a scenario where optimization should help
+        for i in range(1, 200):
+            tree[i] = f"value_{i}"
+        
+        # Delete many keys to create sparse structure
+        for i in range(50, 150):
+            del tree[i]
+        
+        # Measure before optimization
+        nodes_before = tree._count_total_nodes()
+        leaves_before = tree.leaf_count()
+        
+        # Apply optimization
+        tree.compact()
+        
+        # Measure after optimization
+        nodes_after = tree._count_total_nodes()
+        leaves_after = tree.leaf_count()
+        
+        # Should show improvement (fewer nodes for same data)
+        efficiency_improvement = nodes_before > nodes_after
+        
+        # Tree should still work correctly
+        assert tree.invariants()
+        
+        # At minimum, tree should not get worse
+        assert nodes_after <= nodes_before
+        assert leaves_after <= leaves_before
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

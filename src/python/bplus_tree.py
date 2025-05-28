@@ -169,6 +169,11 @@ class BPlusTreeMap:
             elif child.is_underfull():
                 # Child is underfull but not empty, try redistribution or merging
                 self._handle_underflow(node, child_index)
+            
+            # PHASE 6 OPTIMIZATION: Aggressive consolidation
+            # After handling underflow, check if we can consolidate the tree structure
+            # Note: Disabled during deletion to avoid corruption - use compact() method instead
+            # self._try_consolidate_branch(node)
         
         return deleted
     
@@ -280,6 +285,34 @@ class BPlusTreeMap:
             # This should not happen - a node with only one child should have been collapsed
             raise ValueError("Cannot merge - node has no siblings")
     
+    def _try_consolidate_branch(self, node: "BranchNode") -> None:
+        """
+        PHASE 6 OPTIMIZATION: Try to consolidate branch structure for better space utilization.
+        Look for opportunities to merge sparse branch nodes or eliminate unnecessary levels.
+        """
+        if node.is_leaf():
+            return
+        
+        # Check if any child branches can be merged with siblings to reduce tree width
+        for i in range(len(node.children) - 1):
+            child = node.children[i]
+            right_sibling = node.children[i + 1]
+            
+            # If both children are branches and their combined size would fit in one node
+            if (not child.is_leaf() and not right_sibling.is_leaf() and 
+                len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity):
+                
+                # Merge the two branch nodes for better space utilization
+                separator_key = node.keys[i]
+                child.merge_with_right(right_sibling, separator_key)
+                
+                # Remove the merged sibling and separator
+                node.children.pop(i + 1)
+                node.keys.pop(i)
+                
+                # Only do one merge per call to avoid index issues
+                break
+    
     def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
         """Remove an empty child from a branch node."""
         empty_child = parent.children[child_index]
@@ -312,6 +345,30 @@ class BPlusTreeMap:
         """Delete from a leaf node. Returns True if deleted, False if not found."""
         deleted = leaf.delete(key)
         return deleted is not None
+
+    def delete_batch(self, keys: list) -> int:
+        """
+        PHASE 6 OPTIMIZATION: Delete multiple keys efficiently.
+        Returns the number of keys actually deleted.
+        """
+        deleted_count = 0
+        
+        # Sort keys to potentially optimize tree traversal
+        sorted_keys = sorted(keys)
+        
+        # Delete keys one by one (could be optimized further)
+        for key in sorted_keys:
+            try:
+                del self[key]
+                deleted_count += 1
+            except KeyError:
+                pass  # Key doesn't exist, skip
+        
+        # Compact the tree after batch deletions if many keys were deleted
+        if deleted_count > len(keys) * 0.1:  # If >10% of keys were deleted
+            self.compact()
+        
+        return deleted_count
 
     def keys(self):
         """Return an iterator over keys"""
@@ -472,6 +529,51 @@ class BPlusTreeMap:
             pass
 
         return True
+
+    def compact(self) -> None:
+        """
+        PHASE 6 OPTIMIZATION: Compact the tree structure for better space utilization.
+        This method should be called after large numbers of deletions to optimize the tree.
+        """
+        if self.root.is_leaf():
+            return
+        
+        # Perform multiple passes of consolidation until no more improvements
+        max_passes = 10  # Prevent infinite loops
+        for _ in range(max_passes):
+            initial_structure = self._count_total_nodes()
+            self._compact_recursive(self.root)
+            
+            # Check if root can be collapsed further
+            while (not self.root.is_leaf() and len(self.root.children) == 1):
+                self.root = self.root.children[0]
+            
+            # If no structural changes were made, we're done
+            if self._count_total_nodes() == initial_structure:
+                break
+    
+    def _count_total_nodes(self) -> int:
+        """Count total nodes in the tree for optimization tracking"""
+        def count_nodes(node):
+            if node.is_leaf():
+                return 1
+            count = 1
+            for child in node.children:
+                count += count_nodes(child)
+            return count
+        return count_nodes(self.root)
+    
+    def _compact_recursive(self, node: "Node") -> None:
+        """Recursively compact the tree structure"""
+        if node.is_leaf():
+            return
+        
+        # First, compact all children
+        for child in node.children:
+            self._compact_recursive(child)
+        
+        # Then try to consolidate this level
+        self._try_consolidate_branch(node)
 
 
 class Node(ABC):
