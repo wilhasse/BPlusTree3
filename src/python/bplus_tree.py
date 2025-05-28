@@ -80,9 +80,8 @@ class BPlusTreeMap:
     
     def _insert_into_branch(self, branch: "BranchNode", child_index: int, separator_key: Any, new_child: "Node") -> Optional[Tuple["BranchNode", Any]]:
         """Insert a separator and new child into a branch node. Returns None or (new_branch, separator) if split."""
-        # Insert the separator key at the appropriate position
-        insert_pos = child_index
-        branch.keys.insert(insert_pos, separator_key)
+        # Insert the separator key and new child at the appropriate position
+        branch.keys.insert(child_index, separator_key)
         branch.children.insert(child_index + 1, new_child)
         
         # If branch is not full, we're done
