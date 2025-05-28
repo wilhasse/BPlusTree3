@@ -40,29 +40,26 @@ class BPlusTreeMap:
             # Normal insertion
             leaf.insert(key, value)
             return
+
+        new_leaf = leaf.split()
+
+        if key < new_leaf.keys[0]:
+            leaf.insert(key, value)
         else:
-            # Split the leaf
-            new_leaf = leaf.split()
+            new_leaf.insert(key, value)
 
-            # Insert the new key into the appropriate leaf
-            if key < new_leaf.keys[0]:
-                leaf.insert(key, value)
-            else:
-                new_leaf.insert(key, value)
+        separator_key = new_leaf.keys[0]
 
-            # Get separator key
-            separator_key = new_leaf.keys[0]
-
-            # If this is the root, create a new branch root
-            if leaf == self.root:
-                branch = BranchNode(self.capacity)
-                branch.keys.append(separator_key)
-                branch.children.append(leaf)
-                branch.children.append(new_leaf)
-                self.root = branch
-            else:
-                # Propagate the split up the tree
-                self._insert_into_parent(path, leaf, separator_key, new_leaf)
+        # If this is the root, create a new branch root
+        if leaf == self.root:
+            branch = BranchNode(self.capacity)
+            branch.keys.append(separator_key)
+            branch.children.append(leaf)
+            branch.children.append(new_leaf)
+            self.root = branch
+        else:
+            # Propagate the split up the tree
+            self._insert_into_parent(path, leaf, separator_key, new_leaf)
 
     def _insert_into_parent(
         self,
@@ -100,8 +97,12 @@ class BPlusTreeMap:
 
         # Check if parent needs to split
         if parent.is_full():
-            # TODO: Handle parent splitting (not needed for current test)
-            pass
+            # Split the parent
+            new_parent, promoted_key = parent.split()
+            
+            # Recursively insert the promoted key into the grandparent
+            grandparent_path = path[:-1]
+            self._insert_into_parent(grandparent_path, parent, promoted_key, new_parent)
 
     def __getitem__(self, key: Any) -> Any:
         """Get value for a key (dict-like API)"""
@@ -275,34 +276,12 @@ class BPlusTreeMap:
             )
             return False
 
-        # 5. Check branch balance (same number of nodes at each level in subtrees)
+        # 5. Check branch balance (subtrees should have similar depths)
         if not self.root.is_leaf():
-            # For each branch node, check that all its subtrees have the same shape
-            def check_subtree_balance(node: BranchNode) -> bool:
-                if not node.children:
-                    return True
-
-                # Get the shape of the first subtree
-                first_shape = count_nodes_per_level(node.children[0])
-
-                # Compare with other subtrees
-                for i in range(1, len(node.children)):
-                    shape = count_nodes_per_level(node.children[i])
-                    if shape != first_shape:
-                        print(
-                            f"Invariant violated: Subtrees have different shapes: {first_shape} vs {shape}"
-                        )
-                        return False
-
-                # Recursively check children
-                for child in node.children:
-                    if not child.is_leaf() and not check_subtree_balance(child):
-                        return False
-
-                return True
-
-            if not check_subtree_balance(self.root):
-                return False
+            # For B+ trees, we only need to check that all leaves are at the same depth
+            # which we already did above. The exact shape of subtrees can vary
+            # during insertions as long as all leaves remain at the same level.
+            pass
 
         return True
 
@@ -454,3 +433,26 @@ class BranchNode(Node):
         """Get the child node where a key would be found"""
         index = self.find_child_index(key)
         return self.children[index]
+
+    def split(self) -> "BranchNode":
+        """Split this branch node, returning the new right node"""
+        # Find the midpoint
+        mid = len(self.keys) // 2
+        
+        # Create new branch for right half
+        new_branch = BranchNode(self.capacity)
+        
+        # The middle key becomes the separator to be promoted
+        separator_key = self.keys[mid]
+        
+        # Move right half of keys to new branch (excluding the middle key)
+        new_branch.keys = self.keys[mid + 1:]
+        
+        # Move corresponding children to new branch
+        new_branch.children = self.children[mid + 1:]
+        
+        # Keep left half in this branch
+        self.keys = self.keys[:mid]
+        self.children = self.children[:mid + 1]
+        
+        return new_branch, separator_key

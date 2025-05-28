@@ -132,6 +132,31 @@ class TestSetItemSplitting:
         for i in range(20):
             assert tree[i] == f"value_{i}"
 
+    def test_parent_splitting(self):
+        """Test that parent nodes split correctly when they become full"""
+        tree = BPlusTreeMap(capacity=3)  # Small capacity to force parent splits
+        
+        # Insert enough items to force multiple levels of splits
+        for i in range(30):
+            tree[i] = f"value_{i}"
+            assert tree.invariants(), f"Invariants violated after inserting {i}"
+        
+        # Verify all items are still retrievable
+        for i in range(30):
+            assert tree[i] == f"value_{i}"
+        
+        # The tree should have multiple levels now
+        assert not tree.root.is_leaf()
+        
+        # Check that no nodes are overfull
+        def check_no_overfull(node):
+            assert len(node.keys) <= node.capacity, f"Node has {len(node.keys)} keys but capacity is {node.capacity}"
+            if not node.is_leaf():
+                for child in node.children:
+                    check_no_overfull(child)
+        
+        check_no_overfull(tree.root)
+
 
 class TestLeafNode:
     """Test LeafNode operations"""
@@ -224,6 +249,24 @@ class TestBranchNode:
         assert branch.find_child_index(25) == 2  # >= 20, < 30
         assert branch.find_child_index(30) == 3  # >= 30
         assert branch.find_child_index(35) == 3  # >= 30
+
+    def test_branch_node_split(self):
+        """Test splitting a branch node"""
+        branch = BranchNode(capacity=4)
+        branch.keys = [10, 20, 30, 40]
+        
+        # Create dummy children (one more than keys)
+        branch.children = [LeafNode(4) for _ in range(5)]
+        
+        # Split the branch
+        new_branch, separator = branch.split()
+        
+        # Check the split results
+        assert separator == 30  # Middle key should be promoted (keys[2])
+        assert branch.keys == [10, 20]  # Left half
+        assert new_branch.keys == [40]  # Right half (excluding promoted key)
+        assert len(branch.children) == 3  # mid + 1 = 3
+        assert len(new_branch.children) == 2  # 5 - 3 = 2
 
 
 if __name__ == "__main__":
