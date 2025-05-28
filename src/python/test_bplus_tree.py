@@ -665,10 +665,10 @@ class TestSiblingRedistribution:
         assert new_separator == 15
 
     def test_redistribution_during_deletion(self):
-        """Test that redistribution happens during deletion to prevent underflow"""
+        """Test that underflow handling (redistribution or merging) works during deletion"""
         tree = BPlusTreeMap(capacity=4)
         
-        # Create a tree where deletion will trigger redistribution
+        # Create a tree where deletion will trigger underflow handling
         # Insert enough items to create multiple leaves
         for i in range(1, 8):
             tree[i] = f"value_{i}"
@@ -677,16 +677,41 @@ class TestSiblingRedistribution:
         assert tree.invariants()
         initial_structure = tree.leaf_count()
         
-        # Delete an item that should trigger redistribution
+        # Delete an item that should trigger underflow handling
         del tree[1]
         
-        # Tree should still be valid and have same structure
+        # Tree should still be valid (may have fewer leaves due to merging)
         assert tree.invariants()
-        assert tree.leaf_count() == initial_structure  # No node merging yet
+        assert tree.leaf_count() <= initial_structure  # Merging may reduce leaf count
         
         # Verify remaining keys
         for i in range(2, 8):
             assert tree[i] == f"value_{i}"
+
+    def test_actual_redistribution_scenario(self):
+        """Test a scenario that actually triggers redistribution (not merging)"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a tree structure where redistribution will be possible
+        # Insert keys that will create leaves where one can donate to another
+        keys = [10, 20, 30, 40, 50, 60, 70]
+        for key in keys:
+            tree[key] = f"value_{key}"
+        
+        # Check the initial structure - this should create leaves with uneven distribution
+        assert tree.invariants()
+        initial_leaf_count = tree.leaf_count()
+        
+        # Delete a key to create underflow where redistribution should be possible
+        del tree[10]
+        
+        # Tree should remain valid and potentially maintain leaf count via redistribution
+        assert tree.invariants()
+        
+        # Verify remaining keys are accessible
+        remaining_keys = [20, 30, 40, 50, 60, 70]
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
 
     def test_forced_redistribution_scenario(self):
         """Test a specific scenario that forces redistribution"""
@@ -717,6 +742,134 @@ class TestSiblingRedistribution:
         
         # Verify remaining keys are still accessible
         remaining_keys = [15, 20, 25, 30, 35, 40]
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+
+class TestNodeMerging:
+    """Test node merging during deletion"""
+
+    def test_leaf_merge_with_right(self):
+        """Test merging a leaf with its right sibling"""
+        left = LeafNode(capacity=4)
+        right = LeafNode(capacity=4)
+        
+        # Set up left leaf with underfull keys
+        left.keys = [1]
+        left.values = ["one"]
+        
+        # Set up right leaf
+        right.keys = [5, 6]
+        right.values = ["five", "six"]
+        
+        # Set up linked list
+        left.next = right
+        
+        # Merge left with right
+        left.merge_with_right(right)
+        
+        # Verify merge results
+        assert left.keys == [1, 5, 6]
+        assert left.values == ["one", "five", "six"]
+        assert left.next == right.next  # Should skip merged node
+
+    def test_branch_merge_with_right(self):
+        """Test merging a branch with its right sibling"""
+        left = BranchNode(capacity=4)
+        right = BranchNode(capacity=4)
+        
+        # Set up left branch with underfull keys
+        left.keys = [5]
+        left.children = [LeafNode(4), LeafNode(4)]
+        
+        # Set up right branch
+        right.keys = [15, 20]
+        right.children = [LeafNode(4), LeafNode(4), LeafNode(4)]
+        
+        # Merge with separator key 10
+        left.merge_with_right(right, 10)
+        
+        # Verify merge results
+        assert left.keys == [5, 10, 15, 20]
+        assert len(left.children) == 5  # 2 + 3
+
+    def test_merging_during_deletion_creates_balanced_tree(self):
+        """Test that merging during deletion maintains tree balance"""
+        tree = BPlusTreeMap(capacity=3)  # Small capacity to force merging
+        
+        # Insert keys to create a tree structure
+        for i in range(1, 10):
+            tree[i] = f"value_{i}"
+        
+        # Verify initial state
+        assert tree.invariants()
+        initial_leaf_count = tree.leaf_count()
+        
+        # Delete enough keys to force merging
+        keys_to_delete = [1, 2, 3, 4]
+        for key in keys_to_delete:
+            del tree[key]
+            assert tree.invariants()  # Should remain valid after each deletion
+        
+        # Tree should have fewer leaves after merging
+        final_leaf_count = tree.leaf_count()
+        assert final_leaf_count <= initial_leaf_count
+        
+        # Verify remaining keys are still accessible
+        remaining_keys = [5, 6, 7, 8, 9]
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+    def test_cascade_merging(self):
+        """Test that merging can cascade up the tree"""
+        tree = BPlusTreeMap(capacity=3)
+        
+        # Create a deeper tree structure
+        for i in range(1, 16):
+            tree[i] = f"value_{i}"
+        
+        # Verify initial state
+        assert tree.invariants()
+        initial_structure = tree.leaf_count()
+        
+        # Delete many keys to potentially cause cascading merges
+        keys_to_delete = list(range(1, 8))  # Delete about half
+        for key in keys_to_delete:
+            del tree[key]
+            # Tree should remain valid after each deletion
+            assert tree.invariants()
+        
+        # Verify remaining keys
+        remaining_keys = list(range(8, 16))
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+        
+        # Tree structure may have changed significantly
+        final_structure = tree.leaf_count()
+        assert final_structure <= initial_structure
+
+    def test_merge_vs_redistribute_preference(self):
+        """Test that redistribution is preferred over merging when possible"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a specific scenario where we can test preference
+        keys = [10, 20, 30, 40, 50, 60]
+        for key in keys:
+            tree[key] = f"value_{key}"
+        
+        assert tree.invariants()
+        initial_leaf_count = tree.leaf_count()
+        
+        # Delete one key - this should trigger redistribution, not merging
+        del tree[10]
+        assert tree.invariants()
+        
+        # If redistribution worked, we should have same number of leaves
+        # If merging happened, we'd have fewer leaves
+        assert tree.leaf_count() == initial_leaf_count
+        
+        # Verify remaining keys
+        remaining_keys = [20, 30, 40, 50, 60]
         for key in remaining_keys:
             assert tree[key] == f"value_{key}"
 

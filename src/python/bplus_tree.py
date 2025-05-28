@@ -167,7 +167,7 @@ class BPlusTreeMap:
                 if child.is_leaf():
                     self._remove_empty_child(node, child_index)
             elif child.is_underfull():
-                # Child is underfull but not empty, try redistribution
+                # Child is underfull but not empty, try redistribution or merging
                 self._handle_underflow(node, child_index)
         
         return deleted
@@ -200,10 +200,9 @@ class BPlusTreeMap:
                 self._redistribute_from_left(parent, child_index)
                 redistributed = True
         
-        # If redistribution failed, we'll need to merge (TODO: Phase 3)
+        # If redistribution failed, try to merge with a sibling
         if not redistributed:
-            # For now, we'll leave this as a TODO for the next phase
-            pass
+            self._merge_with_sibling(parent, child_index)
     
     def _redistribute_from_left(self, parent: "BranchNode", child_index: int) -> None:
         """Redistribute keys from left sibling to child"""
@@ -236,6 +235,50 @@ class BPlusTreeMap:
             separator_key = parent.keys[child_index]
             new_separator = child.borrow_from_right(right_sibling, separator_key)
             parent.keys[child_index] = new_separator
+    
+    def _merge_with_sibling(self, parent: "BranchNode", child_index: int) -> None:
+        """Merge an underfull child with one of its siblings"""
+        child = parent.children[child_index]
+        
+        # Prefer merging with left sibling (arbitrary choice)
+        if child_index > 0:
+            # Merge with left sibling
+            left_sibling = parent.children[child_index - 1]
+            
+            if child.is_leaf():
+                # Leaf merging
+                left_sibling.merge_with_right(child)
+                # Remove the merged child and its separator
+                parent.children.pop(child_index)
+                parent.keys.pop(child_index - 1)
+            else:
+                # Branch merging
+                separator_key = parent.keys[child_index - 1]
+                left_sibling.merge_with_right(child, separator_key)
+                # Remove the merged child and its separator
+                parent.children.pop(child_index)
+                parent.keys.pop(child_index - 1)
+                
+        elif child_index < len(parent.children) - 1:
+            # Merge with right sibling
+            right_sibling = parent.children[child_index + 1]
+            
+            if child.is_leaf():
+                # Leaf merging
+                child.merge_with_right(right_sibling)
+                # Remove the merged sibling and its separator
+                parent.children.pop(child_index + 1)
+                parent.keys.pop(child_index)
+            else:
+                # Branch merging
+                separator_key = parent.keys[child_index]
+                child.merge_with_right(right_sibling, separator_key)
+                # Remove the merged sibling and its separator
+                parent.children.pop(child_index + 1)
+                parent.keys.pop(child_index)
+        else:
+            # This should not happen - a node with only one child should have been collapsed
+            raise ValueError("Cannot merge - node has no siblings")
     
     def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
         """Remove an empty child from a branch node."""
@@ -505,6 +548,15 @@ class LeafNode(Node):
         self.keys.append(key)
         self.values.append(value)
 
+    def merge_with_right(self, right_sibling: "LeafNode") -> None:
+        """Merge this leaf with its right sibling"""
+        # Move all keys and values from right sibling to this node
+        self.keys.extend(right_sibling.keys)
+        self.values.extend(right_sibling.values)
+        
+        # Update linked list to skip the right sibling
+        self.next = right_sibling.next
+
     def find_position(self, key: Any) -> Tuple[int, bool]:
         """
         Find where a key should be inserted.
@@ -638,6 +690,15 @@ class BranchNode(Node):
         
         # The leftmost key from right sibling becomes the new separator
         return right_sibling.keys.pop(0)
+
+    def merge_with_right(self, right_sibling: "BranchNode", separator_key: Any) -> None:
+        """Merge this branch with its right sibling using the separator key"""
+        # Add the separator key to this node's keys
+        self.keys.append(separator_key)
+        
+        # Move all keys and children from right sibling to this node
+        self.keys.extend(right_sibling.keys)
+        self.children.extend(right_sibling.children)
 
     def find_child_index(self, key: Any) -> int:
         """Find which child a key should go to"""
