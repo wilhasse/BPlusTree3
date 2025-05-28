@@ -277,6 +277,22 @@ class TestRemoval:
         # Tree should be empty
         assert len(tree) == 0
         assert tree.invariants()
+    
+    def test_remove_nonexistent_key_raises_error(self):
+        """Test that removing a non-existent key raises KeyError"""
+        tree = BPlusTreeMap(capacity=4)
+        tree[1] = "one"
+        tree[2] = "two"
+        
+        # Try to remove non-existent key
+        with pytest.raises(KeyError):
+            del tree[3]
+        
+        # Tree should be unchanged
+        assert len(tree) == 2
+        assert tree[1] == "one"
+        assert tree[2] == "two"
+        assert tree.invariants()
 
 
 class TestBranchNode:
