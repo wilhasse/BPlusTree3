@@ -16,14 +16,19 @@ from bplus_tree import BPlusTreeMap
 class BPlusTreeFuzzTester:
     """Fuzz tester for B+ Tree with operation tracking and reference comparison"""
     
-    def __init__(self, capacity: int = 4, seed: int = None):
+    def __init__(self, capacity: int = 4, seed: int = None, prepopulate: int = 0):
         self.capacity = capacity
         self.seed = seed or random.randint(1, 1000000)
+        self.prepopulate = prepopulate
         random.seed(self.seed)
         
         # Initialize data structures
         self.btree = BPlusTreeMap(capacity=capacity)
         self.reference = OrderedDict()
+        
+        # Pre-populate if requested
+        if prepopulate > 0:
+            self._prepopulate_tree(prepopulate)
         
         # Operation tracking for debugging
         self.operations: List[Tuple[str, Any, Any]] = []
@@ -37,7 +42,8 @@ class BPlusTreeFuzzTester:
             'get': 0,
             'batch_delete': 0,
             'compact': 0,
-            'errors': 0
+            'errors': 0,
+            'prepopulate': prepopulate
         }
     
     def log_operation(self, op_type: str, key: Any = None, value: Any = None, extra: Any = None):
@@ -45,6 +51,63 @@ class BPlusTreeFuzzTester:
         self.operations.append((op_type, key, value, extra))
         self.operation_count += 1
         self.stats[op_type] = self.stats.get(op_type, 0) + 1
+    
+    def _prepopulate_tree(self, count: int) -> None:
+        """Pre-populate the tree with a specified number of elements to create complex structure"""
+        print(f"Pre-populating tree with {count} elements...")
+        
+        # Use a different random state for prepopulation to ensure variety
+        prepop_state = random.getstate()
+        random.seed(self.seed + 12345)  # Offset seed for prepopulation
+        
+        try:
+            # Insert keys in a pattern that creates a well-distributed tree
+            keys_to_insert = set()
+            
+            # Generate unique keys
+            while len(keys_to_insert) < count:
+                # Use a mix of patterns to ensure good tree structure
+                if len(keys_to_insert) < count // 2:
+                    # First half: sequential with gaps
+                    key = len(keys_to_insert) * 3 + random.randint(1, 2)
+                else:
+                    # Second half: random distribution
+                    key = random.randint(1, count * 10)
+                keys_to_insert.add(key)
+            
+            # Insert all keys
+            for key in sorted(keys_to_insert):
+                value = f"prepop_value_{key}"
+                self.btree[key] = value
+                self.reference[key] = value
+            
+            # Verify prepopulation worked correctly
+            if not self.verify_consistency():
+                raise ValueError("Prepopulation failed consistency check")
+            
+            # Log prepopulation details
+            initial_nodes = self.btree._count_total_nodes()
+            initial_leaves = self.btree.leaf_count()
+            
+            print(f"  ✅ Prepopulated with {len(self.reference)} keys")
+            print(f"  📊 Tree structure: {initial_nodes} total nodes, {initial_leaves} leaves")
+            print(f"  🏗️  Tree depth: {self._calculate_tree_depth()}")
+            print(f"  ✅ Invariants verified")
+            
+        finally:
+            # Restore original random state
+            random.setstate(prepop_state)
+    
+    def _calculate_tree_depth(self) -> int:
+        """Calculate the depth of the tree"""
+        def get_depth(node, current_depth=0):
+            if node.is_leaf():
+                return current_depth
+            if not node.children:
+                return current_depth
+            return max(get_depth(child, current_depth + 1) for child in node.children)
+        
+        return get_depth(self.btree.root)
     
     def verify_consistency(self) -> bool:
         """Verify that B+ tree matches reference implementation"""
@@ -217,6 +280,8 @@ class BPlusTreeFuzzTester:
         """Run the main fuzz test with specified number of operations"""
         print(f"Starting fuzz test with {num_operations} operations (seed={self.seed})")
         print(f"B+ tree capacity: {self.capacity}")
+        if self.prepopulate > 0:
+            print(f"Pre-populated with {self.prepopulate} elements")
         
         start_time = time.time()
         
@@ -332,14 +397,27 @@ class BPlusTreeFuzzTester:
 
 def run_quick_fuzz_test():
     """Run a smaller fuzz test for development/testing"""
-    tester = BPlusTreeFuzzTester(capacity=4)  # Use capacity 4 which is more stable
+    tester = BPlusTreeFuzzTester(capacity=4, prepopulate=100)  # Pre-populate with 100 elements
     return tester.run_fuzz_test(1000)  # Much smaller test
 
 
 def run_full_fuzz_test():
     """Run the full million-operation fuzz test"""
-    tester = BPlusTreeFuzzTester(capacity=4)
+    tester = BPlusTreeFuzzTester(capacity=4, prepopulate=1000)  # Pre-populate with 1000 elements
     return tester.run_fuzz_test(1000000)
+
+
+def run_complex_structure_test():
+    """Run a test specifically designed to stress complex tree structures"""
+    # Increase recursion limit for deep trees
+    import sys
+    old_limit = sys.getrecursionlimit()
+    try:
+        sys.setrecursionlimit(5000)
+        tester = BPlusTreeFuzzTester(capacity=3, prepopulate=1000)  # Reduced to avoid recursion issues
+        return tester.run_fuzz_test(50000)
+    finally:
+        sys.setrecursionlimit(old_limit)
 
 
 def run_varied_capacity_tests():
@@ -352,8 +430,8 @@ def run_varied_capacity_tests():
         print(f"Testing with capacity {capacity}")
         print('='*60)
         
-        tester = BPlusTreeFuzzTester(capacity=capacity)
-        if not tester.run_fuzz_test(100000):  # 100k ops per capacity
+        tester = BPlusTreeFuzzTester(capacity=capacity, prepopulate=500)  # Pre-populate each test
+        if not tester.run_fuzz_test(50000):  # 50k ops per capacity (reduced due to prepopulation)
             all_passed = False
             print(f"❌ FAILED with capacity {capacity}")
         else:
@@ -372,6 +450,9 @@ if __name__ == "__main__":
         elif sys.argv[1] == "varied":
             print("Running varied capacity tests...")
             success = run_varied_capacity_tests()
+        elif sys.argv[1] == "complex":
+            print("Running complex structure test...")
+            success = run_complex_structure_test()
         else:
             print("Running full fuzz test...")
             success = run_full_fuzz_test()

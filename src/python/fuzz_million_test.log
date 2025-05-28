@@ -1,0 +1,36 @@
+Running full fuzz test...
+Starting fuzz test with 1000000 operations (seed=552195)
+B+ tree capacity: 4
+Completed 100000 operations in 0.1s (rate: 770665 ops/s)
+  Current tree size: 4 keys
+Completed 200000 operations in 0.3s (rate: 769178 ops/s)
+  Current tree size: 4 keys
+Completed 300000 operations in 0.4s (rate: 766699 ops/s)
+  Current tree size: 0 keys
+Completed 400000 operations in 0.5s (rate: 764829 ops/s)
+  Current tree size: 6 keys
+Completed 500000 operations in 0.7s (rate: 764483 ops/s)
+  Current tree size: 1 keys
+Completed 600000 operations in 0.8s (rate: 760538 ops/s)
+  Current tree size: 9 keys
+Completed 700000 operations in 0.9s (rate: 764349 ops/s)
+  Current tree size: 3 keys
+Completed 800000 operations in 1.1s (rate: 760720 ops/s)
+  Current tree size: 3 keys
+Completed 900000 operations in 1.2s (rate: 762669 ops/s)
+  Current tree size: 7 keys
+
+✅ Fuzz test PASSED!
+Completed 1000000 operations in 1.3s
+Average rate: 755532 operations/second
+Final tree size: 5 keys
+Final node count: 3 nodes
+
+Operation statistics:
+  insert: 288441
+  delete: 208666
+  update: 110840
+  get: 200568
+  batch_delete: 27198
+  compact: 50361
+  delete_nonexistent: 22667
