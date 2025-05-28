@@ -9,8 +9,6 @@ import bisect
 from abc import ABC, abstractmethod
 from typing import Any, Optional, List, Tuple, Union, Iterator
 
-from ._invariant_checker import BPlusTreeInvariantChecker
-
 __all__ = ["BPlusTreeMap", "Node", "LeafNode", "BranchNode"]
 
 # Constants

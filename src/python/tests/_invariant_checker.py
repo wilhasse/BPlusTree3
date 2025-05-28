@@ -18,7 +18,7 @@ from typing import List, Tuple, Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Import only for type checking to avoid circular imports
-    from .bplus_tree import Node, LeafNode, BranchNode
+    from ..bplus_tree import Node, LeafNode, BranchNode
 
 
 class BPlusTreeInvariantChecker:
