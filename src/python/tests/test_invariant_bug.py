@@ -3,8 +3,8 @@
 Test to expose the missing invariant check for minimum children
 """
 
-from bplus_tree import BPlusTreeMap
-from _invariant_checker import BPlusTreeInvariantChecker
+from ..bplus_tree import BPlusTreeMap
+from .._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:

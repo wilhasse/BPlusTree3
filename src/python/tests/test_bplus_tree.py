@@ -3,8 +3,8 @@ Tests for B+ Tree implementation
 """
 
 import pytest
-from bplus_tree import BPlusTreeMap, LeafNode, BranchNode
-from _invariant_checker import BPlusTreeInvariantChecker
+from ..bplus_tree import BPlusTreeMap, LeafNode, BranchNode
+from .._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:

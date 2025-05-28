@@ -1,8 +1,8 @@
 """Detailed tests to reproduce the maximum occupancy bug"""
 
 import pytest
-from bplus_tree import BPlusTreeMap
-from _invariant_checker import BPlusTreeInvariantChecker
+from ..bplus_tree import BPlusTreeMap
+from .._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:

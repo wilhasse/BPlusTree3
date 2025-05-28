@@ -6,7 +6,7 @@ Tests the robustness of our optimized B+ tree implementation.
 
 import time
 import random
-from fuzz_test import BPlusTreeFuzzTester
+from .fuzz_test import BPlusTreeFuzzTester
 
 
 def run_capacity_sweep():

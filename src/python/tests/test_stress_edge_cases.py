@@ -6,8 +6,8 @@ These tests target specific scenarios that could expose bugs.
 
 import pytest
 import random
-from bplus_tree import BPlusTreeMap
-from _invariant_checker import BPlusTreeInvariantChecker
+from ..bplus_tree import BPlusTreeMap
+from .._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:

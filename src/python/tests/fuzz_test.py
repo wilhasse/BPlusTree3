@@ -10,8 +10,8 @@ import random
 import time
 from collections import OrderedDict
 from typing import List, Tuple, Any, Dict
-from bplus_tree import BPlusTreeMap
-from _invariant_checker import BPlusTreeInvariantChecker
+from ..bplus_tree import BPlusTreeMap
+from .._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:
@@ -390,9 +390,9 @@ class BPlusTreeFuzzTester:
             f.write(f"Prepopulate: {self.prepopulate}\n")
             f.write(f"Failed at operation: {failed_at}\n")
             f.write(f'"""\n\n')
-            f.write("from bplus_tree import BPlusTreeMap\n")
+            f.write("from ..bplus_tree import BPlusTreeMap\n")
             f.write("from collections import OrderedDict\n")
-            f.write("from _invariant_checker import BPlusTreeInvariantChecker\n")
+            f.write("from .._invariant_checker import BPlusTreeInvariantChecker\n")
             f.write("import random\n\n")
             f.write("def check_invariants(tree):\n")
             f.write("    checker = BPlusTreeInvariantChecker(tree.capacity)\n")
