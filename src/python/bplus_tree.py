@@ -15,7 +15,6 @@ class BPlusTreeMap:
         original = LeafNode(capacity)
         self.leaves: LeafNode = original
         self.root: Node = original
-        self._size = 0
 
     def __setitem__(self, key: Any, value: Any) -> None:
         """Set a key-value pair (dict-like API)"""
@@ -39,19 +38,18 @@ class BPlusTreeMap:
         # Check if we need to split before inserting
         if not leaf.is_full():
             # Normal insertion
-            old_value = leaf.insert(key, value)
-            if old_value is None:
-                self._size += 1
+            leaf.insert(key, value)
+            return
         else:
             # Split the leaf
             new_leaf = leaf.split()
-            
+
             # Insert the new key into the appropriate leaf
             if key < new_leaf.keys[0]:
                 leaf.insert(key, value)
             else:
                 new_leaf.insert(key, value)
-            
+
             # Get separator key
             separator_key = new_leaf.keys[0]
 
@@ -65,8 +63,6 @@ class BPlusTreeMap:
             else:
                 # Propagate the split up the tree
                 self._insert_into_parent(path, leaf, separator_key, new_leaf)
-
-            self._size += 1
 
     def _insert_into_parent(
         self,
@@ -170,59 +166,62 @@ class BPlusTreeMap:
 
     def invariants(self) -> bool:
         """Check that all B+ tree invariants hold"""
+
         # Helper to get all leaves with their depths
-        def get_leaves_with_depth(node: Node, depth: int = 0) -> List[Tuple[LeafNode, int]]:
+        def get_leaves_with_depth(
+            node: Node, depth: int = 0
+        ) -> List[Tuple[LeafNode, int]]:
             if node.is_leaf():
                 return [(node, depth)]
-            
+
             leaves = []
             for child in node.children:
                 leaves.extend(get_leaves_with_depth(child, depth + 1))
             return leaves
-        
+
         # Helper to check if keys are in ascending order
         def check_keys_ascending(node: Node) -> bool:
             if node.is_leaf():
                 for i in range(1, len(node.keys)):
-                    if node.keys[i-1] >= node.keys[i]:
+                    if node.keys[i - 1] >= node.keys[i]:
                         return False
             else:
                 # Check branch keys
                 for i in range(1, len(node.keys)):
-                    if node.keys[i-1] >= node.keys[i]:
+                    if node.keys[i - 1] >= node.keys[i]:
                         return False
                 # Recursively check children
                 for child in node.children:
                     if not check_keys_ascending(child):
                         return False
             return True
-        
+
         # Helper to check minimum occupancy
         def check_min_occupancy(node: Node, is_root: bool = False) -> bool:
             if is_root:
                 # Root can have fewer entries
                 return True
-            
+
             min_keys = self.capacity // 2
             if len(node.keys) < min_keys:
                 return False
-            
+
             if not node.is_leaf():
                 # Check children recursively
                 for child in node.children:
                     if not check_min_occupancy(child, False):
                         return False
-            
+
             return True
-        
+
         # Helper to count nodes at each level of a subtree
         def count_nodes_per_level(node: Node) -> List[int]:
             if node.is_leaf():
                 return [1]
-            
+
             # Count this level
             counts = [1]
-            
+
             # Get counts from first child to determine depth
             if node.children:
                 child_counts = count_nodes_per_level(node.children[0])
@@ -230,73 +229,81 @@ class BPlusTreeMap:
                 for i in range(len(child_counts)):
                     if i + 1 >= len(counts):
                         counts.append(0)
-                
+
                 # Add counts from all children
                 for child in node.children:
                     child_counts = count_nodes_per_level(child)
                     for i, count in enumerate(child_counts):
                         counts[i + 1] += count
-            
+
             return counts
-        
+
         # 1. Check all leaves are at the same depth
         leaves_with_depth = get_leaves_with_depth(self.root)
         if leaves_with_depth:
             first_depth = leaves_with_depth[0][1]
             for leaf, depth in leaves_with_depth:
                 if depth != first_depth:
-                    print(f"Invariant violated: Leaf at depth {depth}, expected {first_depth}")
+                    print(
+                        f"Invariant violated: Leaf at depth {depth}, expected {first_depth}"
+                    )
                     return False
-        
+
         # 2. Check keys ascend
         if not check_keys_ascending(self.root):
             print("Invariant violated: Keys not in ascending order")
             return False
-        
+
         # Check keys ascend across leaves
         prev_key = None
         current = self.leaves
         while current:
             if current.keys:
                 if prev_key is not None and prev_key >= current.keys[0]:
-                    print(f"Invariant violated: Keys not ascending across leaves: {prev_key} >= {current.keys[0]}")
+                    print(
+                        f"Invariant violated: Keys not ascending across leaves: {prev_key} >= {current.keys[0]}"
+                    )
                     return False
                 if current.keys:
                     prev_key = current.keys[-1]
             current = current.next
-        
+
         # 3 & 4. Check minimum occupancy (except for root)
         if not check_min_occupancy(self.root, is_root=True):
-            print(f"Invariant violated: Node has fewer than {self.capacity // 2} entries")
+            print(
+                f"Invariant violated: Node has fewer than {self.capacity // 2} entries"
+            )
             return False
-        
+
         # 5. Check branch balance (same number of nodes at each level in subtrees)
         if not self.root.is_leaf():
             # For each branch node, check that all its subtrees have the same shape
             def check_subtree_balance(node: BranchNode) -> bool:
                 if not node.children:
                     return True
-                
+
                 # Get the shape of the first subtree
                 first_shape = count_nodes_per_level(node.children[0])
-                
+
                 # Compare with other subtrees
                 for i in range(1, len(node.children)):
                     shape = count_nodes_per_level(node.children[i])
                     if shape != first_shape:
-                        print(f"Invariant violated: Subtrees have different shapes: {first_shape} vs {shape}")
+                        print(
+                            f"Invariant violated: Subtrees have different shapes: {first_shape} vs {shape}"
+                        )
                         return False
-                
+
                 # Recursively check children
                 for child in node.children:
                     if not child.is_leaf() and not check_subtree_balance(child):
                         return False
-                
+
                 return True
-            
+
             if not check_subtree_balance(self.root):
                 return False
-        
+
         return True
 
 
