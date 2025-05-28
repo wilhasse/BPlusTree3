@@ -250,19 +250,27 @@ class BPlusTreeFuzzTester:
         
         # Remove duplicates and count expected deletions
         keys_to_delete = list(set(keys_to_delete))  # Remove duplicates
-        expected_deletions = sum(1 for key in keys_to_delete if key in self.reference)
+        keys_expected_to_exist = [key for key in keys_to_delete if key in self.reference]
+        expected_deletions = len(keys_expected_to_exist)
         
         # Perform batch delete on btree
         actual_deletions = self.btree.delete_batch(keys_to_delete)
+        
+        # Check which keys that should have been deleted weren't found in the tree
+        if actual_deletions != expected_deletions:
+            print(f"ERROR: batch delete count mismatch: expected={expected_deletions}, actual={actual_deletions}")
+            # Find which keys were expected but not found in the tree
+            missing_keys = []
+            for key in keys_expected_to_exist:
+                if key not in self.btree:
+                    missing_keys.append(key)
+            print(f"Keys expected in tree but missing: {missing_keys}")
+            return False
         
         # Manually delete from reference
         for key in keys_to_delete:
             if key in self.reference:
                 del self.reference[key]
-        
-        if actual_deletions != expected_deletions:
-            print(f"ERROR: batch delete count mismatch: expected={expected_deletions}, actual={actual_deletions}")
-            return False
         
         self.log_operation('batch_delete', keys_to_delete, expected_deletions)
         return True
@@ -356,13 +364,35 @@ class BPlusTreeFuzzTester:
             f.write(f'"""\nFuzz test failure reproduction\n')
             f.write(f'Seed: {self.seed}\n')
             f.write(f'Capacity: {self.capacity}\n')
+            f.write(f'Prepopulate: {self.prepopulate}\n')
             f.write(f'Failed at operation: {failed_at}\n')
             f.write(f'"""\n\n')
             f.write('from bplus_tree import BPlusTreeMap\n')
-            f.write('from collections import OrderedDict\n\n')
+            f.write('from collections import OrderedDict\n')
+            f.write('import random\n\n')
             f.write('def reproduce_failure():\n')
+            f.write(f'    # Initialize with same settings\n')
+            f.write(f'    random.seed({self.seed})\n')
             f.write(f'    tree = BPlusTreeMap(capacity={self.capacity})\n')
             f.write('    reference = OrderedDict()\n\n')
+            
+            # Add prepopulation if it was used
+            if self.prepopulate > 0:
+                f.write(f'    # Recreate prepopulation\n')
+                f.write(f'    random.seed({self.seed + 12345})  # Same offset as original\n')
+                f.write(f'    keys_to_insert = set()\n')
+                f.write(f'    while len(keys_to_insert) < {self.prepopulate}:\n')
+                f.write(f'        if len(keys_to_insert) < {self.prepopulate // 2}:\n')
+                f.write(f'            key = len(keys_to_insert) * 3 + random.randint(1, 2)\n')
+                f.write(f'        else:\n')
+                f.write(f'            key = random.randint(1, {self.prepopulate * 10})\n')
+                f.write(f'        keys_to_insert.add(key)\n')
+                f.write(f'    for key in sorted(keys_to_insert):\n')
+                f.write(f'        value = f"prepop_value_{{key}}"\n')
+                f.write(f'        tree[key] = value\n')
+                f.write(f'        reference[key] = value\n')
+                f.write(f'    assert tree.invariants(), "Prepopulation failed"\n')
+                f.write(f'    random.seed({self.seed})  # Reset to test seed\n\n')
             
             for i, (op_type, key, value, extra) in enumerate(self.operations):
                 f.write(f'    # Operation {i + 1}: {op_type}\n')

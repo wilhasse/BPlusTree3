@@ -158,12 +158,8 @@ class BPlusTreeMap:
             return False
 
         # Handle child underflow after deletion
-        if len(child) == 0:
-            # Child is empty, remove it completely
-            if child.is_leaf():
-                self._remove_empty_child(node, child_index)
-        elif child.is_underfull():
-            # Child is underfull but not empty, try redistribution or merging
+        if len(child) == 0 or child.is_underfull():
+            # Child is underfull (including completely empty), try redistribution or merging
             self._handle_underflow(node, child_index)
 
         return deleted
@@ -194,8 +190,10 @@ class BPlusTreeMap:
         if not child.is_underfull():
             return
 
-        # Child should not be empty here (handled separately)
-        assert len(child) > 0, "Empty children should be handled by _remove_empty_child"
+        # Handle empty children by merging them (they can't redistribute)
+        if len(child) == 0:
+            self._merge_with_sibling(parent, child_index)
+            return
 
         # Try to redistribute from siblings
         redistributed = False
@@ -253,6 +251,12 @@ class BPlusTreeMap:
     def _merge_with_sibling(self, parent: "BranchNode", child_index: int) -> None:
         """Merge an underfull child with one of its siblings"""
         child = parent.children[child_index]
+        
+        # Validate parent structure before merging
+        if child_index >= len(parent.children):
+            raise ValueError(f"Invalid child_index {child_index} for parent with {len(parent.children)} children")
+        if len(parent.keys) != len(parent.children) - 1:
+            raise ValueError(f"Parent structure invalid: {len(parent.keys)} keys but {len(parent.children)} children")
 
         # Prefer merging with left sibling (arbitrary choice)
         if child_index > 0:
@@ -355,12 +359,19 @@ class BPlusTreeMap:
         parent.children.pop(child_index)
 
         # Remove the corresponding separator key
-        if child_index > 0:
-            # If not the first child, remove the key to its left
-            parent.keys.pop(child_index - 1)
-        elif len(parent.keys) > 0:
-            # If it's the first child, remove the first key
-            parent.keys.pop(0)
+        # In a branch node: child[0] key[0] child[1] key[1] child[2] ... key[n-2] child[n-1]
+        # Key[i] separates child[i] and child[i+1]
+        # When removing child[i], we need to remove the key that was associated with it
+        if len(parent.keys) > 0:
+            if child_index == 0:
+                # Removing the first child, remove key[0] (between child[0] and child[1])
+                parent.keys.pop(0)
+            elif child_index == len(parent.children):
+                # Removing the last child, remove the last key (was between child[n-2] and child[n-1])
+                parent.keys.pop(-1)
+            else:
+                # Removing middle child[i], remove key[i-1] (was between child[i-1] and child[i])
+                parent.keys.pop(child_index - 1)
 
     def _delete_from_leaf(self, leaf: "LeafNode", key: Any) -> bool:
         """Delete from a leaf node. Returns True if deleted, False if not found."""
@@ -424,30 +435,44 @@ class BPlusTreeMap:
         def get_leaves_with_depth(
             node: Node, depth: int = 0
         ) -> List[Tuple[LeafNode, int]]:
-            if node.is_leaf():
-                return [(node, depth)]
+            try:
+                if node.is_leaf():
+                    return [(node, depth)]
 
-            leaves = []
-            for child in node.children:
-                leaves.extend(get_leaves_with_depth(child, depth + 1))
-            return leaves
+                leaves = []
+                for i, child in enumerate(node.children):
+                    if child is None:
+                        print(f"Invariant violated: None child at index {i}")
+                        return []
+                    leaves.extend(get_leaves_with_depth(child, depth + 1))
+                return leaves
+            except Exception as e:
+                print(f"Error traversing tree in get_leaves_with_depth: {e}")
+                return []
 
         # Helper to check if keys are in ascending order
         def check_keys_ascending(node: Node) -> bool:
-            if node.is_leaf():
-                for i in range(1, len(node.keys)):
-                    if node.keys[i - 1] >= node.keys[i]:
-                        return False
-            else:
-                # Check branch keys
-                for i in range(1, len(node.keys)):
-                    if node.keys[i - 1] >= node.keys[i]:
-                        return False
-                # Recursively check children
-                for child in node.children:
-                    if not check_keys_ascending(child):
-                        return False
-            return True
+            try:
+                if node.is_leaf():
+                    for i in range(1, len(node.keys)):
+                        if node.keys[i - 1] >= node.keys[i]:
+                            return False
+                else:
+                    # Check branch keys
+                    for i in range(1, len(node.keys)):
+                        if node.keys[i - 1] >= node.keys[i]:
+                            return False
+                    # Recursively check children
+                    for i, child in enumerate(node.children):
+                        if child is None:
+                            print(f"Invariant violated: None child at index {i} in check_keys_ascending")
+                            return False
+                        if not check_keys_ascending(child):
+                            return False
+                return True
+            except Exception as e:
+                print(f"Error in check_keys_ascending: {e}")
+                return False
 
         # Helper to check minimum occupancy
         def check_min_occupancy(node: Node, is_root: bool = False) -> bool:
@@ -829,6 +854,12 @@ class BranchNode(Node):
 
     def find_child_index(self, key: Any) -> int:
         """Find which child a key should go to"""
+        # Validate node structure
+        if len(self.children) == 0:
+            raise ValueError("BranchNode has no children")
+        if len(self.keys) != len(self.children) - 1:
+            raise ValueError(f"Invalid branch structure: {len(self.keys)} keys, {len(self.children)} children")
+        
         # Binary search for the child
         left, right = 0, len(self.keys)
         while left < right:
@@ -837,6 +868,11 @@ class BranchNode(Node):
                 right = mid
             else:
                 left = mid + 1
+        
+        # Validate result
+        if left >= len(self.children):
+            raise ValueError(f"Child index {left} out of range (have {len(self.children)} children)")
+        
         return left
 
     def get_child(self, key: Any) -> Node:
