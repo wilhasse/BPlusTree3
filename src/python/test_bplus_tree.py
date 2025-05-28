@@ -527,5 +527,199 @@ class TestBranchNode:
         assert len(new_branch.children) == 2  # 5 - 3 = 2
 
 
+class TestSiblingRedistribution:
+    """Test sibling key redistribution during deletion"""
+
+    def test_leaf_can_donate(self):
+        """Test that leaf nodes correctly detect when they can donate keys"""
+        leaf = LeafNode(capacity=4)  # min_keys = 2
+        
+        # Empty leaf cannot donate
+        assert not leaf.can_donate()
+        
+        # Leaf with 1 key cannot donate  
+        leaf.keys = [1]
+        leaf.values = ["one"]
+        assert not leaf.can_donate()
+        
+        # Leaf with 2 keys (minimum) cannot donate
+        leaf.keys = [1, 2]
+        leaf.values = ["one", "two"]
+        assert not leaf.can_donate()
+        
+        # Leaf with 3 keys can donate
+        leaf.keys = [1, 2, 3]
+        leaf.values = ["one", "two", "three"]
+        assert leaf.can_donate()
+
+    def test_branch_can_donate(self):
+        """Test that branch nodes correctly detect when they can donate keys"""
+        branch = BranchNode(capacity=4)  # min_keys = 2
+        
+        # Empty branch cannot donate
+        assert not branch.can_donate()
+        
+        # Branch with 1 key cannot donate
+        branch.keys = [5]
+        branch.children = [LeafNode(4), LeafNode(4)]
+        assert not branch.can_donate()
+        
+        # Branch with 2 keys (minimum) cannot donate
+        branch.keys = [5, 10]
+        branch.children = [LeafNode(4), LeafNode(4), LeafNode(4)]
+        assert not branch.can_donate()
+        
+        # Branch with 3 keys can donate
+        branch.keys = [5, 10, 15]
+        branch.children = [LeafNode(4), LeafNode(4), LeafNode(4), LeafNode(4)]
+        assert branch.can_donate()
+
+    def test_leaf_borrow_from_left(self):
+        """Test leaf borrowing keys from left sibling"""
+        left = LeafNode(capacity=4)
+        right = LeafNode(capacity=4)
+        
+        # Set up left sibling with excess keys
+        left.keys = [1, 2, 3]
+        left.values = ["one", "two", "three"]
+        
+        # Set up right sibling with too few keys
+        right.keys = [5]
+        right.values = ["five"]
+        
+        # Borrow from left
+        right.borrow_from_left(left)
+        
+        # Verify redistribution
+        assert left.keys == [1, 2]
+        assert left.values == ["one", "two"]
+        assert right.keys == [3, 5]
+        assert right.values == ["three", "five"]
+
+    def test_leaf_borrow_from_right(self):
+        """Test leaf borrowing keys from right sibling"""
+        left = LeafNode(capacity=4)
+        right = LeafNode(capacity=4)
+        
+        # Set up left sibling with too few keys
+        left.keys = [1]
+        left.values = ["one"]
+        
+        # Set up right sibling with excess keys
+        right.keys = [5, 6, 7]
+        right.values = ["five", "six", "seven"]
+        
+        # Borrow from right
+        left.borrow_from_right(right)
+        
+        # Verify redistribution
+        assert left.keys == [1, 5]
+        assert left.values == ["one", "five"]
+        assert right.keys == [6, 7]
+        assert right.values == ["six", "seven"]
+
+    def test_branch_borrow_from_left(self):
+        """Test branch borrowing keys from left sibling"""
+        left = BranchNode(capacity=4)
+        right = BranchNode(capacity=4)
+        
+        # Set up left sibling with excess keys and children
+        left.keys = [5, 10, 15]
+        left.children = [LeafNode(4) for _ in range(4)]
+        
+        # Set up right sibling with too few keys
+        right.keys = [25]
+        right.children = [LeafNode(4), LeafNode(4)]
+        
+        # Borrow from left with separator key 20
+        new_separator = right.borrow_from_left(left, 20)
+        
+        # Verify redistribution
+        assert left.keys == [5, 10]
+        assert len(left.children) == 3
+        assert right.keys == [20, 25]
+        assert len(right.children) == 3
+        assert new_separator == 15
+
+    def test_branch_borrow_from_right(self):
+        """Test branch borrowing keys from right sibling"""
+        left = BranchNode(capacity=4)
+        right = BranchNode(capacity=4)
+        
+        # Set up left sibling with too few keys
+        left.keys = [5]
+        left.children = [LeafNode(4), LeafNode(4)]
+        
+        # Set up right sibling with excess keys and children
+        right.keys = [15, 20, 25]
+        right.children = [LeafNode(4) for _ in range(4)]
+        
+        # Borrow from right with separator key 10
+        new_separator = left.borrow_from_right(right, 10)
+        
+        # Verify redistribution
+        assert left.keys == [5, 10]
+        assert len(left.children) == 3
+        assert right.keys == [20, 25]
+        assert len(right.children) == 3
+        assert new_separator == 15
+
+    def test_redistribution_during_deletion(self):
+        """Test that redistribution happens during deletion to prevent underflow"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a tree where deletion will trigger redistribution
+        # Insert enough items to create multiple leaves
+        for i in range(1, 8):
+            tree[i] = f"value_{i}"
+        
+        # Verify tree structure before deletion
+        assert tree.invariants()
+        initial_structure = tree.leaf_count()
+        
+        # Delete an item that should trigger redistribution
+        del tree[1]
+        
+        # Tree should still be valid and have same structure
+        assert tree.invariants()
+        assert tree.leaf_count() == initial_structure  # No node merging yet
+        
+        # Verify remaining keys
+        for i in range(2, 8):
+            assert tree[i] == f"value_{i}"
+
+    def test_forced_redistribution_scenario(self):
+        """Test a specific scenario that forces redistribution"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a tree with specific structure to force redistribution
+        # Insert keys to create a scenario where one leaf becomes underfull
+        keys = [5, 10, 15, 20, 25, 30, 35, 40]
+        for key in keys:
+            tree[key] = f"value_{key}"
+        
+        # Verify initial state
+        assert tree.invariants()
+        
+        # Find a leaf that will become underfull after deletion
+        # With capacity=4, min_keys=2, so deleting from a leaf with 2 keys should trigger redistribution
+        initial_len = len(tree)
+        
+        # Delete multiple keys from one area to create underflow
+        del tree[5]  # This should work without redistribution
+        assert tree.invariants()
+        
+        # Continue deleting to potentially trigger redistribution
+        # The exact behavior depends on the tree structure, but it should remain valid
+        del tree[10]
+        assert tree.invariants()
+        assert len(tree) == initial_len - 2
+        
+        # Verify remaining keys are still accessible
+        remaining_keys = [15, 20, 25, 30, 35, 40]
+        for key in remaining_keys:
+            assert tree[key] == f"value_{key}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

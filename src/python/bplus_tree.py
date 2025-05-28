@@ -149,7 +149,9 @@ class BPlusTreeMap:
         """
         if node.is_leaf():
             # Base case: delete from leaf
-            return self._delete_from_leaf(node, key)
+            deleted = self._delete_from_leaf(node, key)
+            # Note: underflow handling will be done by parent
+            return deleted
         
         # Recursive case: find the correct child and recurse
         child_index = node.find_child_index(key)
@@ -158,11 +160,82 @@ class BPlusTreeMap:
         # Recursively delete from child
         deleted = self._delete_recursive(child, key)
         
-        # If child is now empty, remove it
-        if deleted and child.is_leaf() and len(child) == 0:
-            self._remove_empty_child(node, child_index)
+        if deleted:
+            # Handle child underflow after deletion
+            if len(child) == 0:
+                # Child is empty, remove it completely
+                if child.is_leaf():
+                    self._remove_empty_child(node, child_index)
+            elif child.is_underfull():
+                # Child is underfull but not empty, try redistribution
+                self._handle_underflow(node, child_index)
         
         return deleted
+    
+    def _handle_underflow(self, parent: "BranchNode", child_index: int) -> None:
+        """Handle underflow in a child node by trying redistribution first"""
+        child = parent.children[child_index]
+        
+        # If child is not underfull, nothing to do
+        if not child.is_underfull():
+            return
+        
+        # Child should not be empty here (handled separately)
+        assert len(child) > 0, "Empty children should be handled by _remove_empty_child"
+        
+        # Try to redistribute from siblings
+        redistributed = False
+        
+        # Try to borrow from right sibling
+        if child_index < len(parent.children) - 1:
+            right_sibling = parent.children[child_index + 1]
+            if right_sibling.can_donate():
+                self._redistribute_from_right(parent, child_index)
+                redistributed = True
+        
+        # If no redistribution from right, try left sibling
+        if not redistributed and child_index > 0:
+            left_sibling = parent.children[child_index - 1]
+            if left_sibling.can_donate():
+                self._redistribute_from_left(parent, child_index)
+                redistributed = True
+        
+        # If redistribution failed, we'll need to merge (TODO: Phase 3)
+        if not redistributed:
+            # For now, we'll leave this as a TODO for the next phase
+            pass
+    
+    def _redistribute_from_left(self, parent: "BranchNode", child_index: int) -> None:
+        """Redistribute keys from left sibling to child"""
+        child = parent.children[child_index]
+        left_sibling = parent.children[child_index - 1]
+        
+        if child.is_leaf():
+            # Leaf redistribution
+            child.borrow_from_left(left_sibling)
+            # Update separator key in parent
+            parent.keys[child_index - 1] = child.keys[0]
+        else:
+            # Branch redistribution
+            separator_key = parent.keys[child_index - 1]
+            new_separator = child.borrow_from_left(left_sibling, separator_key)
+            parent.keys[child_index - 1] = new_separator
+    
+    def _redistribute_from_right(self, parent: "BranchNode", child_index: int) -> None:
+        """Redistribute keys from right sibling to child"""
+        child = parent.children[child_index]
+        right_sibling = parent.children[child_index + 1]
+        
+        if child.is_leaf():
+            # Leaf redistribution
+            child.borrow_from_right(right_sibling)
+            # Update separator key in parent
+            parent.keys[child_index] = right_sibling.keys[0]
+        else:
+            # Branch redistribution
+            separator_key = parent.keys[child_index]
+            new_separator = child.borrow_from_right(right_sibling, separator_key)
+            parent.keys[child_index] = new_separator
     
     def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
         """Remove an empty child from a branch node."""
@@ -405,6 +478,33 @@ class LeafNode(Node):
         min_keys = self.capacity // 2
         return len(self.keys) < min_keys
 
+    def can_donate(self) -> bool:
+        """Check if leaf can give a key to a sibling (has more than minimum)"""
+        min_keys = self.capacity // 2
+        return len(self.keys) > min_keys
+
+    def borrow_from_left(self, left_sibling: "LeafNode") -> None:
+        """Borrow the rightmost key-value from left sibling"""
+        if not left_sibling.can_donate():
+            raise ValueError("Left sibling cannot donate")
+        
+        # Move the rightmost key-value from left to beginning of this node
+        key = left_sibling.keys.pop()
+        value = left_sibling.values.pop()
+        self.keys.insert(0, key)
+        self.values.insert(0, value)
+
+    def borrow_from_right(self, right_sibling: "LeafNode") -> None:
+        """Borrow the leftmost key-value from right sibling"""
+        if not right_sibling.can_donate():
+            raise ValueError("Right sibling cannot donate")
+        
+        # Move the leftmost key-value from right to end of this node
+        key = right_sibling.keys.pop(0)
+        value = right_sibling.values.pop(0)
+        self.keys.append(key)
+        self.values.append(value)
+
     def find_position(self, key: Any) -> Tuple[int, bool]:
         """
         Find where a key should be inserted.
@@ -503,6 +603,41 @@ class BranchNode(Node):
         """Check if branch has fewer than minimum required keys"""
         min_keys = self.capacity // 2
         return len(self.keys) < min_keys
+
+    def can_donate(self) -> bool:
+        """Check if branch can give a key to a sibling (has more than minimum)"""
+        min_keys = self.capacity // 2
+        return len(self.keys) > min_keys
+
+    def borrow_from_left(self, left_sibling: "BranchNode", separator_key: Any) -> Any:
+        """Borrow the rightmost key and child from left sibling, returns new separator"""
+        if not left_sibling.can_donate():
+            raise ValueError("Left sibling cannot donate")
+        
+        # Take the separator key as our leftmost key
+        self.keys.insert(0, separator_key)
+        
+        # Take the rightmost child from left sibling
+        child = left_sibling.children.pop()
+        self.children.insert(0, child)
+        
+        # The rightmost key from left sibling becomes the new separator
+        return left_sibling.keys.pop()
+
+    def borrow_from_right(self, right_sibling: "BranchNode", separator_key: Any) -> Any:
+        """Borrow the leftmost key and child from right sibling, returns new separator"""
+        if not right_sibling.can_donate():
+            raise ValueError("Right sibling cannot donate")
+        
+        # Take the separator key as our rightmost key
+        self.keys.append(separator_key)
+        
+        # Take the leftmost child from right sibling
+        child = right_sibling.children.pop(0)
+        self.children.append(child)
+        
+        # The leftmost key from right sibling becomes the new separator
+        return right_sibling.keys.pop(0)
 
     def find_child_index(self, key: Any) -> int:
         """Find which child a key should go to"""
