@@ -52,12 +52,15 @@ for key in tree:
 The main B+ tree class providing a dictionary-like interface.
 
 #### Constructor
+
 ```python
 BPlusTreeMap(capacity: int = 128)
 ```
+
 - `capacity`: Maximum number of keys per node (minimum 16 recommended)
 
 #### Methods
+
 - `__setitem__(key, value)`: Insert or update a key-value pair
 - `__getitem__(key)`: Retrieve value for a key
 - `__delitem__(key)`: Delete a key-value pair
@@ -83,14 +86,34 @@ python -m pytest tests/test_bplus_tree.py
 python -m pytest tests/ --cov=bplus_tree
 ```
 
+### Fuzz Testing
+
+The implementation includes comprehensive fuzz testing to ensure robustness:
+
+```bash
+# Run the main fuzz test (1 million operations)
+python tests/fuzz_test.py
+
+# Run comprehensive fuzz tests across different capacities
+python tests/comprehensive_fuzz_test.py
+```
+
+The fuzz tester:
+- Performs random operations (insert, delete, update, get) and compares results with a reference implementation
+- Tests various tree capacities and initial conditions
+- Validates B+ tree invariants after each operation
+- Automatically saves reproduction scripts when failures are detected
+
 ## Performance
 
 The B+ tree implementation is optimized for:
+
 - Large datasets requiring ordered access
 - Range queries and sequential access patterns
 - Scenarios with mixed read/write workloads
 
 Recommended capacity values:
+
 - Small datasets (< 1000 items): 16-32
 - Medium datasets (1000-100k items): 64-128
 - Large datasets (> 100k items): 128-256
@@ -98,6 +121,9 @@ Recommended capacity values:
 ## Architecture
 
 The implementation consists of:
-- `bplus_tree.py`: Core B+ tree implementation
-- `_invariant_checker.py`: Internal validation for tree structure
-- `tests/`: Comprehensive test suite including unit tests and fuzz tests
+
+- `bplus_tree.py`: Core B+ tree implementation with Node, LeafNode, and BranchNode classes
+- `tests/_invariant_checker.py`: Internal module for validating B+ tree structural invariants
+- `tests/fuzz_test.py`: Fuzz testing framework for randomized testing
+- `tests/comprehensive_fuzz_test.py`: Extended fuzz tests across various configurations
+- `tests/test_*.py`: Unit tests covering specific functionality and edge cases
