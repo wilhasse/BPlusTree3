@@ -343,6 +343,32 @@ class TestRemoval:
         assert 6 not in tree
         
         assert tree.invariants()
+    
+    def test_collapse_root_when_empty(self):
+        """Test that tree height collapses when root branch becomes empty"""
+        tree = BPlusTreeMap(capacity=2)
+        
+        # Create a small tree that will have a branch root
+        tree[1] = "one"
+        tree[2] = "two"
+        tree[3] = "three"  # This should cause a split
+        
+        # Verify we have a branch root
+        assert not tree.root.is_leaf()
+        initial_root = tree.root
+        
+        # Remove items to make one child empty
+        del tree[1]
+        del tree[2]
+        
+        
+        # At this point, the first leaf is empty and should be removed
+        # The root should collapse to just be the remaining leaf
+        assert tree.root.is_leaf()
+        assert tree.root != initial_root
+        assert len(tree) == 1
+        assert tree[3] == "three"
+        assert tree.invariants()
 
 
 class TestBranchNode:

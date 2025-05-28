@@ -136,6 +136,11 @@ class BPlusTreeMap:
         deleted = self._delete_recursive(self.root, key)
         if not deleted:
             raise KeyError(key)
+        
+        # Check if root needs to collapse
+        if not self.root.is_leaf() and len(self.root.children) == 1:
+            # Collapse: make the only child the new root
+            self.root = self.root.children[0]
     
     def _delete_recursive(self, node: "Node", key: Any) -> bool:
         """
@@ -151,7 +156,41 @@ class BPlusTreeMap:
         child = node.children[child_index]
         
         # Recursively delete from child
-        return self._delete_recursive(child, key)
+        deleted = self._delete_recursive(child, key)
+        
+        # If child is now empty, remove it
+        if deleted and child.is_leaf() and len(child) == 0:
+            self._remove_empty_child(node, child_index)
+        
+        return deleted
+    
+    def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
+        """Remove an empty child from a branch node."""
+        empty_child = parent.children[child_index]
+        
+        # If it's a leaf, update the linked list
+        if empty_child.is_leaf() and empty_child == self.leaves:
+            # Update the head of the leaves list
+            self.leaves = empty_child.next
+        
+        # Find and update the previous leaf's next pointer
+        if empty_child.is_leaf():
+            current = self.leaves
+            while current and current.next != empty_child:
+                current = current.next
+            if current:
+                current.next = empty_child.next
+        
+        # Remove the child
+        parent.children.pop(child_index)
+        
+        # Remove the corresponding separator key
+        if child_index > 0:
+            # If not the first child, remove the key to its left
+            parent.keys.pop(child_index - 1)
+        elif len(parent.keys) > 0:
+            # If it's the first child, remove the first key
+            parent.keys.pop(0)
     
     def _delete_from_leaf(self, leaf: "LeafNode", key: Any) -> bool:
         """Delete from a leaf node. Returns True if deleted, False if not found."""
