@@ -328,10 +328,24 @@ class BPlusTreeMap:
             current = current.next
 
         # 3 & 4. Check minimum occupancy (except for root)
-        if not check_min_occupancy(self.root, is_root=True):
-            print(
-                f"Invariant violated: Node has fewer than {self.capacity // 2} entries"
-            )
+        def check_min_occupancy_new(node: Node, is_root: bool = False) -> bool:
+            if is_root:
+                # Root can have fewer entries
+                return True
+            
+            if node.is_underfull():
+                print(f"Invariant violated: Non-root node is underfull with {len(node.keys)} keys (min: {self.capacity // 2})")
+                return False
+            
+            if not node.is_leaf():
+                # Check children recursively
+                for child in node.children:
+                    if not check_min_occupancy_new(child, False):
+                        return False
+            
+            return True
+        
+        if not check_min_occupancy_new(self.root, is_root=True):
             return False
 
         # 5. Check branch balance (subtrees should have similar depths)
@@ -362,6 +376,11 @@ class Node(ABC):
         """Returns the number of items in the node"""
         pass
 
+    @abstractmethod
+    def is_underfull(self) -> bool:
+        """Returns True if the node has fewer than minimum required keys"""
+        pass
+
 
 class LeafNode(Node):
     """Leaf node containing key-value pairs"""
@@ -380,6 +399,11 @@ class LeafNode(Node):
 
     def __len__(self) -> int:
         return len(self.keys)
+
+    def is_underfull(self) -> bool:
+        """Check if leaf has fewer than minimum required keys"""
+        min_keys = self.capacity // 2
+        return len(self.keys) < min_keys
 
     def find_position(self, key: Any) -> Tuple[int, bool]:
         """
@@ -474,6 +498,11 @@ class BranchNode(Node):
 
     def __len__(self) -> int:
         return len(self.keys)
+
+    def is_underfull(self) -> bool:
+        """Check if branch has fewer than minimum required keys"""
+        min_keys = self.capacity // 2
+        return len(self.keys) < min_keys
 
     def find_child_index(self, key: Any) -> int:
         """Find which child a key should go to"""

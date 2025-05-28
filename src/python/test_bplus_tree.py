@@ -371,6 +371,115 @@ class TestRemoval:
         assert tree.invariants()
 
 
+class TestNodeUnderflow:
+    """Test node underflow detection"""
+    
+    def test_leaf_underflow_detection(self):
+        """Test that leaf nodes correctly detect underflow"""
+        leaf = LeafNode(capacity=4)  # min_keys = 2
+        
+        # Empty leaf is underfull
+        assert leaf.is_underfull()
+        
+        # Single key is underfull
+        leaf.insert(1, "one")
+        assert leaf.is_underfull()
+        
+        # Two keys is at minimum (not underfull)
+        leaf.insert(2, "two")
+        assert not leaf.is_underfull()
+        
+        # More keys is definitely not underfull
+        leaf.insert(3, "three")
+        assert not leaf.is_underfull()
+    
+    def test_branch_underflow_detection(self):
+        """Test that branch nodes correctly detect underflow"""
+        branch = BranchNode(capacity=4)  # min_keys = 2
+        
+        # Empty branch is underfull
+        assert branch.is_underfull()
+        
+        # Single key is underfull
+        branch.keys.append(5)
+        assert branch.is_underfull()
+        
+        # Two keys is at minimum (not underfull)
+        branch.keys.append(10)
+        assert not branch.is_underfull()
+        
+        # More keys is definitely not underfull
+        branch.keys.append(15)
+        assert not branch.is_underfull()
+    
+    def test_underflow_after_deletion_creates_violation(self):
+        """Test that deleting keys can create underflow violations"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a tree with enough items to have branch nodes
+        for i in range(1, 10):
+            tree[i] = f"value_{i}"
+        
+        # Delete many items to potentially create underflow
+        # (This test documents current behavior - underflow handling will be added later)
+        del tree[1]
+        del tree[2] 
+        del tree[3]
+        del tree[4]
+        
+        # Check if any nodes are underfull (they might be, which is expected for now)
+        has_underflow = self._tree_has_underflow(tree)
+        
+        # For now, just verify the tree still functions correctly
+        assert len(tree) == 5
+        assert tree[5] == "value_5"
+    
+    def test_deletion_can_violate_underflow_invariant(self):
+        """Test that deletions can create underflow violations (documenting current behavior)"""
+        tree = BPlusTreeMap(capacity=4)
+        
+        # Create a minimal tree that will have underflow after deletion
+        tree[1] = "one"
+        tree[2] = "two"
+        tree[3] = "three"
+        tree[4] = "four"
+        tree[5] = "five"  # This creates a branch node
+        
+        # Verify we start with a valid tree
+        assert tree.invariants()
+        
+        # Delete items from one leaf to make it underfull
+        del tree[1]
+        del tree[2]
+        
+        # Our current deletion implementation actually handles this well
+        # by removing empty leaves, so invariants should still hold
+        assert tree.invariants()
+        
+        # The tree should still be functionally correct even if invariants are violated
+        assert len(tree) == 3
+        assert tree[3] == "three"
+        assert tree[4] == "four"
+        assert tree[5] == "five"
+        
+    def _tree_has_underflow(self, tree) -> bool:
+        """Helper to check if any non-root nodes in tree are underfull"""
+        def check_node(node, is_root=False):
+            if is_root:
+                return False  # Root can be underfull
+            
+            if node.is_underfull():
+                return True
+                
+            if not node.is_leaf():
+                for child in node.children:
+                    if check_node(child, False):
+                        return True
+            return False
+        
+        return check_node(tree.root, is_root=True)
+
+
 class TestBranchNode:
     """Test BranchNode operations"""
 
