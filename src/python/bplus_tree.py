@@ -39,19 +39,19 @@ class BPlusTreeMap:
         if node.is_leaf():
             # Base case: insert into leaf
             return self._insert_into_leaf(node, key, value)
-        else:
-            # Recursive case: find the right child and recurse
-            child_index = node.find_child_index(key)
-            child = node.children[child_index]
 
-            # Recursively insert and check if child split
-            split_result = self._insert_recursive(child, key, value)
-            if split_result is None:
-                return None
+        # Recursive case: find the correct child and recurse
+        child_index = node.find_child_index(key)
+        child = node.children[child_index]
 
-            # Child split, handle it
-            new_child, separator_key = split_result
-            return self._insert_into_branch(node, child_index, separator_key, new_child)
+        # Recursively insert and check if child split
+        split_result = self._insert_recursive(child, key, value)
+        if split_result is None:
+            return None
+
+        # Child split, handle it
+        new_child, separator_key = split_result
+        return self._insert_into_branch(node, child_index, separator_key, new_child)
 
     def _insert_into_leaf(
         self, leaf: "LeafNode", key: Any, value: Any
