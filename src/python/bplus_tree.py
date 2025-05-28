@@ -15,7 +15,7 @@ except ImportError:
 class BPlusTreeMap:
     """B+ Tree with Python dict-like API"""
 
-    def __init__(self, capacity: int = 4):
+    def __init__(self, capacity: int = 128):
         """Create a B+ tree with specified node capacity"""
         self.capacity = capacity
         original = LeafNode(capacity)

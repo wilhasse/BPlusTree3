@@ -139,6 +139,8 @@ let all_entries = tree.slice();
 
 ## Performance Characteristics
 
+### Theoretical Complexity
+
 | Operation       | BPlusTree    | BTreeMap           | Notes                         |
 | --------------- | ------------ | ------------------ | ----------------------------- |
 | Insert          | O(log n)     | O(log n)           | Similar performance           |
@@ -148,6 +150,58 @@ let all_entries = tree.slice();
 | Memory Usage    | Higher       | Lower              | B+ trees store more pointers  |
 
 Where `n` is the number of elements and `k` is the number of elements in the result set.
+
+### Real-World Performance vs SortedDict
+
+Our Python implementation has been extensively benchmarked against the highly optimized `SortedDict` from `sortedcontainers`. While SortedDict dominates general-purpose scenarios, **B+ Tree excels in specific use cases**:
+
+#### 🏆 **B+ Tree Performance Wins**
+
+| Scenario | B+ Tree Advantage | Use Cases |
+|----------|-------------------|-----------|
+| **Partial Range Scans** | **Up to 2.5x faster** | Database LIMIT queries, pagination, "top N" results |
+| **Large Dataset Iteration** | **1.1x - 1.4x faster** | Data export, bulk processing, full table scans |
+| **Medium Range Queries** | **1.4x faster** | Time-series analysis, geographic queries, batch processing |
+
+#### 📊 **Detailed Benchmark Results**
+
+**Partial Range Scans (Early Termination):**
+```
+Limit  10 items: B+ Tree 1.18x faster
+Limit  50 items: B+ Tree 2.50x faster  ⭐ Best performance
+Limit 100 items: B+ Tree 1.52x faster
+Limit 500 items: B+ Tree 1.15x faster
+```
+
+**Large Dataset Iteration:**
+```
+200K items: B+ Tree 1.29x faster
+300K items: B+ Tree 1.12x faster  
+500K items: B+ Tree 1.39x faster  ⭐ Scales well
+```
+
+**Optimal Configuration:**
+- **Node Capacity: 128** provides best performance (3.3x faster than default capacity 4)
+- Performance continues improving with larger capacities
+- Higher capacity = fewer tree levels, better cache utilization
+
+#### 🎯 **When to Choose B+ Tree**
+
+**Excellent for:**
+- Database-like workloads with range queries
+- Analytics dashboards ("top 100 users")
+- Search systems with pagination
+- Time-series data processing
+- Data export and ETL operations
+- Any scenario with "LIMIT" or early termination patterns
+
+**Use SortedDict when:**
+- Random access dominates (37x faster individual lookups)
+- Small datasets (< 100K items)
+- Memory efficiency is critical
+- General-purpose sorted container needs
+
+*Benchmarks run on Python implementation with capacity=128 vs SortedDict. See `/src/python/COMPETITIVE_ADVANTAGES.md` for complete analysis.*
 
 ## Configuration
 
