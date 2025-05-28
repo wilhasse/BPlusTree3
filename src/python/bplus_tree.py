@@ -1,99 +1,149 @@
 """
-B+ Tree implementation in Python with dict-like API
+B+ Tree implementation in Python with dict-like API.
+
+This module provides a B+ tree data structure with a dictionary-like interface,
+supporting efficient insertion, deletion, lookup, and range queries.
 """
 
 import bisect
-from typing import Any, Optional, List, Tuple, Union
 from abc import ABC, abstractmethod
-from _invariant_checker import BPlusTreeInvariantChecker
+from typing import Any, Optional, List, Tuple, Union, Iterator
+
+from ._invariant_checker import BPlusTreeInvariantChecker
+
+__all__ = ["BPlusTreeMap", "Node", "LeafNode", "BranchNode"]
+
+# Constants
+MIN_CAPACITY = 4
+DEFAULT_CAPACITY = 128
+BULK_LOAD_BATCH_MULTIPLIER = 2
+MIN_BULK_LOAD_BATCH_SIZE = 50
+
+
+class BPlusTreeError(Exception):
+    """Base exception for B+ tree operations."""
+    pass
+
+
+class InvalidCapacityError(BPlusTreeError):
+    """Raised when an invalid capacity is specified."""
+    pass
 
 
 class BPlusTreeMap:
-    """B+ Tree with Python dict-like API"""
+    """B+ Tree implementation with Python dict-like API.
+    
+    A B+ tree is a self-balancing tree data structure that maintains sorted data
+    and allows searches, sequential access, insertions, and deletions in O(log n).
+    Unlike B trees, all values are stored in leaf nodes, which are linked together
+    for efficient range queries.
+    
+    Attributes:
+        capacity: Maximum number of keys per node.
+        root: The root node of the tree.
+        leaves: The leftmost leaf node (head of linked list).
+    
+    Example:
+        >>> tree = BPlusTreeMap(capacity=32)
+        >>> tree[1] = "one"
+        >>> tree[2] = "two"
+        >>> print(tree[1])
+        one
+        >>> for key, value in tree.items():
+        ...     print(f"{key}: {value}")
+        1: one
+        2: two
+    """
 
-    def __init__(self, capacity: int = 128):
-        """Create a B+ tree with specified node capacity"""
-        if capacity < 4:
-            raise ValueError(
-                "Capacity must be at least 4 to maintain B+ tree invariants"
+    def __init__(self, capacity: int = DEFAULT_CAPACITY) -> None:
+        """Create a B+ tree with specified node capacity.
+        
+        Args:
+            capacity: Maximum number of keys per node (minimum 4).
+            
+        Raises:
+            InvalidCapacityError: If capacity is less than 4.
+        """
+        if capacity < MIN_CAPACITY:
+            raise InvalidCapacityError(
+                f"Capacity must be at least {MIN_CAPACITY} to maintain B+ tree invariants"
             )
         self.capacity = capacity
+        self._rightmost_leaf_cache: Optional[LeafNode] = None
 
         original = LeafNode(self.capacity)
         self.leaves: LeafNode = original
         self.root: Node = original
 
     @classmethod
-    def from_sorted_items(cls, items, capacity: int = 128):
-        """
-        Bulk load from sorted key-value pairs for 3-5x faster construction.
+    def from_sorted_items(cls, items, capacity: int = DEFAULT_CAPACITY) -> "BPlusTreeMap":
+        """Bulk load from sorted key-value pairs for 3-5x faster construction.
 
         Args:
-            items: Iterable of (key, value) pairs that MUST be sorted by key
-            capacity: Node capacity (minimum 4)
+            items: Iterable of (key, value) pairs that MUST be sorted by key.
+            capacity: Node capacity (minimum 4).
 
         Returns:
-            BPlusTreeMap instance
+            BPlusTreeMap instance with loaded data.
+            
+        Raises:
+            InvalidCapacityError: If capacity is less than 4.
         """
         tree = cls(capacity=capacity)
         tree._bulk_load_sorted(items)
         return tree
 
-    def _bulk_load_sorted(self, items):
-        """Internal bulk loading implementation for sorted items"""
+    def _bulk_load_sorted(self, items) -> None:
+        """Internal bulk loading implementation for sorted items."""
         items_list = list(items)
         if not items_list:
             return
-
-        # Simplified bulk loading approach:
-        # Use larger insertion batches and optimize for sorted order
-
-        # Strategy: Insert items in optimally-sized batches
-        # This reduces tree restructuring while maintaining correctness
-        optimal_batch_size = max(self.capacity * 2, 50)  # Larger batches for efficiency
+        optimal_batch_size = max(
+            self.capacity * BULK_LOAD_BATCH_MULTIPLIER, 
+            MIN_BULK_LOAD_BATCH_SIZE
+        )
 
         for i in range(0, len(items_list), optimal_batch_size):
             batch_end = min(i + optimal_batch_size, len(items_list))
 
-            # Insert batch using optimized path for sorted data
             for j in range(i, batch_end):
                 key, value = items_list[j]
                 self._insert_sorted_optimized(key, value)
 
-    def _insert_sorted_optimized(self, key, value):
-        """Optimized insertion for sorted data - avoids repeated tree traversals"""
-        # For sorted data, we can cache the rightmost leaf and insert directly
-        # when possible, falling back to regular insertion when needed
-
-        if not hasattr(self, "_rightmost_leaf_cache"):
-            self._rightmost_leaf_cache = None
-
-        # Try to insert into cached rightmost leaf if key is larger than all existing
+    def _insert_sorted_optimized(self, key: Any, value: Any) -> None:
+        """Optimized insertion for sorted data - avoids repeated tree traversals.
+        
+        Args:
+            key: The key to insert.
+            value: The value to associate with the key.
+        """
         if (
             self._rightmost_leaf_cache
             and self._rightmost_leaf_cache.keys
             and key > self._rightmost_leaf_cache.keys[-1]
             and not self._rightmost_leaf_cache.is_full()
         ):
-
             self._rightmost_leaf_cache.keys.append(key)
             self._rightmost_leaf_cache.values.append(value)
             return
 
-        # Fallback to regular insertion and update cache
         self[key] = value
         self._update_rightmost_leaf_cache()
 
-    def _update_rightmost_leaf_cache(self):
-        """Update the rightmost leaf cache"""
-        # Find the rightmost leaf by traversing the linked list
+    def _update_rightmost_leaf_cache(self) -> None:
+        """Update the rightmost leaf cache."""
         current = self.leaves
         while current.next is not None:
             current = current.next
         self._rightmost_leaf_cache = current
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        """Set a key-value pair (dict-like API)"""
+        """Set a key-value pair (dict-like API).
+        
+        Args:
+            key: The key to insert or update.
+            value: The value to associate with the key.
+        """
         result = self._insert_recursive(self.root, key, value)
 
         # If the root split, create a new root
@@ -116,16 +166,13 @@ class BPlusTreeMap:
             # Base case: insert into leaf
             return self._insert_into_leaf(node, key, value)
 
-        # Recursive case: find the correct child and recurse
         child_index = node.find_child_index(key)
         child = node.children[child_index]
 
-        # Recursively insert and check if child split
         split_result = self._insert_recursive(child, key, value)
         if split_result is None:
             return None
 
-        # Child split, handle it
         new_child, separator_key = split_result
         return self._insert_into_branch(node, child_index, separator_key, new_child)
 
@@ -168,13 +215,19 @@ class BPlusTreeMap:
         return value
 
     def get(self, key: Any, default: Any = None) -> Any:
-        """Get value for a key with optional default"""
-        # Navigate to the correct leaf
+        """Get value for a key with optional default.
+        
+        Args:
+            key: The key to look up.
+            default: Value to return if key not found (default: None).
+            
+        Returns:
+            The value associated with the key, or default if not found.
+        """
         node = self.root
         while not node.is_leaf():
             node = node.get_child(key)
 
-        # Get from leaf
         value = node.get(key)
         return value if value is not None else default
 
@@ -386,41 +439,34 @@ class BPlusTreeMap:
         deleted = leaf.delete(key)
         return deleted is not None
 
-    def keys(self, start_key=None, end_key=None):
+    def keys(self, start_key=None, end_key=None) -> Iterator[Any]:
         """Return an iterator over keys in the given range"""
         for key, _ in self.items(start_key, end_key):
             yield key
 
-    def values(self, start_key=None, end_key=None):
+    def values(self, start_key=None, end_key=None) -> Iterator[Any]:
         """Return an iterator over values in the given range"""
         for _, value in self.items(start_key, end_key):
             yield value
 
-    def items(self, start_key=None, end_key=None):
+    def items(self, start_key=None, end_key=None) -> Iterator[Tuple[Any, Any]]:
         """Return an iterator over (key, value) pairs in the given range"""
         if start_key is None:
-            # Start from the beginning
             current = self.leaves
             start_index = 0
         else:
-            # Find the leaf containing start_key or where it would be
             current = self._find_leaf_for_key(start_key)
             if current is None:
-                return  # Empty tree
-            # Find the starting position within the leaf
+                return
             start_index = self._find_position_in_leaf(current, start_key)
 
-        # Iterate through leaves starting from current
         while current is not None:
-            # Start from start_index in the first leaf, 0 in subsequent leaves
             for i in range(start_index, len(current.keys)):
                 key = current.keys[i]
-                # Check if we've reached the end of the range
                 if end_key is not None and key >= end_key:
                     return
                 yield (key, current.values[i])
 
-            # Move to next leaf and reset start_index
             current = current.next
             start_index = 0
 
@@ -466,7 +512,12 @@ class BPlusTreeMap:
 
 
 class Node(ABC):
-    """Abstract base class for B+ tree nodes"""
+    """Abstract base class for B+ tree nodes.
+    
+    This class defines the interface that both leaf and branch nodes must implement.
+    All nodes in the B+ tree have a capacity limit and can check if they are full
+    or underfull (for maintaining tree invariants during deletions).
+    """
 
     @abstractmethod
     def is_leaf(self) -> bool:
@@ -490,7 +541,17 @@ class Node(ABC):
 
 
 class LeafNode(Node):
-    """Leaf node containing key-value pairs"""
+    """Leaf node containing key-value pairs.
+    
+    Leaf nodes are where all actual key-value pairs are stored in a B+ tree.
+    They are linked together to form a doubly-linked list for efficient range queries.
+    
+    Attributes:
+        capacity: Maximum number of keys this node can hold.
+        keys: Sorted list of keys.
+        values: List of values corresponding to keys.
+        next: Pointer to the next leaf node (for range queries).
+    """
 
     def __init__(self, capacity: int):
         self.capacity = capacity
@@ -508,12 +569,12 @@ class LeafNode(Node):
         return len(self.keys)
 
     def is_underfull(self) -> bool:
-        """Check if leaf has fewer than minimum required keys"""
+        """Check if leaf has fewer than minimum required keys."""
         min_keys = (self.capacity - 1) // 2
         return len(self.keys) < min_keys
 
     def can_donate(self) -> bool:
-        """Check if leaf can give a key to a sibling (has more than minimum)"""
+        """Check if leaf can give a key to a sibling (has more than minimum)."""
         min_keys = (self.capacity - 1) // 2
         return len(self.keys) > min_keys
 
@@ -522,7 +583,6 @@ class LeafNode(Node):
         if not left_sibling.can_donate():
             raise ValueError("Left sibling cannot donate")
 
-        # Move the rightmost key-value from left to beginning of this node
         key = left_sibling.keys.pop()
         value = left_sibling.values.pop()
         self.keys.insert(0, key)
@@ -533,7 +593,6 @@ class LeafNode(Node):
         if not right_sibling.can_donate():
             raise ValueError("Right sibling cannot donate")
 
-        # Move the leftmost key-value from right to end of this node
         key = right_sibling.keys.pop(0)
         value = right_sibling.values.pop(0)
         self.keys.append(key)
@@ -634,7 +693,21 @@ class LeafNode(Node):
 
 
 class BranchNode(Node):
-    """Internal node containing keys and child pointers"""
+    """Internal (branch) node containing keys and child pointers.
+    
+    Branch nodes guide the search through the tree. They contain separator keys
+    and pointers to child nodes. For n keys, there are n+1 children.
+    
+    Attributes:
+        capacity: Maximum number of keys this node can hold.
+        keys: Sorted list of separator keys.
+        children: List of child nodes (leaves or other branches).
+    
+    Invariants:
+        - len(children) == len(keys) + 1
+        - All keys in children[i] < keys[i]
+        - All keys in children[i+1] >= keys[i]
+    """
 
     def __init__(self, capacity: int):
         self.capacity = capacity

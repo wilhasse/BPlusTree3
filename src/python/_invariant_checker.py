@@ -83,25 +83,22 @@ class BPlusTreeInvariantChecker:
             return True
 
         except Exception as e:
-            print(f"Error during invariant checking: {e}")
+            print(f"Error during invariant checking: {type(e).__name__}: {e}")
             return False
 
     def _check_keys_ascending(self, node: "Node") -> bool:
         """Check if keys are in ascending order throughout the tree"""
         try:
             if node.is_leaf():
-                # Check leaf keys are sorted
                 for i in range(1, len(node.keys)):
                     if node.keys[i - 1] >= node.keys[i]:
                         return False
             else:
-                branch = node  # Type: BranchNode
-                # Check branch keys are sorted
+                branch = node
                 for i in range(1, len(branch.keys)):
                     if branch.keys[i - 1] >= branch.keys[i]:
                         return False
 
-                # Recursively check children
                 for i, child in enumerate(branch.children):
                     if child is None:
                         print(
@@ -120,28 +117,23 @@ class BPlusTreeInvariantChecker:
     def _check_min_occupancy(self, node: "Node", is_root: bool = False) -> bool:
         """Check minimum occupancy constraints"""
         if is_root:
-            # Root can have fewer entries but still needs basic structure
             if not node.is_leaf():
-                branch = node  # Type: BranchNode
-                # Root branch must have at least 2 children (unless it's becoming a leaf)
+                branch = node
                 if len(branch.children) < 2:
                     return False
         else:
-            # Non-root nodes must meet minimum requirements
             min_keys = (self.capacity - 1) // 2
             if len(node.keys) < min_keys:
                 return False
 
             if not node.is_leaf():
-                branch = node  # Type: BranchNode
-                # Branch nodes must have at least (min_keys + 1) children
+                branch = node
                 min_children = min_keys + 1
                 if len(branch.children) < min_children:
                     return False
 
         if not node.is_leaf():
-            branch = node  # Type: BranchNode
-            # Check children recursively
+            branch = node
             for child in branch.children:
                 if not self._check_min_occupancy(child, False):
                     return False
