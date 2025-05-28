@@ -5,6 +5,12 @@ B+ Tree implementation in Python with dict-like API
 from typing import Any, Optional, List, Tuple, Union
 from abc import ABC, abstractmethod
 
+try:
+    from ._invariant_checker import _BPlusTreeInvariantChecker
+except ImportError:
+    # For when the module is run directly
+    from _invariant_checker import _BPlusTreeInvariantChecker
+
 
 class BPlusTreeMap:
     """B+ Tree with Python dict-like API"""
@@ -15,6 +21,7 @@ class BPlusTreeMap:
         original = LeafNode(capacity)
         self.leaves: LeafNode = original
         self.root: Node = original
+        self._invariant_checker = _BPlusTreeInvariantChecker(capacity)
 
     def __setitem__(self, key: Any, value: Any) -> None:
         """Set a key-value pair (dict-like API)"""
@@ -430,153 +437,7 @@ class BPlusTreeMap:
 
     def invariants(self) -> bool:
         """Check that all B+ tree invariants hold"""
-
-        # Helper to get all leaves with their depths
-        def get_leaves_with_depth(
-            node: Node, depth: int = 0
-        ) -> List[Tuple[LeafNode, int]]:
-            try:
-                if node.is_leaf():
-                    return [(node, depth)]
-
-                leaves = []
-                for i, child in enumerate(node.children):
-                    if child is None:
-                        print(f"Invariant violated: None child at index {i}")
-                        return []
-                    leaves.extend(get_leaves_with_depth(child, depth + 1))
-                return leaves
-            except Exception as e:
-                print(f"Error traversing tree in get_leaves_with_depth: {e}")
-                return []
-
-        # Helper to check if keys are in ascending order
-        def check_keys_ascending(node: Node) -> bool:
-            try:
-                if node.is_leaf():
-                    for i in range(1, len(node.keys)):
-                        if node.keys[i - 1] >= node.keys[i]:
-                            return False
-                else:
-                    # Check branch keys
-                    for i in range(1, len(node.keys)):
-                        if node.keys[i - 1] >= node.keys[i]:
-                            return False
-                    # Recursively check children
-                    for i, child in enumerate(node.children):
-                        if child is None:
-                            print(f"Invariant violated: None child at index {i} in check_keys_ascending")
-                            return False
-                        if not check_keys_ascending(child):
-                            return False
-                return True
-            except Exception as e:
-                print(f"Error in check_keys_ascending: {e}")
-                return False
-
-        # Helper to check minimum occupancy
-        def check_min_occupancy(node: Node, is_root: bool = False) -> bool:
-            if is_root:
-                # Root can have fewer entries
-                return True
-
-            min_keys = self.capacity // 2
-            if len(node.keys) < min_keys:
-                return False
-
-            if not node.is_leaf():
-                # Check children recursively
-                for child in node.children:
-                    if not check_min_occupancy(child, False):
-                        return False
-
-            return True
-
-        # Helper to count nodes at each level of a subtree
-        def count_nodes_per_level(node: Node) -> List[int]:
-            if node.is_leaf():
-                return [1]
-
-            # Count this level
-            counts = [1]
-
-            # Get counts from first child to determine depth
-            if node.children:
-                child_counts = count_nodes_per_level(node.children[0])
-                # Initialize counts for all levels below
-                for i in range(len(child_counts)):
-                    if i + 1 >= len(counts):
-                        counts.append(0)
-
-                # Add counts from all children
-                for child in node.children:
-                    child_counts = count_nodes_per_level(child)
-                    for i, count in enumerate(child_counts):
-                        counts[i + 1] += count
-
-            return counts
-
-        # 1. Check all leaves are at the same depth
-        leaves_with_depth = get_leaves_with_depth(self.root)
-        if leaves_with_depth:
-            first_depth = leaves_with_depth[0][1]
-            for leaf, depth in leaves_with_depth:
-                if depth != first_depth:
-                    print(
-                        f"Invariant violated: Leaf at depth {depth}, expected {first_depth}"
-                    )
-                    return False
-
-        # 2. Check keys ascend
-        if not check_keys_ascending(self.root):
-            print("Invariant violated: Keys not in ascending order")
-            return False
-
-        # Check keys ascend across leaves
-        prev_key = None
-        current = self.leaves
-        while current:
-            if current.keys:
-                if prev_key is not None and prev_key >= current.keys[0]:
-                    print(
-                        f"Invariant violated: Keys not ascending across leaves: {prev_key} >= {current.keys[0]}"
-                    )
-                    return False
-                if current.keys:
-                    prev_key = current.keys[-1]
-            current = current.next
-
-        # 3 & 4. Check minimum occupancy (except for root)
-        def check_min_occupancy_new(node: Node, is_root: bool = False) -> bool:
-            if is_root:
-                # Root can have fewer entries
-                return True
-
-            if node.is_underfull():
-                print(
-                    f"Invariant violated: Non-root node is underfull with {len(node.keys)} keys (min: {self.capacity // 2})"
-                )
-                return False
-
-            if not node.is_leaf():
-                # Check children recursively
-                for child in node.children:
-                    if not check_min_occupancy_new(child, False):
-                        return False
-
-            return True
-
-        if not check_min_occupancy_new(self.root, is_root=True):
-            return False
-
-        # 5. Check branch balance (subtrees should have similar depths)
-        if not self.root.is_leaf():
-            # For B+ trees, we only need to check that all leaves are at the same depth
-            # which we already did above. The exact shape of subtrees can vary
-            # during insertions as long as all leaves remain at the same level.
-            pass
-
-        return True
+        return self._invariant_checker.check_invariants(self.root, self.leaves)
 
     def compact(self) -> None:
         """
