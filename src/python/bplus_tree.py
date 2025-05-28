@@ -5,6 +5,7 @@ B+ Tree implementation in Python with dict-like API
 import bisect
 from typing import Any, Optional, List, Tuple, Union
 from abc import ABC, abstractmethod
+from _invariant_checker import BPlusTreeInvariantChecker
 
 
 class BPlusTreeMap:
@@ -449,6 +450,19 @@ class BPlusTreeMap:
             count += 1
             node = node.next
         return count
+
+    def _count_total_nodes(self) -> int:
+        """Count total nodes in the tree (for testing/debugging)"""
+
+        def count_nodes(node: "Node") -> int:
+            if node.is_leaf():
+                return 1
+            total = 1
+            for child in node.children:
+                total += count_nodes(child)
+            return total
+
+        return count_nodes(self.root)
 
 
 class Node(ABC):
