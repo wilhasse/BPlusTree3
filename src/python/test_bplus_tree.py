@@ -14,6 +14,7 @@ class TestBasicOperations:
         tree = BPlusTreeMap(capacity=4)
         assert len(tree) == 0
         assert not tree  # Should be falsy when empty
+        assert tree.invariants()
 
     def test_insert_and_get_single_item(self):
         """Test inserting and retrieving a single item"""
@@ -24,6 +25,7 @@ class TestBasicOperations:
         assert tree  # Should be truthy when not empty
         assert tree[1] == "one"
         assert tree.get(1) == "one"
+        assert tree.invariants()
 
     def test_insert_multiple_items(self):
         """Test inserting multiple items"""
@@ -36,6 +38,7 @@ class TestBasicOperations:
         assert tree[1] == "one"
         assert tree[2] == "two"
         assert tree[3] == "three"
+        assert tree.invariants()
 
     def test_update_existing_key(self):
         """Test updating an existing key"""
@@ -45,6 +48,7 @@ class TestBasicOperations:
 
         assert len(tree) == 1  # Size shouldn't change
         assert tree[1] == "ONE"
+        assert tree.invariants()
 
     def test_contains_operator(self):
         """Test the 'in' operator"""
@@ -55,6 +59,7 @@ class TestBasicOperations:
         assert 1 in tree
         assert 2 in tree
         assert 3 not in tree
+        assert tree.invariants()
 
     def test_get_with_default(self):
         """Test get() with default value"""
@@ -64,6 +69,7 @@ class TestBasicOperations:
         assert tree.get(1) == "one"
         assert tree.get(2) is None
         assert tree.get(2, "default") == "default"
+        assert tree.invariants()
 
     def test_key_error_on_missing_key(self):
         """Test that KeyError is raised for missing keys"""
@@ -72,6 +78,8 @@ class TestBasicOperations:
 
         with pytest.raises(KeyError):
             _ = tree[2]
+        
+        assert tree.invariants()
 
 
 class TestSetItemSplitting:
