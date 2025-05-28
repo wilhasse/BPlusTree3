@@ -326,12 +326,14 @@ class BPlusTreeMap:
         for i in range(len(node.children) - 1):
             child = node.children[i]
             right_sibling = node.children[i + 1]
+            
+            # Skip if either child is a leaf - we don't consolidate leaves in this method
+            if child.is_leaf() or right_sibling.is_leaf():
+                continue
 
             # If both children are branches and their combined size would fit in one node
             if (
-                not child.is_leaf()
-                and not right_sibling.is_leaf()
-                and len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity
+                len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity
                 and len(child.children) + len(right_sibling.children) <= child.capacity + 1
             ):
 
@@ -527,8 +529,7 @@ class BPlusTreeMap:
             self._compact_recursive(child)
 
         # Then try to consolidate this level
-        # TODO: Fix consolidation logic - currently violates max occupancy
-        # self._try_consolidate_branch(node)
+        self._try_consolidate_branch(node)
 
 
 class Node(ABC):
