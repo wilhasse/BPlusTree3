@@ -136,12 +136,12 @@ class BPlusTreeMap:
         deleted = self._delete_recursive(self.root, key)
         if not deleted:
             raise KeyError(key)
-        
+
         # Check if root needs to collapse
         if not self.root.is_leaf() and len(self.root.children) == 1:
             # Collapse: make the only child the new root
             self.root = self.root.children[0]
-    
+
     def _delete_recursive(self, node: "Node", key: Any) -> bool:
         """
         Recursively delete a key from the tree.
@@ -149,71 +149,64 @@ class BPlusTreeMap:
         """
         if node.is_leaf():
             # Base case: delete from leaf
-            deleted = self._delete_from_leaf(node, key)
             # Note: underflow handling will be done by parent
-            return deleted
-        
+            return self._delete_from_leaf(node, key)
+
         # Recursive case: find the correct child and recurse
         child_index = node.find_child_index(key)
         child = node.children[child_index]
-        
-        # Recursively delete from child
         deleted = self._delete_recursive(child, key)
-        
-        if deleted:
-            # Handle child underflow after deletion
-            if len(child) == 0:
-                # Child is empty, remove it completely
-                if child.is_leaf():
-                    self._remove_empty_child(node, child_index)
-            elif child.is_underfull():
-                # Child is underfull but not empty, try redistribution or merging
-                self._handle_underflow(node, child_index)
-            
-            # PHASE 6 OPTIMIZATION: Aggressive consolidation
-            # After handling underflow, check if we can consolidate the tree structure
-            # Note: Disabled during deletion to avoid corruption - use compact() method instead
-            # self._try_consolidate_branch(node)
-        
+        if not deleted:
+            return False
+
+        # Handle child underflow after deletion
+        if len(child) == 0:
+            # Child is empty, remove it completely
+            if child.is_leaf():
+                self._remove_empty_child(node, child_index)
+        elif child.is_underfull():
+            # Child is underfull but not empty, try redistribution or merging
+            self._handle_underflow(node, child_index)
+
         return deleted
-    
+
     def _handle_underflow(self, parent: "BranchNode", child_index: int) -> None:
         """Handle underflow in a child node by trying redistribution first"""
         child = parent.children[child_index]
-        
+
         # If child is not underfull, nothing to do
         if not child.is_underfull():
             return
-        
+
         # Child should not be empty here (handled separately)
         assert len(child) > 0, "Empty children should be handled by _remove_empty_child"
-        
+
         # Try to redistribute from siblings
         redistributed = False
-        
+
         # Try to borrow from right sibling
         if child_index < len(parent.children) - 1:
             right_sibling = parent.children[child_index + 1]
             if right_sibling.can_donate():
                 self._redistribute_from_right(parent, child_index)
                 redistributed = True
-        
+
         # If no redistribution from right, try left sibling
         if not redistributed and child_index > 0:
             left_sibling = parent.children[child_index - 1]
             if left_sibling.can_donate():
                 self._redistribute_from_left(parent, child_index)
                 redistributed = True
-        
+
         # If redistribution failed, try to merge with a sibling
         if not redistributed:
             self._merge_with_sibling(parent, child_index)
-    
+
     def _redistribute_from_left(self, parent: "BranchNode", child_index: int) -> None:
         """Redistribute keys from left sibling to child"""
         child = parent.children[child_index]
         left_sibling = parent.children[child_index - 1]
-        
+
         if child.is_leaf():
             # Leaf redistribution
             child.borrow_from_left(left_sibling)
@@ -224,12 +217,12 @@ class BPlusTreeMap:
             separator_key = parent.keys[child_index - 1]
             new_separator = child.borrow_from_left(left_sibling, separator_key)
             parent.keys[child_index - 1] = new_separator
-    
+
     def _redistribute_from_right(self, parent: "BranchNode", child_index: int) -> None:
         """Redistribute keys from right sibling to child"""
         child = parent.children[child_index]
         right_sibling = parent.children[child_index + 1]
-        
+
         if child.is_leaf():
             # Leaf redistribution
             child.borrow_from_right(right_sibling)
@@ -240,16 +233,16 @@ class BPlusTreeMap:
             separator_key = parent.keys[child_index]
             new_separator = child.borrow_from_right(right_sibling, separator_key)
             parent.keys[child_index] = new_separator
-    
+
     def _merge_with_sibling(self, parent: "BranchNode", child_index: int) -> None:
         """Merge an underfull child with one of its siblings"""
         child = parent.children[child_index]
-        
+
         # Prefer merging with left sibling (arbitrary choice)
         if child_index > 0:
             # Merge with left sibling
             left_sibling = parent.children[child_index - 1]
-            
+
             if child.is_leaf():
                 # Leaf merging
                 left_sibling.merge_with_right(child)
@@ -263,11 +256,11 @@ class BPlusTreeMap:
                 # Remove the merged child and its separator
                 parent.children.pop(child_index)
                 parent.keys.pop(child_index - 1)
-                
+
         elif child_index < len(parent.children) - 1:
             # Merge with right sibling
             right_sibling = parent.children[child_index + 1]
-            
+
             if child.is_leaf():
                 # Leaf merging
                 child.merge_with_right(right_sibling)
@@ -284,7 +277,7 @@ class BPlusTreeMap:
         else:
             # This should not happen - a node with only one child should have been collapsed
             raise ValueError("Cannot merge - node has no siblings")
-    
+
     def _try_consolidate_branch(self, node: "BranchNode") -> None:
         """
         PHASE 6 OPTIMIZATION: Try to consolidate branch structure for better space utilization.
@@ -292,36 +285,39 @@ class BPlusTreeMap:
         """
         if node.is_leaf():
             return
-        
+
         # Check if any child branches can be merged with siblings to reduce tree width
         for i in range(len(node.children) - 1):
             child = node.children[i]
             right_sibling = node.children[i + 1]
-            
+
             # If both children are branches and their combined size would fit in one node
-            if (not child.is_leaf() and not right_sibling.is_leaf() and 
-                len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity):
-                
+            if (
+                not child.is_leaf()
+                and not right_sibling.is_leaf()
+                and len(child.keys) + len(right_sibling.keys) + 1 <= child.capacity
+            ):
+
                 # Merge the two branch nodes for better space utilization
                 separator_key = node.keys[i]
                 child.merge_with_right(right_sibling, separator_key)
-                
+
                 # Remove the merged sibling and separator
                 node.children.pop(i + 1)
                 node.keys.pop(i)
-                
+
                 # Only do one merge per call to avoid index issues
                 break
-    
+
     def _remove_empty_child(self, parent: "BranchNode", child_index: int) -> None:
         """Remove an empty child from a branch node."""
         empty_child = parent.children[child_index]
-        
+
         # If it's a leaf, update the linked list
         if empty_child.is_leaf() and empty_child == self.leaves:
             # Update the head of the leaves list
             self.leaves = empty_child.next
-        
+
         # Find and update the previous leaf's next pointer
         if empty_child.is_leaf():
             current = self.leaves
@@ -329,10 +325,10 @@ class BPlusTreeMap:
                 current = current.next
             if current:
                 current.next = empty_child.next
-        
+
         # Remove the child
         parent.children.pop(child_index)
-        
+
         # Remove the corresponding separator key
         if child_index > 0:
             # If not the first child, remove the key to its left
@@ -340,7 +336,7 @@ class BPlusTreeMap:
         elif len(parent.keys) > 0:
             # If it's the first child, remove the first key
             parent.keys.pop(0)
-    
+
     def _delete_from_leaf(self, leaf: "LeafNode", key: Any) -> bool:
         """Delete from a leaf node. Returns True if deleted, False if not found."""
         deleted = leaf.delete(key)
@@ -352,10 +348,10 @@ class BPlusTreeMap:
         Returns the number of keys actually deleted.
         """
         deleted_count = 0
-        
+
         # Sort keys to potentially optimize tree traversal
         sorted_keys = sorted(keys)
-        
+
         # Delete keys one by one (could be optimized further)
         for key in sorted_keys:
             try:
@@ -363,11 +359,11 @@ class BPlusTreeMap:
                 deleted_count += 1
             except KeyError:
                 pass  # Key doesn't exist, skip
-        
+
         # Compact the tree after batch deletions if many keys were deleted
         if deleted_count > len(keys) * 0.1:  # If >10% of keys were deleted
             self.compact()
-        
+
         return deleted_count
 
     def keys(self):
@@ -505,19 +501,21 @@ class BPlusTreeMap:
             if is_root:
                 # Root can have fewer entries
                 return True
-            
+
             if node.is_underfull():
-                print(f"Invariant violated: Non-root node is underfull with {len(node.keys)} keys (min: {self.capacity // 2})")
+                print(
+                    f"Invariant violated: Non-root node is underfull with {len(node.keys)} keys (min: {self.capacity // 2})"
+                )
                 return False
-            
+
             if not node.is_leaf():
                 # Check children recursively
                 for child in node.children:
                     if not check_min_occupancy_new(child, False):
                         return False
-            
+
             return True
-        
+
         if not check_min_occupancy_new(self.root, is_root=True):
             return False
 
@@ -537,23 +535,24 @@ class BPlusTreeMap:
         """
         if self.root.is_leaf():
             return
-        
+
         # Perform multiple passes of consolidation until no more improvements
         max_passes = 10  # Prevent infinite loops
         for _ in range(max_passes):
             initial_structure = self._count_total_nodes()
             self._compact_recursive(self.root)
-            
+
             # Check if root can be collapsed further
-            while (not self.root.is_leaf() and len(self.root.children) == 1):
+            while not self.root.is_leaf() and len(self.root.children) == 1:
                 self.root = self.root.children[0]
-            
+
             # If no structural changes were made, we're done
             if self._count_total_nodes() == initial_structure:
                 break
-    
+
     def _count_total_nodes(self) -> int:
         """Count total nodes in the tree for optimization tracking"""
+
         def count_nodes(node):
             if node.is_leaf():
                 return 1
@@ -561,17 +560,18 @@ class BPlusTreeMap:
             for child in node.children:
                 count += count_nodes(child)
             return count
+
         return count_nodes(self.root)
-    
+
     def _compact_recursive(self, node: "Node") -> None:
         """Recursively compact the tree structure"""
         if node.is_leaf():
             return
-        
+
         # First, compact all children
         for child in node.children:
             self._compact_recursive(child)
-        
+
         # Then try to consolidate this level
         self._try_consolidate_branch(node)
 
@@ -632,7 +632,7 @@ class LeafNode(Node):
         """Borrow the rightmost key-value from left sibling"""
         if not left_sibling.can_donate():
             raise ValueError("Left sibling cannot donate")
-        
+
         # Move the rightmost key-value from left to beginning of this node
         key = left_sibling.keys.pop()
         value = left_sibling.values.pop()
@@ -643,7 +643,7 @@ class LeafNode(Node):
         """Borrow the leftmost key-value from right sibling"""
         if not right_sibling.can_donate():
             raise ValueError("Right sibling cannot donate")
-        
+
         # Move the leftmost key-value from right to end of this node
         key = right_sibling.keys.pop(0)
         value = right_sibling.values.pop(0)
@@ -655,7 +655,7 @@ class LeafNode(Node):
         # Move all keys and values from right sibling to this node
         self.keys.extend(right_sibling.keys)
         self.values.extend(right_sibling.values)
-        
+
         # Update linked list to skip the right sibling
         self.next = right_sibling.next
 
@@ -767,14 +767,14 @@ class BranchNode(Node):
         """Borrow the rightmost key and child from left sibling, returns new separator"""
         if not left_sibling.can_donate():
             raise ValueError("Left sibling cannot donate")
-        
+
         # Take the separator key as our leftmost key
         self.keys.insert(0, separator_key)
-        
+
         # Take the rightmost child from left sibling
         child = left_sibling.children.pop()
         self.children.insert(0, child)
-        
+
         # The rightmost key from left sibling becomes the new separator
         return left_sibling.keys.pop()
 
@@ -782,14 +782,14 @@ class BranchNode(Node):
         """Borrow the leftmost key and child from right sibling, returns new separator"""
         if not right_sibling.can_donate():
             raise ValueError("Right sibling cannot donate")
-        
+
         # Take the separator key as our rightmost key
         self.keys.append(separator_key)
-        
+
         # Take the leftmost child from right sibling
         child = right_sibling.children.pop(0)
         self.children.append(child)
-        
+
         # The leftmost key from right sibling becomes the new separator
         return right_sibling.keys.pop(0)
 
@@ -797,7 +797,7 @@ class BranchNode(Node):
         """Merge this branch with its right sibling using the separator key"""
         # Add the separator key to this node's keys
         self.keys.append(separator_key)
-        
+
         # Move all keys and children from right sibling to this node
         self.keys.extend(right_sibling.keys)
         self.children.extend(right_sibling.children)
