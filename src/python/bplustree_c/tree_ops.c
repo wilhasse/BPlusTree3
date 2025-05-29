@@ -15,7 +15,7 @@ BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key) {
         int pos = 0;
         for (int i = 0; i < node->num_keys; i++) {
             PyObject *node_key = node_get_key(node, i);
-            int cmp = PyObject_RichCompareBool(key, node_key, Py_LT);
+            int cmp = fast_compare_lt(key, node_key);
             if (cmp < 0) return NULL;  /* Comparison error */
             if (cmp) break;  /* key < node_key, so use this child */
             pos++;
@@ -38,7 +38,7 @@ static int tree_insert_recursive(BPlusNode *node, PyObject *key, PyObject *value
     int child_pos = 0;
     for (int i = 0; i < node->num_keys; i++) {
         PyObject *node_key = node_get_key(node, i);
-        int cmp = PyObject_RichCompareBool(key, node_key, Py_LT);
+        int cmp = fast_compare_lt(key, node_key);
         if (cmp < 0) return -1;  /* Comparison error */
         if (cmp) break;  /* key < node_key, so use this child */
         child_pos++;

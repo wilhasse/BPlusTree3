@@ -12,6 +12,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Cache optimization support */
+#ifdef __GNUC__
+    #define LIKELY(x)   __builtin_expect(!!(x), 1)
+    #define UNLIKELY(x) __builtin_expect(!!(x), 0)
+    #define PREFETCH(addr, rw, locality) __builtin_prefetch(addr, rw, locality)
+#else
+    #define LIKELY(x)   (x)
+    #define UNLIKELY(x) (x)
+    #define PREFETCH(addr, rw, locality) ((void)0)
+#endif
+
 /* Configuration constants */
 #define DEFAULT_CAPACITY 16
 #define MIN_CAPACITY 4
@@ -39,7 +50,8 @@ typedef struct BPlusNode {
     uint16_t num_keys;          /* Number of keys currently in node */
     uint16_t capacity;          /* Maximum keys this node can hold */
     NodeType type;              /* Leaf or branch node */
-    uint8_t _padding[3];        /* Alignment padding */
+    uint8_t _unused;            /* Reserved for future use */
+    uint8_t _padding[2];        /* Alignment padding */
     
     /* Links */
     struct BPlusNode *next;     /* Next leaf (for leaf nodes only) */
@@ -91,6 +103,14 @@ static inline void node_set_child(BPlusNode *node, int index, BPlusNode *child) 
 }
 
 /* Function prototypes */
+
+/* Fast comparison functions */
+int fast_compare_lt(PyObject *a, PyObject *b);
+int fast_compare_eq(PyObject *a, PyObject *b);
+
+/* Cache optimization functions */
+void* cache_aligned_alloc(size_t size);
+void cache_aligned_free(void* ptr);
 
 /* Node creation and destruction */
 BPlusNode* node_create(NodeType type, uint16_t capacity);

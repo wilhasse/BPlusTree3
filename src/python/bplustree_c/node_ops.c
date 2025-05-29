@@ -9,18 +9,71 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* Binary search optimized for cache locality */
+#ifdef _WIN32
+#include <malloc.h>
+#endif
+
+/* Fast comparison function with type-specific optimizations */
+int fast_compare_lt(PyObject *a, PyObject *b) {
+    /* Fast path for integers */
+    if (PyLong_CheckExact(a) && PyLong_CheckExact(b)) {
+        /* For small integers, use direct comparison */
+        long val_a = PyLong_AsLong(a);
+        long val_b = PyLong_AsLong(b);
+        if (!PyErr_Occurred()) {
+            return val_a < val_b ? 1 : 0;
+        }
+        PyErr_Clear(); /* Clear error and fall through */
+    }
+    
+    /* Fast path for strings */
+    if (PyUnicode_CheckExact(a) && PyUnicode_CheckExact(b)) {
+        int result = PyUnicode_Compare(a, b);
+        if (result != -1 || !PyErr_Occurred()) {
+            return result < 0 ? 1 : 0;
+        }
+        PyErr_Clear(); /* Clear error and fall through */
+    }
+    
+    /* Fall back to general comparison */
+    return PyObject_RichCompareBool(a, b, Py_LT);
+}
+
+/* Fast equality comparison function */
+int fast_compare_eq(PyObject *a, PyObject *b) {
+    /* Fast path for integers */
+    if (PyLong_CheckExact(a) && PyLong_CheckExact(b)) {
+        long val_a = PyLong_AsLong(a);
+        long val_b = PyLong_AsLong(b);
+        if (!PyErr_Occurred()) {
+            return val_a == val_b ? 1 : 0;
+        }
+        PyErr_Clear();
+    }
+    
+    /* Fast path for strings */
+    if (PyUnicode_CheckExact(a) && PyUnicode_CheckExact(b)) {
+        int result = PyUnicode_Compare(a, b);
+        if (result != -1 || !PyErr_Occurred()) {
+            return result == 0 ? 1 : 0;
+        }
+        PyErr_Clear();
+    }
+    
+    /* Fall back to general comparison */
+    return PyObject_RichCompareBool(a, b, Py_EQ);
+}
+
+/* Binary search to find position for key */
 int node_find_position(BPlusNode *node, PyObject *key) {
     int left = 0;
     int right = node->num_keys;
-    int result;
     
     while (left < right) {
         int mid = (left + right) / 2;
         PyObject *mid_key = node_get_key(node, mid);
         
-        /* Use Python's comparison */
-        result = PyObject_RichCompareBool(mid_key, key, Py_LT);
+        int result = fast_compare_lt(mid_key, key);
         if (result < 0) {
             return -1;  /* Error in comparison */
         }
@@ -55,6 +108,7 @@ BPlusNode* node_create(NodeType type, uint16_t capacity) {
     node->num_keys = 0;
     node->capacity = capacity;
     node->type = type;
+    node->_unused = 0;  /* Reserved for future use */
     node->next = NULL;
     
     /* Clear data array */
@@ -99,7 +153,7 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
     /* Check if key already exists */
     if (pos < node->num_keys) {
         PyObject *existing_key = node_get_key(node, pos);
-        int cmp = PyObject_RichCompareBool(existing_key, key, Py_EQ);
+        int cmp = fast_compare_eq(existing_key, key);
         if (cmp < 0) return -1;  /* Comparison error */
         
         if (cmp) {
@@ -171,6 +225,8 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
         (*new_node)->next = node->next;
         node->next = *new_node;
         
+        /* Flags no longer needed after SIMD removal */
+        
         /* Set split key */
         *split_key = node_get_key(*new_node, 0);
         Py_INCREF(*split_key);
@@ -195,6 +251,8 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
     node_set_value(node, pos, value);
     node->num_keys++;
     
+    /* No flag updates needed after SIMD removal */
+    
     return 0;  /* No split */
 }
 
@@ -213,7 +271,7 @@ int node_delete(BPlusNode *node, PyObject *key) {
     }
     
     PyObject *found_key = node_get_key(node, pos);
-    int cmp = PyObject_RichCompareBool(found_key, key, Py_EQ);
+    int cmp = fast_compare_eq(found_key, key);
     if (cmp < 0) return -1;  /* Comparison error */
     if (!cmp) return 0;      /* Key not found */
     
@@ -242,7 +300,7 @@ PyObject* node_get(BPlusNode *node, PyObject *key) {
     
     if (pos < node->num_keys) {
         PyObject *found_key = node_get_key(node, pos);
-        int cmp = PyObject_RichCompareBool(found_key, key, Py_EQ);
+        int cmp = fast_compare_eq(found_key, key);
         if (cmp < 0) return NULL;  /* Comparison error */
         
         if (cmp) {
@@ -255,4 +313,30 @@ PyObject* node_get(BPlusNode *node, PyObject *key) {
     /* Key not found */
     PyErr_SetObject(PyExc_KeyError, key);
     return NULL;
+}
+
+/* Cache-aligned memory allocation functions */
+void* cache_aligned_alloc(size_t size) {
+#ifdef _WIN32
+    return _aligned_malloc(size, CACHE_LINE_SIZE);
+#elif defined(__APPLE__) || defined(__linux__)
+    void *ptr;
+    if (posix_memalign(&ptr, CACHE_LINE_SIZE, size) != 0) {
+        return NULL;
+    }
+    return ptr;
+#else
+    /* Fallback to regular malloc if no aligned allocation available */
+    return malloc(size);
+#endif
+}
+
+void cache_aligned_free(void* ptr) {
+#ifdef _WIN32
+    _aligned_free(ptr);
+#elif defined(__APPLE__) || defined(__linux__)
+    free(ptr);
+#else
+    free(ptr);
+#endif
 }
