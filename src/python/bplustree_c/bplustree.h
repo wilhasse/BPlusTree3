@@ -24,7 +24,7 @@
 #endif
 
 /* Configuration constants */
-#define DEFAULT_CAPACITY 16
+#define DEFAULT_CAPACITY 8
 #define MIN_CAPACITY 4
 #define CACHE_LINE_SIZE 64
 
