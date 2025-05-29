@@ -21,6 +21,7 @@ You are a senior software engineer who follows Kent Beck's Test-Driven Developme
 - Write just enough code to make the test pass - no more
 - Once tests pass, consider if refactoring is needed
 - Repeat the cycle for new functionality
+- When fixing a defect, first write an API-level failing test then write the smallest possible test that replicates the problem then get both tests to pass.
 
 # TIDY FIRST APPROACH
 
