@@ -1,8 +1,8 @@
-use bplustree3::BPlusTree;
+use bplustree3::BPlusTreeMap;
 
 #[test]
 fn test_bplus_tree_remove_existing_key() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert some test data
     tree.insert(10, 100);
@@ -24,7 +24,7 @@ fn test_bplus_tree_remove_existing_key() {
 
 #[test]
 fn test_bplus_tree_remove_with_underflow() {
-    let mut tree = BPlusTree::new(2); // Small branching factor, min_keys = 1
+    let mut tree = BPlusTreeMap::new(4).unwrap(); // Small branching factor, min_keys = 1
 
     // Insert enough keys to create multiple nodes
     tree.insert(10, 100);
@@ -63,7 +63,7 @@ fn test_bplus_tree_remove_with_underflow() {
 
 #[test]
 fn test_bplus_tree_remove_last_key_from_tree() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert a single key
     tree.insert(42, 420);
@@ -90,7 +90,7 @@ fn test_bplus_tree_remove_last_key_from_tree() {
 
 #[test]
 fn test_bplus_tree_remove_all_keys_from_single_node() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert multiple keys in a single node
     tree.insert(10, 100);
@@ -128,13 +128,15 @@ fn test_bplus_tree_remove_all_keys_from_single_node() {
 
 #[test]
 fn test_bplus_tree_remove_from_first_node_causing_empty() {
-    let mut tree = BPlusTree::new(2); // Small branching factor
+    let mut tree = BPlusTreeMap::new(4).unwrap(); // Small branching factor
 
     // Create a scenario with multiple nodes where first node becomes empty
+    // With capacity 4, we need 5+ items to force a split
     tree.insert(10, 100);
     tree.insert(20, 200);
     tree.insert(30, 300);
     tree.insert(40, 400);
+    tree.insert(50, 500);
 
     // Verify we have multiple nodes
     assert!(tree.leaf_count() > 1, "Should have multiple nodes");
@@ -148,6 +150,7 @@ fn test_bplus_tree_remove_from_first_node_causing_empty() {
     assert_eq!(tree.get(&20), Some(&200));
     assert_eq!(tree.get(&30), Some(&300));
     assert_eq!(tree.get(&40), Some(&400));
+    assert_eq!(tree.get(&50), Some(&500));
 
     // The tree structure should be valid even if first node is empty/removed
     tree.validate()
@@ -156,7 +159,7 @@ fn test_bplus_tree_remove_from_first_node_causing_empty() {
 
 #[test]
 fn test_bplus_tree_remove_with_root_node_empty_validation() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert a single key and remove it
     tree.insert(42, 420);
@@ -178,7 +181,7 @@ fn test_bplus_tree_remove_with_root_node_empty_validation() {
 
 #[test]
 fn test_remove_nonexistent_key() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert some test data
     tree.insert(10, 100);

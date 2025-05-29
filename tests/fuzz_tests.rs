@@ -7,7 +7,7 @@
 //! - Specific test: `cargo test fuzz_test_bplus_tree -- --ignored --nocapture`
 //! - With custom timing: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture`
 
-use bplustree3::BPlusTree;
+use bplustree3::BPlusTreeMap;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::time::{Duration, Instant};
@@ -19,7 +19,7 @@ fn fuzz_test_bplus_tree() {
     for branching_factor in 2..=10 {
         println!("\n=== Testing branching factor {} ===", branching_factor);
 
-        let mut bplus_tree = BPlusTree::new(branching_factor);
+        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
 
@@ -156,7 +156,7 @@ fn fuzz_test_with_random_keys() {
             branching_factor
         );
 
-        let mut bplus_tree = BPlusTree::new(branching_factor);
+        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
         let mut inserted_keys = HashSet::new();
@@ -265,7 +265,7 @@ fn fuzz_test_with_updates() {
             branching_factor
         );
 
-        let mut bplus_tree = BPlusTree::new(branching_factor);
+        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
 
@@ -350,7 +350,7 @@ fn fuzz_test_timed() {
                 break;
             }
 
-            let mut bplus_tree = BPlusTree::new(branching_factor);
+            let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
             let mut btree_map = BTreeMap::new();
             let mut operations = Vec::new();
 
