@@ -10,8 +10,17 @@ import random
 import time
 from collections import OrderedDict
 from typing import List, Tuple, Any, Dict
-from ..bplus_tree import BPlusTreeMap
-from ._invariant_checker import BPlusTreeInvariantChecker
+
+# Handle both module and direct execution
+try:
+    from ..bplus_tree import BPlusTreeMap
+    from ._invariant_checker import BPlusTreeInvariantChecker
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from bplus_tree import BPlusTreeMap
+    from tests._invariant_checker import BPlusTreeInvariantChecker
 
 
 def check_invariants(tree: BPlusTreeMap) -> bool:

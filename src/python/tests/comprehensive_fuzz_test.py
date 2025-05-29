@@ -6,7 +6,15 @@ Tests the robustness of our optimized B+ tree implementation.
 
 import time
 import random
-from .fuzz_test import BPlusTreeFuzzTester
+
+# Handle both module and direct execution
+try:
+    from .fuzz_test import BPlusTreeFuzzTester
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from tests.fuzz_test import BPlusTreeFuzzTester
 
 
 def run_capacity_sweep():
