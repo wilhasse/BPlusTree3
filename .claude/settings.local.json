@@ -26,8 +26,21 @@
       "Bash(python -m pytest test_bplus_tree.py -xvs)",
       "Bash(python:*)",
       "Bash(grep:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(find:*)",
+      "Bash(git rm:*)",
+      "Bash(git checkout:*)",
+      "Bash(mv:*)",
+      "Bash(for f in *.py)",
+      "Bash(do if [ \"$f\" != \"__init__.py\" ])",
+      "Bash(then sed -i '' 's/from bplus_tree import/from ..bplus_tree import/g' \"$f\")",
+      "Bash(sed:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(tree:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": false
 }
