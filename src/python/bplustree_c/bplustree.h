@@ -13,7 +13,7 @@
 #include <stdbool.h>
 
 /* Configuration constants */
-#define DEFAULT_CAPACITY 128
+#define DEFAULT_CAPACITY 16
 #define MIN_CAPACITY 4
 #define CACHE_LINE_SIZE 64
 
