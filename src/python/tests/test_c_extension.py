@@ -18,7 +18,7 @@ except ImportError as e:
     print(f"C extension not available: {e}")
     HAS_C_EXTENSION = False
 
-from bplus_tree_switchable import BPlusTreeMap, NodeImplementation
+from bplus_tree import BPlusTreeMap
 
 try:
     from sortedcontainers import SortedDict
@@ -96,7 +96,7 @@ def test_c_extension_performance():
         # Python optimized
         gc.collect()
         start = time.perf_counter()
-        tree_py = BPlusTreeMap(capacity=128, node_impl=NodeImplementation.OPTIMIZED)
+        tree_py = BPlusTreeMap(capacity=128)
         for key in keys:
             tree_py[key] = key * 2
         py_time = (time.perf_counter() - start) * 1e6 / size
