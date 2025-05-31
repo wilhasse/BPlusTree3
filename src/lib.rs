@@ -150,21 +150,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // If the root split, create a new root
         if let Some((new_node, separator_key)) = result.1 {
-            let mut new_root = BranchNode::new(self.capacity);
-            new_root.keys.push(separator_key);
-
-            // Move the current root to be the left child
-            let old_root = std::mem::replace(
-                &mut self.root,
-                NodeRef::Leaf(Box::new(LeafNode::new(self.capacity))),
-            );
-            new_root.children.push(old_root);
-            new_root.children.push(new_node);
-
+            let new_root = self.new_root(new_node, separator_key);
             self.root = NodeRef::Branch(Box::new(new_root));
         }
 
         result.0 // Return the old value if key existed
+    }
+
+    fn new_root(&mut self, new_node: NodeRef<K, V>, separator_key: K) -> BranchNode<K, V> {
+        let mut new_root = BranchNode::new(self.capacity);
+        new_root.keys.push(separator_key);
+
+        // Move the current root to be the left child
+        let old_root = std::mem::replace(
+            &mut self.root,
+            NodeRef::Leaf(Box::new(LeafNode::new(self.capacity))),
+        );
+        new_root.children.push(old_root);
+        new_root.children.push(new_node);
+        new_root
     }
 
     /// Recursively insert a key-value pair into the tree.
