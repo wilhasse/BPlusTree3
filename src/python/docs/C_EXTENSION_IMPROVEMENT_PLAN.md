@@ -4,16 +4,16 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 ## Phase 0 – Preparation & Test Harnesses
 
-- [ ] **0.1 Structural:** Add leak‑detection and benchmark harnesses to CI
+- [x] **0.1 Structural:** Add leak‑detection and benchmark harnesses to CI
   - Integrate valgrind or PyMem_DebugMalloc tests
   - Wire gprof‑based profiling reproducibility in pytest
-- [ ] **0.2 Structural:** Extract common in‑node search routine
+- [x] **0.2 Structural:** Extract common in‑node search routine
   - Write a failing test that branch/node search and leaf search agree
 
 ## Phase 1 – Correctness & Memory Hygiene
 
-- [ ] **1.1.1 Behavioral:** Add test for reference‑count leaks in split logic
-- [ ] **1.1.2 Behavioral:** Fix `split_leaf` to `Py_DECREF` and clear old slots beyond midpoint
+- [x] **1.1.1 Behavioral:** Add test for reference‑count leaks in split logic
+- [x] **1.1.2 Behavioral:** Fix `split_leaf` to `Py_DECREF` and clear old slots beyond midpoint
 - [ ] **1.1.3 Refactor:** Extract helper `node_clear_slot(node,i)` and consolidate cleanup logic
 
 - [ ] **1.2.1 Structural:** Decide to integrate or remove the memory pool; remove stubs or wire pool in allocation paths
@@ -27,7 +27,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 ## Phase 3 – In‑Node Search & Prefetch/SIMD Foundation
 
-- [ ] **3.1.1 Behavioral:** Add test that binary‑search and linear‑scan positions agree on branch nodes
+- [x] **3.1.1 Behavioral:** Add test that binary‑search and linear‑scan positions agree on branch nodes
 - [ ] **3.1.2 Green:** Swap branch‑node linear scan for `node_find_position` binary‑search call
 - [ ] **3.1.3 Refactor:** Clean up comments and remove old scan code
 
@@ -52,7 +52,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 - [ ] **5.2.3 Refactor:** Factor GIL‑release blocks into well‑named macros (`ENTER_TREE_LOOP`/`EXIT_TREE_LOOP`)
 
 - [ ] **5.3.1 Behavioral:** Rename compiled extension to trigger `ImportError`; expect fallback to pure‑Python implementation
-- [ ] **5.3.2 Green:** Add `try/except ImportError` in package `__init__.py` to fallback to Python version
+- [x] **5.3.2 Green:** Add `try/except ImportError` in package `__init__.py` to fallback to Python version
 - [ ] **5.3.3 Refactor:** Clean up import logic and update docstring
 
 - [ ] **5.4.1 Behavioral:** Enable `pydocstyle`/`flake8-docstrings`; capture doc failures

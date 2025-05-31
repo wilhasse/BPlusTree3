@@ -212,6 +212,9 @@ class BPlusTreeMap:
         """Get value for a key (dict-like API)"""
         value = self.get(key)
         if value is None:
+            # Check if key actually exists but has None value
+            if key in self:
+                return None
             raise KeyError(key)
         return value
 
@@ -234,7 +237,12 @@ class BPlusTreeMap:
 
     def __contains__(self, key: Any) -> bool:
         """Check if key exists (for 'in' operator)"""
-        return self.get(key) is not None
+        node = self.root
+        while not node.is_leaf():
+            node = node.get_child(key)
+
+        pos, exists = node.find_position(key)
+        return exists
 
     def __len__(self) -> int:
         """Return number of key-value pairs"""
@@ -782,15 +790,17 @@ class BranchNode(Node):
             )
 
         # Use optimized bisect module for binary search
-        left = bisect.bisect_right(self.keys, key)
+        # bisect_right returns the insertion point for key in keys
+        # For B+ trees: if key <= separator, go left; if key > separator, go right
+        index = bisect.bisect_right(self.keys, key)
 
         # Validate result
-        if left >= len(self.children):
+        if index >= len(self.children):
             raise ValueError(
-                f"Child index {left} out of range (have {len(self.children)} children)"
+                f"Child index {index} out of range (have {len(self.children)} children)"
             )
 
-        return left
+        return index
 
     def get_child(self, key: Any) -> Node:
         """Get the child node where a key would be found"""

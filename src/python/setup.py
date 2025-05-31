@@ -17,11 +17,10 @@ bplustree_c = Extension(
     ],
     include_dirs=['bplustree_c'],
     extra_compile_args=[
-        '-O3',  # Maximum optimization
-        '-march=native',  # Use native CPU features
-        '-ffast-math',  # Fast math operations
-        '-Wall',  # All warnings
-        '-Wextra',  # Extra warnings
+        '-O3',        # Maximum optimization
+        '-ffast-math', # Fast math operations
+        '-Wall',      # All warnings
+        '-Wextra',    # Extra warnings
     ],
     define_macros=[
         ('NDEBUG', '1'),  # Disable debug assertions
