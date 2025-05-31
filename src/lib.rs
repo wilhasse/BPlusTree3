@@ -242,13 +242,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
         let node = &self.root;
-        Self::get_recursive(key, node)
+        Self::get_recursive(node, key)
     }
 
-    fn get_recursive<'a>(key: &K, node: &'a NodeRef<K, V>) -> Option<&'a V> {
+    fn get_recursive<'a>(node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
         match node {
             NodeRef::Leaf(leaf) => leaf.get(key),
-            NodeRef::Branch(branch) => branch.get(key),
+            NodeRef::Branch(branch) => {
+                if let Some(child) = branch.get_child(key) {
+                    Self::get_recursive(child, key)
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -873,6 +879,16 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         match self.keys.binary_search(key) {
             Ok(index) => index + 1, // Key found, go to right child
             Err(index) => index,    // Key not found, insert position is the child index
+        }
+    }
+
+    /// Get the child node for a given key.
+    pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
+        let child_index = self.find_child_index(key);
+        if child_index < self.children.len() {
+            Some(&self.children[child_index])
+        } else {
+            None
         }
     }
 
