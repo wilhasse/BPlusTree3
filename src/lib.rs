@@ -285,21 +285,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         is_root: bool,
     ) -> (Option<V>, bool) {
         match node {
-            NodeRef::Leaf(leaf) => {
-                let removed_value = leaf.remove(key);
-                let needs_rebalancing = removed_value.is_some() && !is_root && leaf.is_underfull();
-                (removed_value, needs_rebalancing)
-            }
+            NodeRef::Leaf(leaf) => leaf.remove_and_check_rebalancing(key, is_root),
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(key);
 
                 if child_index >= branch.children.len() {
                     return (None, false); // Invalid child index
                 }
+                let child = &mut branch.children[child_index];
 
                 // Recursively remove from the appropriate child
                 let (removed_value, child_needs_rebalancing) =
-                    Self::remove_recursive(&mut branch.children[child_index], key, capacity, false);
+                    Self::remove_recursive(child, key, capacity, false);
 
                 if !child_needs_rebalancing {
                     return (removed_value, false);
@@ -856,6 +853,14 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
+    /// Remove a key and check if rebalancing is needed.
+    /// Returns (removed_value, needs_rebalancing).
+    pub fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
+        let removed_value = self.remove(key);
+        let needs_rebalancing = removed_value.is_some() && !is_root && self.is_underfull();
+        (removed_value, needs_rebalancing)
+    }
+
     /// Merge this leaf with the right sibling.
     /// Returns true if merge was successful.
     pub fn merge_with_right(&mut self, mut right: LeafNode<K, V>) -> bool {
@@ -894,6 +899,41 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         } else {
             None
         }
+    }
+
+    /// Remove a key and handle child rebalancing.
+    /// Returns (removed_value, needs_rebalancing).
+    pub fn remove_and_rebalance<F>(
+        &mut self,
+        key: &K,
+        capacity: usize,
+        is_root: bool,
+        remove_recursive: F,
+    ) -> (Option<V>, bool)
+    where
+        F: Fn(&mut NodeRef<K, V>, &K, usize, bool) -> (Option<V>, bool),
+    {
+        let child_index = self.find_child_index(key);
+
+        if child_index >= self.children.len() {
+            return (None, false); // Invalid child index
+        }
+
+        // Recursively remove from the appropriate child
+        let (removed_value, child_needs_rebalancing) =
+            remove_recursive(&mut self.children[child_index], key, capacity, false);
+
+        if !child_needs_rebalancing {
+            return (removed_value, false);
+        }
+
+        // Child needs rebalancing - try to fix it
+        let rebalanced = BPlusTreeMap::rebalance_child(self, child_index, capacity);
+
+        // Check if this branch node now needs rebalancing
+        let branch_needs_rebalancing = !is_root && !rebalanced && self.is_underfull();
+
+        (removed_value, branch_needs_rebalancing)
     }
 
     /// Get value for a key by searching through children.
