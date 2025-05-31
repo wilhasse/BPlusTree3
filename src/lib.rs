@@ -200,13 +200,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(&key);
 
-                if child_index >= branch.children.len() {
-                    return (None, None); // Invalid child index
-                }
+                let child = match branch.get_child_mut(&key) {
+                    Some(child) => child,
+                    None => return (None, None), // Invalid child index
+                };
 
                 // Recursively insert into the appropriate child
-                let (old_value, split_result) =
-                    Self::insert_recursive(&mut branch.children[child_index], key, value, capacity);
+                let (old_value, split_result) = Self::insert_recursive(child, key, value, capacity);
 
                 // If child didn't split, we're done
                 if split_result.is_none() {
@@ -288,11 +288,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             NodeRef::Leaf(leaf) => leaf.remove_and_check_rebalancing(key, is_root),
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(key);
-
-                if child_index >= branch.children.len() {
-                    return (None, false); // Invalid child index
-                }
-                let child = &mut branch.children[child_index];
+                let child = match branch.get_child_mut(key) {
+                    Some(child) => child,
+                    None => return (None, false), // Invalid child index
+                };
 
                 // Recursively remove from the appropriate child
                 let (removed_value, child_needs_rebalancing) =
@@ -901,6 +900,15 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         }
     }
 
+    /// Get a mutable reference to the child node for a given key.
+    pub fn get_child_mut(&mut self, key: &K) -> Option<&mut NodeRef<K, V>> {
+        let child_index = self.find_child_index(key);
+        if child_index >= self.children.len() {
+            return None; // Invalid child index
+        }
+        Some(&mut self.children[child_index])
+    }
+
     /// Remove a key and handle child rebalancing.
     /// Returns (removed_value, needs_rebalancing).
     pub fn remove_and_rebalance<F>(
@@ -914,14 +922,14 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         F: Fn(&mut NodeRef<K, V>, &K, usize, bool) -> (Option<V>, bool),
     {
         let child_index = self.find_child_index(key);
-
-        if child_index >= self.children.len() {
-            return (None, false); // Invalid child index
-        }
+        let child = match self.get_child_mut(key) {
+            Some(child) => child,
+            None => return (None, false), // Invalid child index
+        };
 
         // Recursively remove from the appropriate child
         let (removed_value, child_needs_rebalancing) =
-            remove_recursive(&mut self.children[child_index], key, capacity, false);
+            remove_recursive(child, key, capacity, false);
 
         if !child_needs_rebalancing {
             return (removed_value, false);
