@@ -2,6 +2,22 @@
 //!
 //! This module provides a B+ tree data structure with a dictionary-like interface,
 //! supporting efficient insertion, deletion, lookup, and range queries.
+//!
+//! # Design Philosophy
+//!
+//! The tree traversal algorithm is centralized in the `BPlusTreeMap` type rather than
+//! distributed across node types. This design choice makes the code easier to understand
+//! and maintain because:
+//!
+//! 1. **Single source of truth**: All traversal logic is in one place
+//! 2. **No recursive method calls**: Nodes don't call methods on other nodes
+//! 3. **Clear separation of concerns**: Nodes store data, tree manages traversal
+//! 4. **Easier to optimize**: Can easily switch between recursive and iterative approaches
+//!
+//! The key traversal methods are:
+//! - `find_leaf()` - Navigate from root to the appropriate leaf
+//! - `find_leaf_mut()` - Mutable version for modifications
+//! - `find_path_to_leaf()` - Returns the complete path for debugging
 
 // Constants
 const MIN_CAPACITY: usize = 4;
@@ -241,9 +257,99 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&2), None);
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
-        match &self.root {
-            NodeRef::Leaf(leaf) => leaf.get(key),
-            NodeRef::Branch(branch) => branch.get(key),
+        // Find the leaf that should contain this key
+        let leaf = self.find_leaf(key)?;
+        leaf.get(key)
+    }
+    
+    /// Get a mutable reference to the value associated with a key.
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        // Find the leaf that should contain this key
+        let leaf = self.find_leaf_mut(key)?;
+        leaf.get_mut(key)
+    }
+    
+    /// Find the leaf node that should contain the given key.
+    /// 
+    /// This implements the B+ tree traversal algorithm:
+    /// 1. Start at the root node
+    /// 2. If the current node is a leaf, we've found our target
+    /// 3. If the current node is a branch:
+    ///    - Use binary search on the separator keys to find which child to follow
+    ///    - If key < separator[i], go to child[i]
+    ///    - If key >= separator[i], continue checking next separator
+    ///    - Follow the selected child and repeat from step 2
+    /// 
+    /// The algorithm guarantees we find the correct leaf in O(log n) time,
+    /// where n is the number of keys in the tree.
+    fn find_leaf(&self, key: &K) -> Option<&LeafNode<K, V>> {
+        let mut current_node = &self.root;
+        
+        loop {
+            match current_node {
+                NodeRef::Leaf(leaf) => return Some(leaf),
+                NodeRef::Branch(branch) => {
+                    // Binary search to find the correct child
+                    let child_index = branch.find_child_index(key);
+                    if child_index < branch.children.len() {
+                        current_node = &branch.children[child_index];
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Find the leaf node that should contain the given key (mutable version).
+    fn find_leaf_mut(&mut self, key: &K) -> Option<&mut LeafNode<K, V>> {
+        let mut current_node = &mut self.root;
+        
+        loop {
+            match current_node {
+                NodeRef::Leaf(leaf) => return Some(leaf),
+                NodeRef::Branch(branch) => {
+                    let child_index = branch.find_child_index(key);
+                    if child_index < branch.children.len() {
+                        current_node = &mut branch.children[child_index];
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Find the path from root to the leaf that should contain the given key.
+    /// Returns a vector of (child_index, separator_key) pairs representing the path.
+    /// This method is useful for understanding and explaining the traversal algorithm.
+    #[allow(dead_code)]
+    fn find_path_to_leaf(&self, key: &K) -> Vec<(usize, Option<K>)> {
+        let mut path = Vec::new();
+        let mut current_node = &self.root;
+        
+        loop {
+            match current_node {
+                NodeRef::Leaf(_) => return path,
+                NodeRef::Branch(branch) => {
+                    let child_index = branch.find_child_index(key);
+                    
+                    // Record the separator key used for this navigation decision
+                    let separator_key = if child_index > 0 && child_index <= branch.keys.len() {
+                        Some(branch.keys[child_index - 1].clone())
+                    } else {
+                        None
+                    };
+                    
+                    path.push((child_index, separator_key));
+                    
+                    if child_index < branch.children.len() {
+                        current_node = &branch.children[child_index];
+                    } else {
+                        return path; // Invalid path
+                    }
+                }
+            }
         }
     }
 
@@ -385,10 +491,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
-        match &self.root {
-            NodeRef::Leaf(leaf) => leaf.len(),
-            NodeRef::Branch(branch) => branch.len(),
+        // Count all key-value pairs by traversing all leaf nodes
+        let mut count = 0;
+        let mut stack = vec![&self.root];
+        
+        while let Some(node) = stack.pop() {
+            match node {
+                NodeRef::Leaf(leaf) => count += leaf.len(),
+                NodeRef::Branch(branch) => {
+                    // Add all children to the stack for processing
+                    for child in branch.children.iter().rev() {
+                        stack.push(child);
+                    }
+                }
+            }
         }
+        
+        count
     }
 
     /// Returns true if the tree is empty.
@@ -403,10 +522,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Returns the number of leaf nodes in the tree.
     pub fn leaf_count(&self) -> usize {
-        match &self.root {
-            NodeRef::Leaf(_) => 1,
-            NodeRef::Branch(branch) => branch.leaf_count(),
+        let mut count = 0;
+        let mut stack = vec![&self.root];
+        
+        while let Some(node) = stack.pop() {
+            match node {
+                NodeRef::Leaf(_) => count += 1,
+                NodeRef::Branch(branch) => {
+                    // Add all children to the stack for processing
+                    for child in branch.children.iter().rev() {
+                        stack.push(child);
+                    }
+                }
+            }
         }
+        
+        count
     }
 
     /// Get value for a key, returning an error if the key doesn't exist.
@@ -461,13 +592,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
     }
 
-    /// Get a mutable reference to the value for a key.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match &mut self.root {
-            NodeRef::Leaf(leaf) => leaf.get_mut(key),
-            NodeRef::Branch(branch) => branch.get_mut(key),
-        }
-    }
 
     /// Returns the first key-value pair in the tree.
     pub fn first(&self) -> Option<(&K, &V)> {
@@ -871,66 +995,8 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         }
     }
 
-    /// Get value for a key by searching through children.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.get(key),
-                NodeRef::Branch(branch) => branch.get(key),
-            }
-        } else {
-            None
-        }
-    }
 
-    /// Get a mutable reference to the value for a key by searching through children.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &mut self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.get_mut(key),
-                NodeRef::Branch(branch) => branch.get_mut(key),
-            }
-        } else {
-            None
-        }
-    }
 
-    /// Count all keys in this branch and its children.
-    pub fn len(&self) -> usize {
-        self.children
-            .iter()
-            .map(|child| match child {
-                NodeRef::Leaf(leaf) => leaf.len(),
-                NodeRef::Branch(branch) => branch.len(),
-            })
-            .sum()
-    }
-
-    /// Count all leaf nodes in this branch and its children.
-    pub fn leaf_count(&self) -> usize {
-        self.children
-            .iter()
-            .map(|child| match child {
-                NodeRef::Leaf(_) => 1,
-                NodeRef::Branch(branch) => branch.leaf_count(),
-            })
-            .sum()
-    }
-
-    /// Remove a key from this branch by searching through children.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &mut self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.remove(key),
-                NodeRef::Branch(branch) => branch.remove(key),
-            }
-        } else {
-            None
-        }
-    }
 
     /// Insert a separator key and new child into this branch node.
     /// Returns None if no split needed, or Some((new_branch, promoted_key)) if split occurred.
