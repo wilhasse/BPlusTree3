@@ -241,7 +241,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.get(&2), None);
     /// ```
     pub fn get(&self, key: &K) -> Option<&V> {
-        match &self.root {
+        let node = &self.root;
+        Self::get_recursive(key, node)
+    }
+
+    fn get_recursive<'a>(key: &K, node: &'a NodeRef<K, V>) -> Option<&'a V> {
+        match node {
             NodeRef::Leaf(leaf) => leaf.get(key),
             NodeRef::Branch(branch) => branch.get(key),
         }
