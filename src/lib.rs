@@ -157,6 +157,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         result.0 // Return the old value if key existed
     }
 
+    /// New roots are the only BranchNodes allowed to remain underfull
     fn new_root(&mut self, new_node: NodeRef<K, V>, separator_key: K) -> BranchNode<K, V> {
         let mut new_root = BranchNode::new(self.capacity);
         new_root.keys.push(separator_key);
