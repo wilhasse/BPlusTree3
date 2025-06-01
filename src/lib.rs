@@ -119,20 +119,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         })
     }
 
-    /// Create a B+ tree with default capacity.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree3::BPlusTreeMap;
-    ///
-    /// let tree = BPlusTreeMap::<i32, String>::default();
-    /// assert!(tree.is_empty());
-    /// ```
-    pub fn with_capacity(capacity: usize) -> Result<Self, BPlusTreeError> {
-        Self::new(capacity)
-    }
-
     // ============================================================================
     // GET OPERATIONS
     // ============================================================================
