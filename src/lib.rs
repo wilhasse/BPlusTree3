@@ -83,6 +83,10 @@ pub enum InsertResult<K, V> {
 }
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
+    // ============================================================================
+    // CONSTRUCTION
+    // ============================================================================
+
     /// Create a B+ tree with specified node capacity.
     ///
     /// # Arguments
@@ -129,6 +133,80 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         Self::new(capacity)
     }
 
+    // ============================================================================
+    // GET OPERATIONS
+    // ============================================================================
+
+    /// Get a reference to the value associated with a key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to look up
+    ///
+    /// # Returns
+    ///
+    /// A reference to the value if the key exists, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bplustree3::BPlusTreeMap;
+    ///
+    /// let mut tree = BPlusTreeMap::new(16).unwrap();
+    /// tree.insert(1, "one");
+    /// assert_eq!(tree.get(&1), Some(&"one"));
+    /// assert_eq!(tree.get(&2), None);
+    /// ```
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let node = &self.root;
+        Self::get_recursive(node, key)
+    }
+
+    /// Check if key exists in the tree.
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.get(key).is_some()
+    }
+
+    /// Get value for a key with default.
+    pub fn get_or_default<'a>(&'a self, key: &K, default: &'a V) -> &'a V {
+        self.get(key).unwrap_or(default)
+    }
+
+    /// Get value for a key, returning an error if the key doesn't exist.
+    /// This is equivalent to Python's `tree[key]`.
+    pub fn get_item(&self, key: &K) -> Result<&V, BPlusTreeError> {
+        self.get(key).ok_or(BPlusTreeError::KeyNotFound)
+    }
+
+    /// Get a mutable reference to the value for a key.
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        match &mut self.root {
+            NodeRef::Leaf(leaf) => leaf.get_mut(key),
+            NodeRef::Branch(branch) => branch.get_mut(key),
+        }
+    }
+
+    // ============================================================================
+    // HELPERS FOR GET OPERATIONS
+    // ============================================================================
+
+    fn get_recursive<'a>(node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
+        match node {
+            NodeRef::Leaf(leaf) => leaf.get(key),
+            NodeRef::Branch(branch) => {
+                if let Some(child) = branch.get_child(key) {
+                    Self::get_recursive(child, key)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    // ============================================================================
+    // INSERT OPERATIONS
+    // ============================================================================
+
     /// Insert a key-value pair into the tree.
     ///
     /// If the key already exists, the old value is returned and replaced.
@@ -164,6 +242,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         result.0 // Return the old value if key existed
     }
+
+    // ============================================================================
+    // HELPERS FOR INSERT OPERATIONS
+    // ============================================================================
 
     /// New roots are the only BranchNodes allowed to remain underfull
     fn new_root(&mut self, new_node: NodeRef<K, V>, separator_key: K) -> BranchNode<K, V> {
@@ -222,43 +304,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Get a reference to the value associated with a key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - The key to look up
-    ///
-    /// # Returns
-    ///
-    /// A reference to the value if the key exists, `None` otherwise.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use bplustree3::BPlusTreeMap;
-    ///
-    /// let mut tree = BPlusTreeMap::new(16).unwrap();
-    /// tree.insert(1, "one");
-    /// assert_eq!(tree.get(&1), Some(&"one"));
-    /// assert_eq!(tree.get(&2), None);
-    /// ```
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let node = &self.root;
-        Self::get_recursive(node, key)
-    }
-
-    fn get_recursive<'a>(node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
-        match node {
-            NodeRef::Leaf(leaf) => leaf.get(key),
-            NodeRef::Branch(branch) => {
-                if let Some(child) = branch.get_child(key) {
-                    Self::get_recursive(child, key)
-                } else {
-                    None
-                }
-            }
-        }
-    }
+    // ============================================================================
+    // DELETE OPERATIONS
+    // ============================================================================
 
     /// Remove a key from the tree.
     pub fn remove(&mut self, key: &K) -> Option<V> {
@@ -273,6 +321,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         removed_value
     }
+
+    /// Remove a key from the tree, returning an error if the key doesn't exist.
+    /// This is equivalent to Python's `del tree[key]`.
+    pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
+        self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
+    }
+
+    // ============================================================================
+    // HELPERS FOR DELETE OPERATIONS
+    // ============================================================================
 
     /// Recursively remove a key from the tree.
     /// Returns (removed_value, needs_rebalancing)
@@ -382,15 +440,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Check if key exists in the tree.
-    pub fn contains_key(&self, key: &K) -> bool {
-        self.get(key).is_some()
-    }
-
-    /// Get value for a key with default.
-    pub fn get_or_default<'a>(&'a self, key: &K, default: &'a V) -> &'a V {
-        self.get(key).unwrap_or(default)
-    }
+    // ============================================================================
+    // OTHER API OPERATIONS
+    // ============================================================================
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
@@ -418,16 +470,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Get value for a key, returning an error if the key doesn't exist.
-    /// This is equivalent to Python's `tree[key]`.
-    pub fn get_item(&self, key: &K) -> Result<&V, BPlusTreeError> {
-        self.get(key).ok_or(BPlusTreeError::KeyNotFound)
-    }
-
-    /// Remove a key from the tree, returning an error if the key doesn't exist.
-    /// This is equivalent to Python's `del tree[key]`.
-    pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
-        self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
+    /// Clear all items from the tree.
+    pub fn clear(&mut self) {
+        self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
     }
 
     /// Returns an iterator over all key-value pairs in sorted order.
@@ -465,19 +510,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.items_range(start_key, end_key)
     }
 
-    /// Clear all items from the tree.
-    pub fn clear(&mut self) {
-        self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
-    }
-
-    /// Get a mutable reference to the value for a key.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match &mut self.root {
-            NodeRef::Leaf(leaf) => leaf.get_mut(key),
-            NodeRef::Branch(branch) => branch.get_mut(key),
-        }
-    }
-
     /// Returns the first key-value pair in the tree.
     pub fn first(&self) -> Option<(&K, &V)> {
         self.items().next()
@@ -487,6 +519,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn last(&self) -> Option<(&K, &V)> {
         self.items().last()
     }
+
+    // ============================================================================
+    // OTHER HELPERS (TEST HELPERS)
+    // ============================================================================
 
     /// Check if the tree maintains B+ tree invariants.
     /// Returns true if all invariants are satisfied.
@@ -525,6 +561,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         sizes
     }
 
+    /// Prints the node chain for debugging.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn print_node_chain(&self) {
+        println!("Tree structure:");
+        self.print_node(&self.root, 0);
+    }
+
     #[cfg(any(test, feature = "testing"))]
     fn collect_leaf_sizes(&self, node: &NodeRef<K, V>, sizes: &mut Vec<usize>) {
         match node {
@@ -537,13 +580,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
             }
         }
-    }
-
-    /// Prints the node chain for debugging.
-    #[cfg(any(test, feature = "testing"))]
-    pub fn print_node_chain(&self) {
-        println!("Tree structure:");
-        self.print_node(&self.root, 0);
     }
 
     #[cfg(any(test, feature = "testing"))]
@@ -729,6 +765,41 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
+    /// Insert a key-value pair and handle splitting if necessary.
+    pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
+        // Do binary search once and use the result throughout
+        match self.keys.binary_search(&key) {
+            Ok(index) => {
+                // Key already exists, update the value
+                let old_value = std::mem::replace(&mut self.values[index], value);
+                InsertResult::Updated(Some(old_value))
+            }
+            Err(index) => {
+                // Key doesn't exist, need to insert
+                if !self.is_full() {
+                    // Simple insertion - leaf is not full
+                    self.insert_at_index(index, key, value);
+                    InsertResult::Updated(None)
+                } else {
+                    // Leaf is full, need to split
+                    let mut new_leaf = self.split();
+
+                    // Insert into appropriate leaf based on the split
+                    if key < new_leaf.keys[0] {
+                        self.insert_at_index(index, key, value);
+                    } else {
+                        // Adjust index for the new leaf since keys were moved
+                        let adjusted_index = index - self.keys.len();
+                        new_leaf.insert_at_index(adjusted_index, key, value);
+                    }
+
+                    let separator_key = new_leaf.keys[0].clone();
+                    InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
+                }
+            }
+        }
+    }
+
     /// Split this leaf node, returning the new right node.
     pub fn split(&mut self) -> Box<LeafNode<K, V>> {
         // Find the midpoint
@@ -829,41 +900,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     fn insert_at_index(&mut self, index: usize, key: K, value: V) {
         self.keys.insert(index, key);
         self.values.insert(index, value);
-    }
-
-    /// Insert a key-value pair and handle splitting if necessary.
-    pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
-        // Do binary search once and use the result throughout
-        match self.keys.binary_search(&key) {
-            Ok(index) => {
-                // Key already exists, update the value
-                let old_value = std::mem::replace(&mut self.values[index], value);
-                InsertResult::Updated(Some(old_value))
-            }
-            Err(index) => {
-                // Key doesn't exist, need to insert
-                if !self.is_full() {
-                    // Simple insertion - leaf is not full
-                    self.insert_at_index(index, key, value);
-                    InsertResult::Updated(None)
-                } else {
-                    // Leaf is full, need to split
-                    let mut new_leaf = self.split();
-
-                    // Insert into appropriate leaf based on the split
-                    if key < new_leaf.keys[0] {
-                        self.insert_at_index(index, key, value);
-                    } else {
-                        // Adjust index for the new leaf since keys were moved
-                        let adjusted_index = index - self.keys.len();
-                        new_leaf.insert_at_index(adjusted_index, key, value);
-                    }
-
-                    let separator_key = new_leaf.keys[0].clone();
-                    InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
-                }
-            }
-        }
     }
 
     /// Remove a key and check if rebalancing is needed.
