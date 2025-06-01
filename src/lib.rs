@@ -74,6 +74,14 @@ pub enum NodeRef<K, V> {
     Branch(Box<BranchNode<K, V>>),
 }
 
+/// Result of an insertion operation on a leaf node.
+pub enum InsertResult<K, V> {
+    /// Insertion completed without splitting. Contains the old value if key existed.
+    Updated(Option<V>),
+    /// Insertion caused a split. Contains the old value and the new node with separator key.
+    Split(Option<V>, NodeRef<K, V>, K),
+}
+
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Create a B+ tree with specified node capacity.
     ///
@@ -181,23 +189,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         capacity: usize,
     ) -> (Option<V>, Option<(NodeRef<K, V>, K)>) {
         match node {
-            NodeRef::Leaf(leaf) => {
-                // Check if key already exists
-                if let Some(_) = leaf.get(&key) {
-                    let old_value = leaf.insert(key, value);
-                    return (old_value, None); // No split needed for update
+            NodeRef::Leaf(leaf) => match leaf.new_insert(key, value) {
+                InsertResult::Updated(old_value) => (old_value, None),
+                InsertResult::Split(old_value, new_node, separator_key) => {
+                    (old_value, Some((new_node, separator_key)))
                 }
-
-                // If leaf is not full, simple insertion
-                if !leaf.is_full() {
-                    leaf.insert(key, value);
-                    return (None, None);
-                }
-
-                // Leaf is full, need to split
-                let (new_leaf, separator_key) = leaf.split_and_insert(key, value);
-                (None, Some((NodeRef::Leaf(new_leaf), separator_key)))
-            }
+            },
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(&key);
 
@@ -851,6 +848,25 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         if !right.keys.is_empty() {
             *separator = right.keys[0].clone();
         }
+    }
+
+    /// Insert a key-value pair and handle splitting if necessary.
+    pub fn new_insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
+        // Check if key already exists
+        if let Some(_) = self.get(&key) {
+            let old_value = self.insert(key, value);
+            return InsertResult::Updated(old_value);
+        }
+
+        // If leaf is not full, simple insertion
+        if !self.is_full() {
+            self.insert(key, value);
+            return InsertResult::Updated(None);
+        }
+
+        // Leaf is full, need to split
+        let (new_leaf, separator_key) = self.split_and_insert(key, value);
+        InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
     }
 
     /// Remove a key and check if rebalancing is needed.
