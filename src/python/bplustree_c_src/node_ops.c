@@ -98,7 +98,7 @@ BPlusNode* node_create(NodeType type, uint16_t capacity) {
         data_size = (capacity * 2 + 1) * sizeof(PyObject*);
     }
     
-    BPlusNode *node = (BPlusNode*)PyMem_Malloc(sizeof(BPlusNode) + data_size);
+    BPlusNode *node = (BPlusNode*)cache_aligned_alloc(sizeof(BPlusNode) + data_size);
     if (!node) {
         PyErr_NoMemory();
         return NULL;
@@ -141,7 +141,7 @@ void node_destroy(BPlusNode *node) {
         }
     }
     
-    PyMem_Free(node);
+    cache_aligned_free(node);
 }
 
 /* Clear a single slot: decref or destroy payload and null out key/value or child pointer */

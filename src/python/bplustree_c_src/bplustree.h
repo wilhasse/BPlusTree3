@@ -55,11 +55,11 @@ typedef struct BPlusNode {
     
     /* Links */
     struct BPlusNode *next;     /* Next leaf (for leaf nodes only) */
-    
-    /* Flexible array member for keys and values/children */
+
+    /* Flexible array for keys and values/children (cache-line aligned) */
     /* Actual size allocated: capacity * 2 * sizeof(PyObject*) for leaves */
     /*                        (capacity * 2 + 1) * sizeof(PyObject*) for branches */
-    PyObject *data[];
+    PyObject *data[] __attribute__((aligned(CACHE_LINE_SIZE)));
 } BPlusNode;
 
 /* B+ Tree structure */
