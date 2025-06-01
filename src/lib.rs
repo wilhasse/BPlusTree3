@@ -485,9 +485,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         branch.keys[child_index - 1] = key;
                     }
                 }
+                (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
+                    // Move one key and child from left to right
+                    if !left_branch.keys.is_empty() && !left_branch.children.is_empty() {
+                        // Move the last key and child from left to right
+                        let borrowed_key = left_branch.keys.pop().unwrap();
+                        let borrowed_child = left_branch.children.pop().unwrap();
+
+                        // The separator becomes the new first key in right branch
+                        right_branch
+                            .keys
+                            .insert(0, branch.keys[child_index - 1].clone());
+                        right_branch.children.insert(0, borrowed_child);
+
+                        // Update the separator to be the borrowed key
+                        branch.keys[child_index - 1] = borrowed_key;
+                    }
+                }
                 _ => {
-                    // For now, just leave branch-to-branch borrowing unimplemented
-                    // This is a more complex case that we'll handle later
+                    // Mixed node types - this shouldn't happen in a well-formed tree
                 }
             }
         }
@@ -936,25 +952,17 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             }
             Err(index) => {
                 // Key doesn't exist, need to insert
-                if !self.is_full() {
-                    // Simple insertion - leaf is not full
-                    self.insert_at_index(index, key, value);
-                    InsertResult::Updated(None)
-                } else {
-                    // Leaf is full, need to split
-                    let mut new_leaf = self.split();
+                // Always insert first, then check if split is needed
+                self.insert_at_index(index, key, value);
 
-                    // Insert into appropriate leaf based on the split
-                    if key < new_leaf.keys[0] {
-                        self.insert_at_index(index, key, value);
-                    } else {
-                        // Adjust index for the new leaf since keys were moved
-                        let adjusted_index = index - self.keys.len();
-                        new_leaf.insert_at_index(adjusted_index, key, value);
-                    }
-
+                if self.needs_split() {
+                    // Leaf has too many keys, need to split
+                    let new_leaf = self.split();
                     let separator_key = new_leaf.keys[0].clone();
                     InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
+                } else {
+                    // Simple insertion - no split needed
+                    InsertResult::Updated(None)
                 }
             }
         }
@@ -972,8 +980,22 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Split this leaf node, returning the new right node.
     pub fn split(&mut self) -> Box<LeafNode<K, V>> {
-        // Find the midpoint
-        let mid = self.keys.len() / 2;
+        // For B+ trees, we need to ensure both resulting nodes have at least min_keys
+        // When splitting a full node (capacity keys), we want to distribute them
+        // so that both nodes have at least min_keys
+        let min_keys = self.min_keys();
+        let total_keys = self.keys.len();
+
+        // Calculate split point to ensure both sides have at least min_keys
+        // Left side gets min_keys, right side gets the rest
+        let mid = min_keys;
+
+        // Verify this split is valid
+        debug_assert!(mid >= min_keys, "Left side would be underfull");
+        debug_assert!(
+            total_keys - mid >= min_keys,
+            "Right side would be underfull"
+        );
 
         // Create new leaf for right half
         let mut new_leaf = Box::new(LeafNode::new(self.capacity));
@@ -1079,6 +1101,12 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         self.keys.len() >= self.capacity
     }
 
+    /// Returns true if this leaf node needs to be split.
+    /// We allow one extra key beyond capacity to ensure proper splitting.
+    pub fn needs_split(&self) -> bool {
+        self.keys.len() > self.capacity
+    }
+
     /// Returns true if this leaf node is underfull (below minimum occupancy).
     pub fn is_underfull(&self) -> bool {
         self.keys.len() < self.min_keys()
@@ -1095,9 +1123,9 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Returns the minimum number of keys this leaf should have.
     pub fn min_keys(&self) -> usize {
-        // For leaf nodes, minimum is ceil(capacity/2) - 1, but at least 1
+        // For leaf nodes, minimum is floor(capacity / 2)
         // Exception: root can have fewer keys
-        std::cmp::max(1, (self.capacity + 1) / 2)
+        self.capacity / 2
     }
 }
 
@@ -1193,13 +1221,14 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         self.keys.insert(child_index, separator_key);
         self.children.insert(child_index + 1, new_child);
 
-        // If branch is not full after insertion, we're done
-        if !self.is_full() {
-            return None;
+        // Check if branch needs to be split
+        if self.needs_split() {
+            // Branch has too many keys, need to split
+            self.split()
+        } else {
+            // No split needed
+            None
         }
-
-        // Branch is full, need to split
-        self.split()
     }
 
     // ============================================================================
@@ -1208,8 +1237,25 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
 
     /// Split this branch node, returning the new right node and promoted key.
     pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
-        // Find the midpoint
-        let mid = self.keys.len() / 2;
+        // For branch nodes, we need to ensure both resulting nodes have at least min_keys
+        // The middle key gets promoted, so we need at least min_keys on each side
+        let min_keys = self.min_keys();
+        let total_keys = self.keys.len();
+
+        // For branch splits, we promote the middle key, so we need:
+        // - Left side: min_keys keys
+        // - Middle: 1 key (promoted)
+        // - Right side: min_keys keys
+        // Total needed: min_keys + 1 + min_keys
+        let mid = min_keys;
+
+        // Verify this split is valid
+        debug_assert!(mid < total_keys, "Not enough keys to promote one");
+        debug_assert!(mid >= min_keys, "Left side would be underfull");
+        debug_assert!(
+            total_keys - mid - 1 >= min_keys,
+            "Right side would be underfull"
+        );
 
         // The middle key gets promoted to the parent
         let promoted_key = self.keys[mid].clone();
@@ -1327,6 +1373,12 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         self.keys.len() >= self.capacity
     }
 
+    /// Returns true if this branch node needs to be split.
+    /// We allow one extra key beyond capacity to ensure proper splitting.
+    pub fn needs_split(&self) -> bool {
+        self.keys.len() > self.capacity
+    }
+
     /// Returns true if this branch node is underfull (below minimum occupancy).
     pub fn is_underfull(&self) -> bool {
         self.keys.len() < self.min_keys()
@@ -1343,9 +1395,9 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
 
     /// Returns the minimum number of keys this branch should have.
     pub fn min_keys(&self) -> usize {
-        // For branch nodes, minimum is ceil(capacity/2) - 1
+        // For branch nodes, minimum is floor(capacity / 2)
         // Exception: root can have fewer keys
-        std::cmp::max(1, (self.capacity + 1) / 2 - 1)
+        self.capacity / 2
     }
 }
 

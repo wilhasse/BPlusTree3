@@ -1051,11 +1051,11 @@ fn test_delete_all_but_one() {
     // Delete all but the last item
     for i in 0..49 {
         tree.remove(&i);
-        assert!(
-            tree.check_invariants(),
-            "Invariants violated after removing {}",
-            i
-        );
+        if !tree.check_invariants() {
+            println!("Invariants failed after removing {}", i);
+            tree.print_node_chain();
+            panic!("Invariants violated after removing {}", i);
+        }
     }
 
     // Should have exactly one item left
