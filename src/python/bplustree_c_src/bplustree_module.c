@@ -8,6 +8,11 @@
 #include <Python.h>
 #include "structmember.h"
 #include "bplustree.h"
+
+/* GIL-release macros for pure-C lookup loops */
+#define ENTER_TREE_LOOP Py_BEGIN_ALLOW_THREADS
+#define EXIT_TREE_LOOP  Py_END_ALLOW_THREADS
+
 /* GC clear/traverse prototypes */
 static int BPlusTree_traverse(BPlusTree *self, visitproc visit, void *arg);
 static int BPlusTree_clear(BPlusTree *self);
@@ -71,9 +76,9 @@ BPlusTree_dealloc(BPlusTree *self) {
 PyObject *
 BPlusTree_getitem(BPlusTree *self, PyObject *key) {
     PyObject *value;
-    Py_BEGIN_ALLOW_THREADS;
+    ENTER_TREE_LOOP;
     value = tree_get(self, key);
-    Py_END_ALLOW_THREADS;
+    EXIT_TREE_LOOP;
     return value;
 }
 
@@ -105,9 +110,9 @@ BPlusTree_length(BPlusTree *self) {
 int
 BPlusTree_contains(BPlusTree *self, PyObject *key) {
     PyObject *value;
-    Py_BEGIN_ALLOW_THREADS;
+    ENTER_TREE_LOOP;
     value = tree_get(self, key);
-    Py_END_ALLOW_THREADS;
+    EXIT_TREE_LOOP;
     if (value) {
         Py_DECREF(value);
         return 1;

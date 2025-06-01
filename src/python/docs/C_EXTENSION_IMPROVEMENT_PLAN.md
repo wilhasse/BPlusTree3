@@ -53,7 +53,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 - [x] **5.2.1 Behavioral:** Multithreaded pytest: measure throughput of concurrent lookups
 - [x] **5.2.2 Green:** Surround pure‑C lookup loops with `Py_BEGIN_ALLOW_THREADS`/`Py_END_ALLOW_THREADS`
-- [ ] **5.2.3 Refactor:** Factor GIL‑release blocks into well‑named macros (`ENTER_TREE_LOOP`/`EXIT_TREE_LOOP`)
+- [x] **5.2.3 Refactor:** Factor GIL‑release blocks into well‑named macros (`ENTER_TREE_LOOP`/`EXIT_TREE_LOOP`)
 
 - [ ] **5.3.1 Behavioral:** Rename compiled extension to trigger `ImportError`; expect fallback to pure‑Python implementation
 - [x] **5.3.2 Green:** Add `try/except ImportError` in package `__init__.py` to fallback to Python version
