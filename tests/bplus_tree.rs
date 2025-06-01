@@ -1498,5 +1498,61 @@ fn test_api_completeness_with_deep_tree() {
     assert!(tree.check_invariants());
 }
 
+#[test]
+fn test_linked_list_range_performance() {
+    use std::time::Instant;
+
+    let mut tree = BPlusTreeMap::new(64).unwrap();
+
+    // Insert 10,000 items
+    for i in 0..10000 {
+        tree.insert(i, format!("value{}", i));
+    }
+
+    // Test range query performance
+    let start = Instant::now();
+    let items: Vec<_> = tree.items_range(Some(&1000), Some(&2000)).collect();
+    let duration = start.elapsed();
+
+    println!("Range query (1000 items) took: {:?}", duration);
+    assert_eq!(items.len(), 1000);
+
+    // Verify correctness
+    for (i, (key, value)) in items.iter().enumerate() {
+        let expected_key = 1000 + i;
+        let expected_value = format!("value{}", expected_key);
+        assert_eq!(**key, expected_key);
+        assert_eq!(**value, expected_value);
+    }
+}
+
+#[test]
+fn test_debug_range_iterator() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+    for i in 0..20 {
+        tree.insert(i, format!("value{}", i));
+    }
+
+    println!("Tree structure after insertions:");
+    println!("Tree length: {}", tree.len());
+    println!("Leaf count: {}", tree.leaf_count());
+
+    let items: Vec<_> = tree.items_range(Some(&5), Some(&15)).collect();
+    println!("Range [5, 15) returned {} items:", items.len());
+    for (key, value) in &items {
+        println!("  {} -> {}", key, value);
+    }
+
+    // This should return keys 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 (10 items)
+    assert_eq!(items.len(), 10);
+
+    // Test the invariant checker - this should catch the linked list issue
+    println!("Checking invariants...");
+    match tree.validate() {
+        Ok(()) => println!("Invariants passed"),
+        Err(e) => println!("Invariants failed: {}", e),
+    }
+}
+
 // TODO: Add fuzz tests against BTreeMap
 // TODO: Add performance benchmarks
