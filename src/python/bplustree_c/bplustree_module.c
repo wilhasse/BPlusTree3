@@ -21,9 +21,6 @@ BPlusTree_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
         self->capacity = DEFAULT_CAPACITY;
         self->min_keys = DEFAULT_CAPACITY / 2;
         self->size = 0;
-        self->free_nodes = NULL;
-        self->pool_size = 0;
-        self->pool_capacity = 0;
     }
     return (PyObject *)self;
 }
@@ -54,11 +51,6 @@ BPlusTree_init(BPlusTree *self, PyObject *args, PyObject *kwds) {
     }
     self->leaves = self->root;
     
-    /* Initialize memory pool */
-    if (pool_init(self, 16) < 0) {
-        node_destroy(self->root);
-        return -1;
-    }
     
     return 0;
 }
@@ -68,7 +60,6 @@ BPlusTree_dealloc(BPlusTree *self) {
     if (self->root) {
         node_destroy(self->root);
     }
-    pool_destroy(self);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -211,50 +202,6 @@ BPlusTree_items(BPlusTree *self, PyObject *Py_UNUSED(args)) {
     return (PyObject *)iter;
 }
 
-/* Memory pool implementation */
-
-int pool_init(BPlusTree *tree, size_t initial_capacity) {
-    tree->free_nodes = PyMem_Malloc(initial_capacity * sizeof(BPlusNode*));
-    if (!tree->free_nodes) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    tree->pool_capacity = initial_capacity;
-    tree->pool_size = 0;
-    return 0;
-}
-
-void pool_destroy(BPlusTree *tree) {
-    if (tree->free_nodes) {
-        for (size_t i = 0; i < tree->pool_size; i++) {
-            PyMem_Free(tree->free_nodes[i]);
-        }
-        PyMem_Free(tree->free_nodes);
-    }
-}
-
-BPlusNode* node_create_from_pool(BPlusTree *tree, NodeType type) {
-    if (tree->pool_size > 0) {
-        BPlusNode *node = tree->free_nodes[--tree->pool_size];
-        node->num_keys = 0;
-        node->type = type;
-        node->next = NULL;
-        return node;
-    }
-    return node_create(type, tree->capacity);
-}
-
-void node_return_to_pool(BPlusTree *tree, BPlusNode *node) {
-    if (tree->pool_size < tree->pool_capacity) {
-        /* Clear all references */
-        for (int i = 0; i < node->capacity * 2 + 1; i++) {
-            node->data[i] = NULL;
-        }
-        tree->free_nodes[tree->pool_size++] = node;
-    } else {
-        PyMem_Free(node);
-    }
-}
 
 /* Method definitions */
 

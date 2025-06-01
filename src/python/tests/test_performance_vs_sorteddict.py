@@ -14,11 +14,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bplus_tree import BPlusTreeMap
 
+import pytest
+
 try:
     from sortedcontainers import SortedDict
 except ImportError:
-    print("sortedcontainers not installed. Install with: pip install sortedcontainers")
-    sys.exit(1)
+    pytest.skip(
+        "sortedcontainers not installed, skipping performance_vs_sortedcontainers tests",
+        allow_module_level=True
+    )
 
 
 class PerformanceComparison:

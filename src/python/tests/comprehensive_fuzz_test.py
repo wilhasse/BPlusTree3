@@ -11,8 +11,6 @@ import random
 try:
     from .fuzz_test import BPlusTreeFuzzTester
 except ImportError:
-    import sys
-    import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from tests.fuzz_test import BPlusTreeFuzzTester
 

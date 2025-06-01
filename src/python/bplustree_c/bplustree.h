@@ -71,10 +71,6 @@ typedef struct BPlusTree {
     uint16_t min_keys;         /* Minimum keys per node (capacity/2) */
     size_t size;               /* Total number of key-value pairs */
     
-    /* Memory pool for node allocation */
-    BPlusNode **free_nodes;    /* Free node pool */
-    size_t pool_size;          /* Current pool size */
-    size_t pool_capacity;      /* Pool capacity */
 } BPlusTree;
 
 /* Inline functions for fast array access */
@@ -115,8 +111,6 @@ void cache_aligned_free(void* ptr);
 /* Node creation and destruction */
 BPlusNode* node_create(NodeType type, uint16_t capacity);
 void node_destroy(BPlusNode *node);
-BPlusNode* node_create_from_pool(BPlusTree *tree, NodeType type);
-void node_return_to_pool(BPlusTree *tree, BPlusNode *node);
 
 /* Node operations */
 int node_find_position(BPlusNode *node, PyObject *key);
@@ -133,10 +127,7 @@ int tree_delete(BPlusTree *tree, PyObject *key);
 PyObject* tree_get(BPlusTree *tree, PyObject *key);
 BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key);
 
-/* Memory pool operations */
-int pool_init(BPlusTree *tree, size_t initial_capacity);
-void pool_destroy(BPlusTree *tree);
-int pool_grow(BPlusTree *tree);
+/* Memory pool operations (removed) */
 
 /* Utility functions */
 void node_split_leaf(BPlusNode *node, BPlusNode *new_node);
