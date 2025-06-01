@@ -402,15 +402,169 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             false // Child was removed
         } else {
             // Child is not empty but might be underfull
-            // For now, we'll just leave it as is
-            // TODO: Implement proper borrowing and merging for underfull (but not empty) nodes
-            // This would involve:
-            // 1. Check if left or right sibling can donate
-            // 2. If yes, borrow from sibling
-            // 3. If no, merge with a sibling
-            // 4. Update separator keys appropriately
-            true // Child is still there
+            // Try to rebalance by borrowing from siblings or merging
+            Self::rebalance_underfull_child(branch, child_index)
         }
+    }
+
+    /// Rebalance an underfull child by borrowing from siblings or merging.
+    /// Returns true if the child is still present, false if it was merged away.
+    fn rebalance_underfull_child(branch: &mut BranchNode<K, V>, child_index: usize) -> bool {
+        // Check if the child is actually underfull
+        let child_is_underfull = match &branch.children[child_index] {
+            NodeRef::Leaf(leaf) => leaf.is_underfull(),
+            NodeRef::Branch(child_branch) => child_branch.is_underfull(),
+        };
+
+        if !child_is_underfull {
+            return true; // Child is not underfull, nothing to do
+        }
+
+        // Try to borrow from left sibling first
+        if child_index > 0 {
+            let can_borrow_from_left = match &branch.children[child_index - 1] {
+                NodeRef::Leaf(left_leaf) => left_leaf.can_donate(),
+                NodeRef::Branch(left_branch) => left_branch.can_donate(),
+            };
+
+            if can_borrow_from_left {
+                Self::borrow_from_left_sibling(branch, child_index);
+                return true;
+            }
+        }
+
+        // Try to borrow from right sibling
+        if child_index < branch.children.len() - 1 {
+            let can_borrow_from_right = match &branch.children[child_index + 1] {
+                NodeRef::Leaf(right_leaf) => right_leaf.can_donate(),
+                NodeRef::Branch(right_branch) => right_branch.can_donate(),
+            };
+
+            if can_borrow_from_right {
+                Self::borrow_from_right_sibling(branch, child_index);
+                return true;
+            }
+        }
+
+        // Cannot borrow from siblings, must merge
+        // Try to merge with left sibling first
+        if child_index > 0 {
+            Self::merge_with_left_sibling(branch, child_index);
+            return false; // Child was merged away
+        }
+
+        // Merge with right sibling
+        if child_index < branch.children.len() - 1 {
+            Self::merge_with_right_sibling(branch, child_index);
+            return true; // Child absorbed the right sibling
+        }
+
+        // This should not happen in a well-formed tree
+        true
+    }
+
+    /// Borrow from left sibling to rebalance an underfull child.
+    fn borrow_from_left_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
+        // For now, implement a simple version that works for leaf nodes
+        // TODO: Extend to handle branch nodes
+        let (left_part, right_part) = branch.children.split_at_mut(child_index);
+        if let (Some(left_child), Some(right_child)) =
+            (left_part.last_mut(), right_part.first_mut())
+        {
+            match (left_child, right_child) {
+                (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) => {
+                    // Move one key-value pair from left to right
+                    if !left_leaf.keys.is_empty() {
+                        let key = left_leaf.keys.pop().unwrap();
+                        let value = left_leaf.values.pop().unwrap();
+
+                        right_leaf.keys.insert(0, key.clone());
+                        right_leaf.values.insert(0, value);
+
+                        // Update the separator key
+                        branch.keys[child_index - 1] = key;
+                    }
+                }
+                _ => {
+                    // For now, just leave branch-to-branch borrowing unimplemented
+                    // This is a more complex case that we'll handle later
+                }
+            }
+        }
+    }
+
+    /// Borrow from right sibling to rebalance an underfull child.
+    fn borrow_from_right_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
+        // For now, implement a simple version that works for leaf nodes
+        // TODO: Extend to handle branch nodes
+        let (left_part, right_part) = branch.children.split_at_mut(child_index + 1);
+        if let (Some(left_child), Some(right_child)) =
+            (left_part.last_mut(), right_part.first_mut())
+        {
+            match (left_child, right_child) {
+                (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) => {
+                    // Move one key-value pair from right to left
+                    if !right_leaf.keys.is_empty() {
+                        let key = right_leaf.keys.remove(0);
+                        let value = right_leaf.values.remove(0);
+
+                        left_leaf.keys.push(key);
+                        left_leaf.values.push(value);
+
+                        // Update the separator key
+                        if !right_leaf.keys.is_empty() {
+                            branch.keys[child_index] = right_leaf.keys[0].clone();
+                        }
+                    }
+                }
+                _ => {
+                    // For now, just leave branch-to-branch borrowing unimplemented
+                    // This is a more complex case that we'll handle later
+                }
+            }
+        }
+    }
+
+    /// Merge child with its left sibling.
+    fn merge_with_left_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
+        // For now, implement a simple version that works for leaf nodes
+        // TODO: Extend to handle branch nodes
+
+        // Extract the right child first
+        let right_child = branch.children.remove(child_index);
+
+        // Now we can safely access the left child
+        if let (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) =
+            (&mut branch.children[child_index - 1], &right_child)
+        {
+            // Move all keys and values from right to left
+            left_leaf.keys.extend_from_slice(&right_leaf.keys);
+            left_leaf.values.extend_from_slice(&right_leaf.values);
+        }
+
+        // Remove the separator key
+        branch.keys.remove(child_index - 1);
+    }
+
+    /// Merge child with its right sibling.
+    fn merge_with_right_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
+        // For now, implement a simple version that works for leaf nodes
+        // TODO: Extend to handle branch nodes
+
+        // Extract the right child first
+        let right_child = branch.children.remove(child_index + 1);
+
+        // Now we can safely access the left child
+        if let (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) =
+            (&mut branch.children[child_index], &right_child)
+        {
+            // Move all keys and values from right to left
+            left_leaf.keys.extend_from_slice(&right_leaf.keys);
+            left_leaf.values.extend_from_slice(&right_leaf.values);
+        }
+
+        // Remove the separator key
+        branch.keys.remove(child_index);
     }
 
     /// Collapse the root if it's a branch with only one child or no children.

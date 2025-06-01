@@ -47,7 +47,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 ## Phase 5 – Python‑Extension Best Practices
 
-- [ ] **5.1.1 Behavioral:** Write pytest for GC support: self‑referencing key/value, then `gc.collect()` should free memory
+- [x] **5.1.1 Behavioral:** Write pytest for GC support: self‑referencing key/value, then `gc.collect()` should free memory
 - [ ] **5.1.2 Green:** Add `Py_TPFLAGS_HAVE_GC`, implement `tp_traverse` and `tp_clear` to visit and clear node payloads
 - [ ] **5.1.3 Refactor:** Extract common GC traversal helpers
 
