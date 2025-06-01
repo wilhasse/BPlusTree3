@@ -98,6 +98,15 @@ static inline void node_set_child(BPlusNode *node, int index, BPlusNode *child) 
     node->data[node->capacity + index] = (PyObject*)child;
 }
 
+/* Prefetch child pointer for cache optimization */
+static inline BPlusNode *node_prefetch_child(BPlusNode *node, int index) {
+    BPlusNode *child = node_get_child(node, index);
+#ifdef PREFETCH_HINTS
+    PREFETCH(child, 0, 3);
+#endif
+    return child;
+}
+
 /* Function prototypes */
 
 /* Fast comparison functions */

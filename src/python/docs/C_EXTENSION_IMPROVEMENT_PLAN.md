@@ -37,7 +37,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 - [x] **3.2.1 Behavioral:** Add microbench for lookup with/without `PREFETCH` hints
 - [x] **3.2.2 Green:** Inject `PREFETCH(child_ptr, 0, 3)` before descending to next node
-- [ ] **3.2.3 Refactor:** Encapsulate prefetch calls behind `node_prefetch_child(node,pos)` helper
+- [x] **3.2.3 Refactor:** Encapsulate prefetch calls behind `node_prefetch_child(node,pos)` helper
 
 ## Phase 4 – Compiler Flags & Build Hygiene
 
