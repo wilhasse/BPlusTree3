@@ -11,11 +11,11 @@ import os
 bplustree_c = Extension(
     'bplustree_c',
     sources=[
-        'bplustree_c/bplustree_module.c',
-        'bplustree_c/node_ops.c', 
-        'bplustree_c/tree_ops.c'
+        'bplustree_c_src/bplustree_module.c',
+        'bplustree_c_src/node_ops.c', 
+        'bplustree_c_src/tree_ops.c'
     ],
-    include_dirs=['bplustree_c'],
+    include_dirs=['bplustree_c_src'],
     extra_compile_args=[
         '-O3',        # Maximum optimization
         '-ffast-math', # Fast math operations

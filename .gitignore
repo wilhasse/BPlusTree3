@@ -31,3 +31,5 @@ htmlcov/
 *~
 .DS_Store
 fuzz_failure_*.py
+# Build artifacts
+src/python/build/
