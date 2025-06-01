@@ -189,7 +189,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         capacity: usize,
     ) -> (Option<V>, Option<(NodeRef<K, V>, K)>) {
         match node {
-            NodeRef::Leaf(leaf) => match leaf.new_insert(key, value) {
+            NodeRef::Leaf(leaf) => match leaf.insert(key, value) {
                 InsertResult::Updated(old_value) => (old_value, None),
                 InsertResult::Split(old_value, new_node, separator_key) => {
                     (old_value, Some((new_node, separator_key)))
@@ -490,11 +490,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Check if the tree maintains B+ tree invariants.
     /// Returns true if all invariants are satisfied.
+    #[cfg(any(test, feature = "testing"))]
     pub fn check_invariants(&self) -> bool {
         self.check_node_invariants(&self.root, None, None, true)
     }
 
     /// Check invariants with detailed error reporting.
+    #[cfg(any(test, feature = "testing"))]
     pub fn check_invariants_detailed(&self) -> Result<(), String> {
         if self.check_node_invariants(&self.root, None, None, true) {
             Ok(())
@@ -504,22 +506,26 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Alias for check_invariants_detailed (for test compatibility).
+    #[cfg(any(test, feature = "testing"))]
     pub fn validate(&self) -> Result<(), String> {
         self.check_invariants_detailed()
     }
 
     /// Returns all key-value pairs as a vector (for testing/debugging).
+    #[cfg(any(test, feature = "testing"))]
     pub fn slice(&self) -> Vec<(&K, &V)> {
         self.items().collect()
     }
 
     /// Returns the sizes of all leaf nodes (for testing/debugging).
+    #[cfg(any(test, feature = "testing"))]
     pub fn leaf_sizes(&self) -> Vec<usize> {
         let mut sizes = Vec::new();
         self.collect_leaf_sizes(&self.root, &mut sizes);
         sizes
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn collect_leaf_sizes(&self, node: &NodeRef<K, V>, sizes: &mut Vec<usize>) {
         match node {
             NodeRef::Leaf(leaf) => {
@@ -534,11 +540,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Prints the node chain for debugging.
+    #[cfg(any(test, feature = "testing"))]
     pub fn print_node_chain(&self) {
         println!("Tree structure:");
         self.print_node(&self.root, 0);
     }
 
+    #[cfg(any(test, feature = "testing"))]
     fn print_node(&self, node: &NodeRef<K, V>, depth: usize) {
         let indent = "  ".repeat(depth);
         match node {
@@ -566,6 +574,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively check invariants for a node and its children.
+    #[cfg(any(test, feature = "testing"))]
     fn check_node_invariants(
         &self,
         node: &NodeRef<K, V>,
@@ -823,7 +832,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Insert a key-value pair and handle splitting if necessary.
-    pub fn new_insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
+    pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
         // Do binary search once and use the result throughout
         match self.keys.binary_search(&key) {
             Ok(index) => {
