@@ -16,7 +16,7 @@ static int BPlusTree_clear(BPlusTree *self);
 
 PyObject *
 BPlusTree_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    BPlusTree *self = (BPlusTree *)type->tp_alloc(type, 0);
+    BPlusTree *self = PyObject_GC_New(BPlusTree, type);
     if (self != NULL) {
         self->root = NULL;
         self->leaves = NULL;
@@ -65,7 +65,7 @@ BPlusTree_dealloc(BPlusTree *self) {
     if (self->root) {
         node_destroy(self->root);
     }
-    Py_TYPE(self)->tp_free((PyObject *)self);
+    PyObject_GC_Del(self);
 }
 
 PyObject *
