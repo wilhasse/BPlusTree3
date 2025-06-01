@@ -8,19 +8,22 @@
 #include <Python.h>
 #include "structmember.h"
 #include "bplustree.h"
+/* GC clear/traverse prototypes */
+static int BPlusTree_traverse(BPlusTree *self, visitproc visit, void *arg);
+static int BPlusTree_clear(BPlusTree *self);
 
 /* Method implementations */
 
 PyObject *
 BPlusTree_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
-    BPlusTree *self;
-    self = (BPlusTree *)type->tp_alloc(type, 0);
+    BPlusTree *self = (BPlusTree *)type->tp_alloc(type, 0);
     if (self != NULL) {
         self->root = NULL;
         self->leaves = NULL;
         self->capacity = DEFAULT_CAPACITY;
         self->min_keys = DEFAULT_CAPACITY / 2;
         self->size = 0;
+        PyObject_GC_Track(self);
     }
     return (PyObject *)self;
 }
@@ -57,6 +60,8 @@ BPlusTree_init(BPlusTree *self, PyObject *args, PyObject *kwds) {
 
 void
 BPlusTree_dealloc(BPlusTree *self) {
+    PyObject_GC_UnTrack(self);
+    BPlusTree_clear(self);
     if (self->root) {
         node_destroy(self->root);
     }
@@ -260,6 +265,69 @@ static PySequenceMethods BPlusTree_as_sequence = {
     (objobjproc)BPlusTree_contains, /* sq_contains */
 };
 
+/* GC: traverse and clear references in the tree and its nodes */
+static int
+node_traverse(BPlusNode *node, visitproc visit, void *arg) {
+    if (!node) {
+        return 0;
+    }
+    for (int i = 0; i < node->num_keys; i++) {
+        Py_VISIT(node_get_key(node, i));
+    }
+    if (node->type == NODE_LEAF) {
+        for (int i = 0; i < node->num_keys; i++) {
+            Py_VISIT(node_get_value(node, i));
+        }
+    } else {
+        for (int i = 0; i <= node->num_keys; i++) {
+            BPlusNode *child = node_get_child(node, i);
+            if (child && node_traverse(child, visit, arg)) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int
+BPlusTree_traverse(BPlusTree *self, visitproc visit, void *arg) {
+    if (self->root) {
+        if (node_traverse(self->root, visit, arg) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void
+node_clear_gc(BPlusNode *node) {
+    if (!node) {
+        return;
+    }
+    /* Clear Python object references (keys and leaf values) */
+    for (int i = 0; i < node->num_keys; i++) {
+        Py_CLEAR(node->data[i]);
+    }
+    if (node->type == NODE_LEAF) {
+        for (int i = 0; i < node->num_keys; i++) {
+            Py_CLEAR(node->data[node->capacity + i]);
+        }
+    } else {
+        for (int i = 0; i <= node->num_keys; i++) {
+            BPlusNode *child = node_get_child(node, i);
+            node_clear_gc(child);
+        }
+    }
+}
+
+static int
+BPlusTree_clear(BPlusTree *self) {
+    if (self->root) {
+        node_clear_gc(self->root);
+    }
+    return 0;
+}
+
 /* Type definition */
 
 static PyTypeObject BPlusTreeType = {
@@ -268,10 +336,12 @@ static PyTypeObject BPlusTreeType = {
     .tp_doc = "High-performance B+ tree implementation",
     .tp_basicsize = sizeof(BPlusTree),
     .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     .tp_new = BPlusTree_new,
     .tp_init = (initproc)BPlusTree_init,
     .tp_dealloc = (destructor)BPlusTree_dealloc,
+    .tp_traverse = (traverseproc)BPlusTree_traverse,
+    .tp_clear = (inquiry)BPlusTree_clear,
     .tp_as_mapping = &BPlusTree_as_mapping,
     .tp_as_sequence = &BPlusTree_as_sequence,
     .tp_methods = BPlusTree_methods,

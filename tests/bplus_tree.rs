@@ -1046,7 +1046,11 @@ fn test_delete_all_but_one() {
     for i in 0..50 {
         tree.insert(i, format!("value_{}", i));
     }
-    assert!(tree.check_invariants());
+    if !tree.check_invariants() {
+        println!("Final tree structure:");
+        tree.print_node_chain();
+        panic!("Final invariants check failed");
+    }
 
     // Delete all but the last item
     for i in 0..49 {

@@ -831,9 +831,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     return false; // Node exceeds capacity
                 }
 
-                // Check minimum occupancy (except for root)
-                if !_is_root && !leaf.keys.is_empty() && leaf.is_underfull() {
-                    return false; // Non-root leaf is underfull
+                // Check minimum occupancy
+                if !leaf.keys.is_empty() && leaf.is_underfull() {
+                    // For root nodes, allow fewer keys only if it's the only node
+                    if _is_root {
+                        // Root leaf can have any number of keys >= 1
+                        // (This is fine for leaf roots)
+                    } else {
+                        return false; // Non-root leaf is underfull
+                    }
                 }
 
                 // Check key bounds
@@ -868,9 +874,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     return false; // Node exceeds capacity
                 }
 
-                // Check minimum occupancy (except for root)
-                if !_is_root && !branch.keys.is_empty() && branch.is_underfull() {
-                    return false; // Non-root branch is underfull
+                // Check minimum occupancy
+                if !branch.keys.is_empty() && branch.is_underfull() {
+                    if _is_root {
+                        // Root branch can have any number of keys >= 1 (as long as it has children)
+                        // The only requirement is that keys.len() + 1 == children.len()
+                        // This is already checked above, so root branches are always valid
+                    } else {
+                        return false; // Non-root branch is underfull
+                    }
                 }
 
                 // Check that branch has at least one child
