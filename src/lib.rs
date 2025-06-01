@@ -740,6 +740,10 @@ pub struct BranchNode<K, V> {
 }
 
 impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
+    // ============================================================================
+    // CONSTRUCTION
+    // ============================================================================
+
     /// Creates a new leaf node with the specified capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
@@ -748,6 +752,10 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             values: Vec::new(),
         }
     }
+
+    // ============================================================================
+    // GET OPERATIONS
+    // ============================================================================
 
     /// Get value for a key from this leaf node.
     pub fn get(&self, key: &K) -> Option<&V> {
@@ -764,6 +772,15 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             Err(_) => None,
         }
     }
+
+    // ============================================================================
+    // HELPERS FOR GET OPERATIONS
+    // ============================================================================
+    // (No additional helpers needed for LeafNode get operations)
+
+    // ============================================================================
+    // INSERT OPERATIONS
+    // ============================================================================
 
     /// Insert a key-value pair and handle splitting if necessary.
     pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
@@ -800,6 +817,16 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
+    // ============================================================================
+    // HELPERS FOR INSERT OPERATIONS
+    // ============================================================================
+
+    /// Insert a key-value pair at the specified index.
+    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
+        self.keys.insert(index, key);
+        self.values.insert(index, value);
+    }
+
     /// Split this leaf node, returning the new right node.
     pub fn split(&mut self) -> Box<LeafNode<K, V>> {
         // Find the midpoint
@@ -815,6 +842,10 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         new_leaf
     }
 
+    // ============================================================================
+    // DELETE OPERATIONS
+    // ============================================================================
+
     /// Remove a key from this leaf node.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         match self.keys.binary_search(key) {
@@ -826,36 +857,16 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
-    /// Returns the number of key-value pairs in this leaf node.
-    pub fn len(&self) -> usize {
-        self.keys.len()
-    }
+    // ============================================================================
+    // HELPERS FOR DELETE OPERATIONS
+    // ============================================================================
 
-    /// Returns true if this leaf node is empty.
-    pub fn is_empty(&self) -> bool {
-        self.keys.is_empty()
-    }
-
-    /// Returns true if this leaf node is at capacity.
-    pub fn is_full(&self) -> bool {
-        self.keys.len() >= self.capacity
-    }
-
-    /// Returns true if this leaf node is underfull (below minimum occupancy).
-    pub fn is_underfull(&self) -> bool {
-        self.keys.len() < self.min_keys()
-    }
-
-    /// Returns the minimum number of keys this leaf should have.
-    pub fn min_keys(&self) -> usize {
-        // For leaf nodes, minimum is ceil(capacity/2) - 1, but at least 1
-        // Exception: root can have fewer keys
-        std::cmp::max(1, (self.capacity + 1) / 2)
-    }
-
-    /// Returns true if this leaf can donate a key to a sibling.
-    pub fn can_donate(&self) -> bool {
-        self.keys.len() > self.min_keys()
+    /// Remove a key and check if rebalancing is needed.
+    /// Returns (removed_value, needs_rebalancing).
+    pub fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
+        let removed_value = self.remove(key);
+        let needs_rebalancing = removed_value.is_some() && !is_root && self.is_underfull();
+        (removed_value, needs_rebalancing)
     }
 
     /// Borrow a key-value pair from the left sibling.
@@ -896,20 +907,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
-    /// Insert a key-value pair at the specified index.
-    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
-        self.keys.insert(index, key);
-        self.values.insert(index, value);
-    }
-
-    /// Remove a key and check if rebalancing is needed.
-    /// Returns (removed_value, needs_rebalancing).
-    pub fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
-        let removed_value = self.remove(key);
-        let needs_rebalancing = removed_value.is_some() && !is_root && self.is_underfull();
-        (removed_value, needs_rebalancing)
-    }
-
     /// Merge this leaf with the right sibling.
     /// Returns true if merge was successful.
     pub fn merge_with_right(&mut self, mut right: LeafNode<K, V>) -> bool {
@@ -919,9 +916,53 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
         true
     }
+
+    // ============================================================================
+    // OTHER API OPERATIONS
+    // ============================================================================
+
+    /// Returns the number of key-value pairs in this leaf node.
+    pub fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Returns true if this leaf node is empty.
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+
+    /// Returns true if this leaf node is at capacity.
+    pub fn is_full(&self) -> bool {
+        self.keys.len() >= self.capacity
+    }
+
+    /// Returns true if this leaf node is underfull (below minimum occupancy).
+    pub fn is_underfull(&self) -> bool {
+        self.keys.len() < self.min_keys()
+    }
+
+    /// Returns true if this leaf can donate a key to a sibling.
+    pub fn can_donate(&self) -> bool {
+        self.keys.len() > self.min_keys()
+    }
+
+    // ============================================================================
+    // OTHER HELPERS
+    // ============================================================================
+
+    /// Returns the minimum number of keys this leaf should have.
+    pub fn min_keys(&self) -> usize {
+        // For leaf nodes, minimum is ceil(capacity/2) - 1, but at least 1
+        // Exception: root can have fewer keys
+        std::cmp::max(1, (self.capacity + 1) / 2)
+    }
 }
 
 impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
+    // ============================================================================
+    // CONSTRUCTION
+    // ============================================================================
+
     /// Creates a new branch node with the specified capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
@@ -931,12 +972,33 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         }
     }
 
-    /// Find the child index where the given key should be located.
-    pub fn find_child_index(&self, key: &K) -> usize {
-        // Binary search to find the appropriate child
-        match self.keys.binary_search(key) {
-            Ok(index) => index + 1, // Key found, go to right child
-            Err(index) => index,    // Key not found, insert position is the child index
+    // ============================================================================
+    // GET OPERATIONS
+    // ============================================================================
+
+    /// Get value for a key by searching through children.
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let child_index = self.find_child_index(key);
+        if child_index < self.children.len() {
+            match &self.children[child_index] {
+                NodeRef::Leaf(leaf) => leaf.get(key),
+                NodeRef::Branch(branch) => branch.get(key),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get a mutable reference to the value for a key by searching through children.
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        let child_index = self.find_child_index(key);
+        if child_index < self.children.len() {
+            match &mut self.children[child_index] {
+                NodeRef::Leaf(leaf) => leaf.get_mut(key),
+                NodeRef::Branch(branch) => branch.get_mut(key),
+            }
+        } else {
+            None
         }
     }
 
@@ -958,6 +1020,90 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         }
         Some(&mut self.children[child_index])
     }
+
+    // ============================================================================
+    // HELPERS FOR GET OPERATIONS
+    // ============================================================================
+
+    /// Find the child index where the given key should be located.
+    pub fn find_child_index(&self, key: &K) -> usize {
+        // Binary search to find the appropriate child
+        match self.keys.binary_search(key) {
+            Ok(index) => index + 1, // Key found, go to right child
+            Err(index) => index,    // Key not found, insert position is the child index
+        }
+    }
+
+    // ============================================================================
+    // INSERT OPERATIONS
+    // ============================================================================
+
+    /// Insert a separator key and new child into this branch node.
+    /// Returns None if no split needed, or Some((new_branch, promoted_key)) if split occurred.
+    pub fn insert_child_and_split_if_needed(
+        &mut self,
+        child_index: usize,
+        separator_key: K,
+        new_child: NodeRef<K, V>,
+    ) -> Option<(NodeRef<K, V>, K)> {
+        // Insert the separator key and new child at the appropriate position
+        self.keys.insert(child_index, separator_key);
+        self.children.insert(child_index + 1, new_child);
+
+        // If branch is not full after insertion, we're done
+        if !self.is_full() {
+            return None;
+        }
+
+        // Branch is full, need to split
+        self.split()
+    }
+
+    // ============================================================================
+    // HELPERS FOR INSERT OPERATIONS
+    // ============================================================================
+
+    /// Split this branch node, returning the new right node and promoted key.
+    pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
+        // Find the midpoint
+        let mid = self.keys.len() / 2;
+
+        // The middle key gets promoted to the parent
+        let promoted_key = self.keys[mid].clone();
+
+        // Create new branch for right half
+        let mut new_branch = Box::new(BranchNode::new(self.capacity));
+
+        // Move right half of keys to new branch (excluding the promoted key)
+        new_branch.keys = self.keys.split_off(mid + 1);
+        self.keys.truncate(mid); // Remove the promoted key from left side
+
+        // Move right half of children to new branch
+        new_branch.children = self.children.split_off(mid + 1);
+
+        Some((NodeRef::Branch(new_branch), promoted_key))
+    }
+
+    // ============================================================================
+    // DELETE OPERATIONS
+    // ============================================================================
+
+    /// Remove a key from this branch by searching through children.
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        let child_index = self.find_child_index(key);
+        if child_index < self.children.len() {
+            match &mut self.children[child_index] {
+                NodeRef::Leaf(leaf) => leaf.remove(key),
+                NodeRef::Branch(branch) => branch.remove(key),
+            }
+        } else {
+            None
+        }
+    }
+
+    // ============================================================================
+    // HELPERS FOR DELETE OPERATIONS
+    // ============================================================================
 
     /// Remove a key and handle child rebalancing.
     /// Returns (removed_value, needs_rebalancing).
@@ -994,31 +1140,22 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         (removed_value, branch_needs_rebalancing)
     }
 
-    /// Get value for a key by searching through children.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.get(key),
-                NodeRef::Branch(branch) => branch.get(key),
-            }
-        } else {
-            None
-        }
+    /// Merge this branch with the right sibling using the given separator.
+    /// Returns true if merge was successful.
+    pub fn merge_with_right(&mut self, mut right: BranchNode<K, V>, separator: K) -> bool {
+        // Add the separator key
+        self.keys.push(separator);
+
+        // Move all keys and children from right to this node
+        self.keys.append(&mut right.keys);
+        self.children.append(&mut right.children);
+
+        true
     }
 
-    /// Get a mutable reference to the value for a key by searching through children.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &mut self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.get_mut(key),
-                NodeRef::Branch(branch) => branch.get_mut(key),
-            }
-        } else {
-            None
-        }
-    }
+    // ============================================================================
+    // OTHER API OPERATIONS
+    // ============================================================================
 
     /// Count all keys in this branch and its children.
     pub fn len(&self) -> usize {
@@ -1042,61 +1179,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
             .sum()
     }
 
-    /// Remove a key from this branch by searching through children.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        let child_index = self.find_child_index(key);
-        if child_index < self.children.len() {
-            match &mut self.children[child_index] {
-                NodeRef::Leaf(leaf) => leaf.remove(key),
-                NodeRef::Branch(branch) => branch.remove(key),
-            }
-        } else {
-            None
-        }
-    }
-
-    /// Insert a separator key and new child into this branch node.
-    /// Returns None if no split needed, or Some((new_branch, promoted_key)) if split occurred.
-    pub fn insert_child_and_split_if_needed(
-        &mut self,
-        child_index: usize,
-        separator_key: K,
-        new_child: NodeRef<K, V>,
-    ) -> Option<(NodeRef<K, V>, K)> {
-        // Insert the separator key and new child at the appropriate position
-        self.keys.insert(child_index, separator_key);
-        self.children.insert(child_index + 1, new_child);
-
-        // If branch is not full after insertion, we're done
-        if !self.is_full() {
-            return None;
-        }
-
-        // Branch is full, need to split
-        self.split()
-    }
-
-    /// Split this branch node, returning the new right node and promoted key.
-    pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
-        // Find the midpoint
-        let mid = self.keys.len() / 2;
-
-        // The middle key gets promoted to the parent
-        let promoted_key = self.keys[mid].clone();
-
-        // Create new branch for right half
-        let mut new_branch = Box::new(BranchNode::new(self.capacity));
-
-        // Move right half of keys to new branch (excluding the promoted key)
-        new_branch.keys = self.keys.split_off(mid + 1);
-        self.keys.truncate(mid); // Remove the promoted key from left side
-
-        // Move right half of children to new branch
-        new_branch.children = self.children.split_off(mid + 1);
-
-        Some((NodeRef::Branch(new_branch), promoted_key))
-    }
-
     /// Returns true if this branch node is at capacity.
     pub fn is_full(&self) -> bool {
         self.keys.len() >= self.capacity
@@ -1107,29 +1189,20 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         self.keys.len() < self.min_keys()
     }
 
-    /// Returns the minimum number of keys this branch should have.
-    pub fn min_keys(&self) -> usize {
-        // For branch nodes, minimum is ceil(capacity/2) - 1
-        // Exception: root can have fewer keys
-        std::cmp::max(1, (self.capacity + 1) / 2 - 1)
-    }
-
     /// Returns true if this branch can donate a key to a sibling.
     pub fn can_donate(&self) -> bool {
         self.keys.len() > self.min_keys()
     }
 
-    /// Merge this branch with the right sibling using the given separator.
-    /// Returns true if merge was successful.
-    pub fn merge_with_right(&mut self, mut right: BranchNode<K, V>, separator: K) -> bool {
-        // Add the separator key
-        self.keys.push(separator);
+    // ============================================================================
+    // OTHER HELPERS
+    // ============================================================================
 
-        // Move all keys and children from right to this node
-        self.keys.append(&mut right.keys);
-        self.children.append(&mut right.children);
-
-        true
+    /// Returns the minimum number of keys this branch should have.
+    pub fn min_keys(&self) -> usize {
+        // For branch nodes, minimum is ceil(capacity/2) - 1
+        // Exception: root can have fewer keys
+        std::cmp::max(1, (self.capacity + 1) / 2 - 1)
     }
 }
 
