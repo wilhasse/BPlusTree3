@@ -1,16 +1,17 @@
 import gc
-import weakref
-
 from bplustree_c import BPlusTree
 
 def test_gc_collects_self_referencing_tree():
-    """Self-referencing BPlusTree instances should be collected by the GC."""
+    """The BPlusTree should be trackable by GC and cycles should be collected."""
+    gc.collect()
     tree = BPlusTree()
     # Create a cycle: tree contains itself as a value
     tree[0] = tree
-    ref = weakref.ref(tree)
-    # Remove local reference and trigger GC
+    tree_id = id(tree)
+    # Tree must participate in GC tracking
+    assert any(tree is obj for obj in gc.get_objects())
     del tree
     gc.collect()
 
-    assert ref() is None, "Self-referencing BPlusTree should be freed after gc.collect()"
+    # After GC, the self-referenced tree should be collected
+    assert not any(obj_id == tree_id for obj_id in map(id, gc.get_objects()))
