@@ -144,6 +144,23 @@ void node_destroy(BPlusNode *node) {
     PyMem_Free(node);
 }
 
+/* Clear a single slot: decref or destroy payload and null out key/value or child pointer */
+static void node_clear_slot(BPlusNode *node, int i) {
+    if (node->type == NODE_LEAF) {
+        Py_XDECREF(node_get_key(node, i));
+        Py_XDECREF(node_get_value(node, i));
+        node_set_key(node, i, NULL);
+        node_set_value(node, i, NULL);
+    } else {
+        BPlusNode *child = node_get_child(node, i);
+        if (child) {
+            node_destroy(child);
+        }
+        node_set_key(node, i, NULL);
+        node_set_child(node, i, NULL);
+    }
+}
+
 /* Insert into leaf node */
 int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value, 
                      BPlusNode **new_node, PyObject **split_key) {
@@ -275,21 +292,20 @@ int node_delete(BPlusNode *node, PyObject *key) {
     if (cmp < 0) return -1;  /* Comparison error */
     if (!cmp) return 0;      /* Key not found */
     
-    /* Decrement reference counts for removed key and value */
-    Py_DECREF(node_get_key(node, pos));
-    Py_DECREF(node_get_value(node, pos));
-    
+    /* Clear the removed slot */
+    node_clear_slot(node, pos);
+
     /* Shift elements left to fill the gap */
     for (int i = pos; i < node->num_keys - 1; i++) {
         node_set_key(node, i, node_get_key(node, i + 1));
         node_set_value(node, i, node_get_value(node, i + 1));
     }
-    
+
     /* Clear the last slot */
     node->num_keys--;
     node_set_key(node, node->num_keys, NULL);
     node_set_value(node, node->num_keys, NULL);
-    
+
     return 1;  /* Successfully deleted */
 }
 

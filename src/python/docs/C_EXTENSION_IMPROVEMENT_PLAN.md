@@ -14,10 +14,10 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 - [x] **1.1.1 Behavioral:** Add test for reference‑count leaks in split logic
 - [x] **1.1.2 Behavioral:** Fix `split_leaf` to `Py_DECREF` and clear old slots beyond midpoint
-- [ ] **1.1.3 Refactor:** Extract helper `node_clear_slot(node,i)` and consolidate cleanup logic
+- [x] **1.1.3 Refactor:** Extract helper `node_clear_slot(node,i)` and consolidate cleanup logic
 
 - [x] **1.2.1 Structural:** Remove memory pool stubs and eliminate unused pool fields
-- [ ] **1.2.2 Behavioral:** (If integrating) Add tests ensuring node allocations/returns use the pool correctly
+- [x] **1.2.2 Behavioral:** (If integrating) Add tests ensuring node allocations/returns use the pool correctly (skipped – pool removed)
 
 ## Phase 2 – Memory Alignment & Cache‑Line Tuning
 
