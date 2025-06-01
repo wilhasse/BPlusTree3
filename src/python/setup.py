@@ -9,10 +9,11 @@ import os
 
 # Default compile flags: safe baseline (-O3 only)
 extra_compile_args = [
-    '-O3',       # Maximum optimization
-    '-Wall',     # All warnings
-    '-Wextra',   # Extra warnings
+    '-O3',
+    '-Wall',
+    '-Wextra',
 ]
+
 # Opt-in flags for additional optimizations
 if os.environ.get('BPLUSTREE_C_FAST_MATH'):
     extra_compile_args.append('-ffast-math')
