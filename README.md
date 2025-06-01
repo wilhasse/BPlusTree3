@@ -157,15 +157,16 @@ Our Python implementation has been extensively benchmarked against the highly op
 
 #### 🏆 **B+ Tree Performance Wins**
 
-| Scenario | B+ Tree Advantage | Use Cases |
-|----------|-------------------|-----------|
-| **Partial Range Scans** | **Up to 2.5x faster** | Database LIMIT queries, pagination, "top N" results |
-| **Large Dataset Iteration** | **1.1x - 1.4x faster** | Data export, bulk processing, full table scans |
-| **Medium Range Queries** | **1.4x faster** | Time-series analysis, geographic queries, batch processing |
+| Scenario                    | B+ Tree Advantage      | Use Cases                                                  |
+| --------------------------- | ---------------------- | ---------------------------------------------------------- |
+| **Partial Range Scans**     | **Up to 2.5x faster**  | Database LIMIT queries, pagination, "top N" results        |
+| **Large Dataset Iteration** | **1.1x - 1.4x faster** | Data export, bulk processing, full table scans             |
+| **Medium Range Queries**    | **1.4x faster**        | Time-series analysis, geographic queries, batch processing |
 
 #### 📊 **Detailed Benchmark Results**
 
 **Partial Range Scans (Early Termination):**
+
 ```
 Limit  10 items: B+ Tree 1.18x faster
 Limit  50 items: B+ Tree 2.50x faster  ⭐ Best performance
@@ -174,13 +175,15 @@ Limit 500 items: B+ Tree 1.15x faster
 ```
 
 **Large Dataset Iteration:**
+
 ```
 200K items: B+ Tree 1.29x faster
-300K items: B+ Tree 1.12x faster  
+300K items: B+ Tree 1.12x faster
 500K items: B+ Tree 1.39x faster  ⭐ Scales well
 ```
 
 **Optimal Configuration:**
+
 - **Node Capacity: 128** provides best performance (3.3x faster than default capacity 4)
 - Performance continues improving with larger capacities
 - Higher capacity = fewer tree levels, better cache utilization
@@ -188,6 +191,7 @@ Limit 500 items: B+ Tree 1.15x faster
 #### 🎯 **When to Choose B+ Tree**
 
 **Excellent for:**
+
 - Database-like workloads with range queries
 - Analytics dashboards ("top 100 users")
 - Search systems with pagination
@@ -196,12 +200,13 @@ Limit 500 items: B+ Tree 1.15x faster
 - Any scenario with "LIMIT" or early termination patterns
 
 **Use SortedDict when:**
+
 - Random access dominates (37x faster individual lookups)
 - Small datasets (< 100K items)
 - Memory efficiency is critical
 - General-purpose sorted container needs
 
-*Benchmarks run on Python implementation with capacity=128 vs SortedDict. See `/src/python/COMPETITIVE_ADVANTAGES.md` for complete analysis.*
+_Benchmarks run on Python implementation with capacity=128 vs SortedDict. See `/src/python/COMPETITIVE_ADVANTAGES.md` for complete analysis._
 
 ## Configuration
 
@@ -220,13 +225,33 @@ let tree = BPlusTree::new(48);
 
 ## Testing
 
+### Important: Feature Flag Required
+
+**This project uses conditional compilation for test-only functions.** You must use the `testing` feature flag when running tests:
+
+```bash
+# Run all tests (REQUIRED: use --features testing)
+cargo test --features testing
+
+# Run specific test files
+cargo test --features testing --test bplus_tree
+cargo test --features testing --test remove_operations
+
+# Run library tests only
+cargo test --features testing --lib
+```
+
+### Why the Feature Flag is Required
+
+Test utility functions like `check_invariants()`, `validate()`, `slice()`, `leaf_sizes()`, and `print_node_chain()` are conditionally compiled using `#[cfg(any(test, feature = "testing"))]`. This means:
+
+- ✅ **Production builds**: Exclude test functions, reducing binary size
+- ✅ **Test builds**: Include test functions when `--features testing` is used
+- ❌ **IDE warnings**: Expected behavior - IDE shows "method not found" for test functions in normal mode
+
 ### Regular Tests
 
 Run the standard test suite:
-
-```bash
-cargo test
-```
 
 ### Fuzz Testing
 
@@ -235,17 +260,17 @@ The project includes comprehensive fuzz tests that are excluded from normal test
 #### Running Fuzz Tests
 
 ```bash
-# Run all fuzz tests
-cargo test --test fuzz_tests -- --ignored
+# Run all fuzz tests (REQUIRED: use --features testing)
+cargo test --features testing --test fuzz_tests -- --ignored
 
 # Run a specific fuzz test with output
-cargo test fuzz_test_bplus_tree -- --ignored --nocapture
+cargo test --features testing fuzz_test_bplus_tree -- --ignored --nocapture
 
 # Run fuzz test with random insertion patterns
-cargo test fuzz_test_with_random_keys -- --ignored --nocapture
+cargo test --features testing fuzz_test_with_random_keys -- --ignored --nocapture
 
 # Run fuzz test focusing on updates
-cargo test fuzz_test_with_updates -- --ignored --nocapture
+cargo test --features testing fuzz_test_with_updates -- --ignored --nocapture
 ```
 
 #### Timed Fuzz Testing
@@ -254,12 +279,12 @@ For extended testing, use the timed fuzz test:
 
 ```bash
 # Default 10-second test
-cargo test fuzz_test_timed -- --ignored --nocapture
+cargo test --features testing fuzz_test_timed -- --ignored --nocapture
 
 # Custom duration examples
-FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture
-FUZZ_TIME=5m cargo test fuzz_test_timed -- --ignored --nocapture
-FUZZ_TIME=1h cargo test fuzz_test_timed -- --ignored --nocapture
+FUZZ_TIME=30s cargo test --features testing fuzz_test_timed -- --ignored --nocapture
+FUZZ_TIME=5m cargo test --features testing fuzz_test_timed -- --ignored --nocapture
+FUZZ_TIME=1h cargo test --features testing fuzz_test_timed -- --ignored --nocapture
 ```
 
 The fuzz tests will:
@@ -357,14 +382,14 @@ Contributions are welcome! Please:
 ### Running the Full Test Suite
 
 ```bash
-# Quick development tests
-cargo test
+# Quick development tests (REQUIRED: use --features testing)
+cargo test --features testing
 
 # Comprehensive validation (takes longer)
-cargo test --test fuzz_tests -- --ignored
+cargo test --features testing --test fuzz_tests -- --ignored
 
 # Extended stress testing
-FUZZ_TIME=10m cargo test fuzz_test_timed -- --ignored --nocapture
+FUZZ_TIME=10m cargo test --features testing fuzz_test_timed -- --ignored --nocapture
 ```
 
 ## License

@@ -12,15 +12,21 @@ BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key) {
     
     while (node->type == NODE_BRANCH) {
         /* For branch nodes, we need bisect_right logic to find child */
-        int pos = 0;
-        for (int i = 0; i < node->num_keys; i++) {
-            PyObject *node_key = node_get_key(node, i);
-            int cmp = fast_compare_lt(key, node_key);
-            if (cmp < 0) return NULL;  /* Comparison error */
-            if (cmp) break;  /* key < node_key, so use this child */
-            pos++;
+        int pos = node_find_position(node, key);
+        if (pos < 0) {
+            return NULL;
         }
-        
+        /* bisect_right semantics: advance past equal keys */
+        if (pos < node->num_keys) {
+            PyObject *node_key = node_get_key(node, pos);
+            int eq = fast_compare_eq(node_key, key);
+            if (eq < 0) {
+                return NULL;
+            }
+            if (eq) {
+                pos++;
+            }
+        }
         node = node_get_child(node, pos);
     }
     
@@ -35,15 +41,21 @@ static int tree_insert_recursive(BPlusNode *node, PyObject *key, PyObject *value
     }
     
     /* Find child to insert into */
-    int child_pos = 0;
-    for (int i = 0; i < node->num_keys; i++) {
-        PyObject *node_key = node_get_key(node, i);
-        int cmp = fast_compare_lt(key, node_key);
-        if (cmp < 0) return -1;  /* Comparison error */
-        if (cmp) break;  /* key < node_key, so use this child */
-        child_pos++;
+    int child_pos = node_find_position(node, key);
+    if (child_pos < 0) {
+        return -1;
     }
-    
+    /* bisect_right semantics: advance past equal keys */
+    if (child_pos < node->num_keys) {
+        PyObject *node_key = node_get_key(node, child_pos);
+        int eq = fast_compare_eq(node_key, key);
+        if (eq < 0) {
+            return -1;
+        }
+        if (eq) {
+            child_pos++;
+        }
+    }
     BPlusNode *child = node_get_child(node, child_pos);
     BPlusNode *new_child = NULL;
     PyObject *new_key = NULL;

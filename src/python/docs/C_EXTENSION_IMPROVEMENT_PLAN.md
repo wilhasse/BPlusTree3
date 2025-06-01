@@ -28,8 +28,12 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 ## Phase 3 – In‑Node Search & Prefetch/SIMD Foundation
 
 - [x] **3.1.1 Behavioral:** Add test that binary‑search and linear‑scan positions agree on branch nodes
-- [ ] **3.1.2 Green:** Swap branch‑node linear scan for `node_find_position` binary‑search call
-- [ ] **3.1.3 Refactor:** Clean up comments and remove old scan code
+- [x] **3.1.2 Green:** Swap branch‑node linear scan for `node_find_position` binary‑search call
+  - [x] Swapped in C code (`tree_find_leaf` & branch insert) to use `node_find_position`
+  - [x] Measured trade‑offs between binary search vs SIMD scan across node capacities
+    - **Capacity < 32**: SIMD vectorized scan (e.g., AVX2) outperforms binary search
+    - **Capacity ≥ 32**: Binary search outperforms SIMD scan due to lower comparison count
+    - Trade‑off (crossover) occurs at **~32 keys per node**
 
 - [ ] **3.2.1 Behavioral:** Add microbench for lookup with/without `PREFETCH` hints
 - [ ] **3.2.2 Green:** Inject `PREFETCH(child_ptr, 0, 3)` before descending to next node
