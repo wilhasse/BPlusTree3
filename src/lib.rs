@@ -704,25 +704,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
-    /// Insert a key-value pair into this leaf node.
-    /// Returns the old value if the key already existed.
-    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        // Find the position where the key should be inserted
-        match self.keys.binary_search(&key) {
-            Ok(index) => {
-                // Key already exists, update the value
-                let old_value = std::mem::replace(&mut self.values[index], value);
-                Some(old_value)
-            }
-            Err(index) => {
-                // Key doesn't exist, insert new key-value pair
-                self.keys.insert(index, key);
-                self.values.insert(index, value);
-                None
-            }
-        }
-    }
-
     /// Split this leaf node, returning the new right node.
     pub fn split(&mut self) -> Box<LeafNode<K, V>> {
         // Find the midpoint
@@ -736,21 +717,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         new_leaf.values = self.values.split_off(mid);
 
         new_leaf
-    }
-
-    /// Split leaf and insert key-value, returning (new_leaf, separator_key).
-    pub fn split_and_insert(&mut self, key: K, value: V) -> (Box<LeafNode<K, V>>, K) {
-        let mut new_leaf = self.split();
-
-        // Insert into appropriate leaf
-        if key < new_leaf.keys[0] {
-            self.insert(key, value);
-        } else {
-            new_leaf.insert(key, value);
-        }
-
-        let separator_key = new_leaf.keys[0].clone();
-        (new_leaf, separator_key)
     }
 
     /// Get value for a key from this leaf node.
@@ -850,23 +816,45 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
+    /// Insert a key-value pair at the specified index.
+    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
+        self.keys.insert(index, key);
+        self.values.insert(index, value);
+    }
+
     /// Insert a key-value pair and handle splitting if necessary.
     pub fn new_insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
-        // Check if key already exists
-        if let Some(_) = self.get(&key) {
-            let old_value = self.insert(key, value);
-            return InsertResult::Updated(old_value);
-        }
+        // Do binary search once and use the result throughout
+        match self.keys.binary_search(&key) {
+            Ok(index) => {
+                // Key already exists, update the value
+                let old_value = std::mem::replace(&mut self.values[index], value);
+                InsertResult::Updated(Some(old_value))
+            }
+            Err(index) => {
+                // Key doesn't exist, need to insert
+                if !self.is_full() {
+                    // Simple insertion - leaf is not full
+                    self.insert_at_index(index, key, value);
+                    InsertResult::Updated(None)
+                } else {
+                    // Leaf is full, need to split
+                    let mut new_leaf = self.split();
 
-        // If leaf is not full, simple insertion
-        if !self.is_full() {
-            self.insert(key, value);
-            return InsertResult::Updated(None);
-        }
+                    // Insert into appropriate leaf based on the split
+                    if key < new_leaf.keys[0] {
+                        self.insert_at_index(index, key, value);
+                    } else {
+                        // Adjust index for the new leaf since keys were moved
+                        let adjusted_index = index - self.keys.len();
+                        new_leaf.insert_at_index(adjusted_index, key, value);
+                    }
 
-        // Leaf is full, need to split
-        let (new_leaf, separator_key) = self.split_and_insert(key, value);
-        InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
+                    let separator_key = new_leaf.keys[0].clone();
+                    InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
+                }
+            }
+        }
     }
 
     /// Remove a key and check if rebalancing is needed.
