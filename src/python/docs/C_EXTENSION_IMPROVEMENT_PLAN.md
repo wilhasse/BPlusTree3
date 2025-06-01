@@ -55,9 +55,9 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 - [x] **5.2.2 Green:** Surround pure‑C lookup loops with `Py_BEGIN_ALLOW_THREADS`/`Py_END_ALLOW_THREADS`
 - [x] **5.2.3 Refactor:** Factor GIL‑release blocks into well‑named macros (`ENTER_TREE_LOOP`/`EXIT_TREE_LOOP`)
 
-- [ ] **5.3.1 Behavioral:** Rename compiled extension to trigger `ImportError`; expect fallback to pure‑Python implementation
+- [x] **5.3.1 Behavioral:** Rename compiled extension to trigger `ImportError`; expect fallback to pure‑Python implementation
 - [x] **5.3.2 Green:** Add `try/except ImportError` in package `__init__.py` to fallback to Python version
-- [ ] **5.3.3 Refactor:** Clean up import logic and update docstring
+- [x] **5.3.3 Refactor:** Clean up import logic and update docstring
 
 - [ ] **5.4.1 Behavioral:** Enable `pydocstyle`/`flake8-docstrings`; capture doc failures
 - [ ] **5.4.2 Green:** Add concise `tp_doc` entries for key methods (`insert`, `__getitem__`, range scans, etc.)
