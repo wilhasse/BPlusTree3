@@ -7,24 +7,31 @@ Build with: python setup.py build_ext --inplace
 from setuptools import setup, Extension
 import os
 
+# Default compile flags: safe baseline (-O3 only)
+extra_compile_args = [
+    '-O3',       # Maximum optimization
+    '-Wall',     # All warnings
+    '-Wextra',   # Extra warnings
+]
+# Opt-in flags for additional optimizations
+if os.environ.get('BPLUSTREE_C_FAST_MATH'):
+    extra_compile_args.append('-ffast-math')
+if os.environ.get('BPLUSTREE_C_MARCH_NATIVE'):
+    extra_compile_args.append('-march=native')
+
 # Define the extension module
 bplustree_c = Extension(
     'bplustree_c',
     sources=[
         'bplustree_c_src/bplustree_module.c',
-        'bplustree_c_src/node_ops.c', 
-        'bplustree_c_src/tree_ops.c'
+        'bplustree_c_src/node_ops.c',
+        'bplustree_c_src/tree_ops.c',
     ],
     include_dirs=['bplustree_c_src'],
-    extra_compile_args=[
-        '-O3',        # Maximum optimization
-        '-ffast-math', # Fast math operations
-        '-Wall',      # All warnings
-        '-Wextra',    # Extra warnings
-    ],
+    extra_compile_args=extra_compile_args,
     define_macros=[
         ('NDEBUG', '1'),  # Disable debug assertions
-    ]
+    ],
 )
 
 setup(

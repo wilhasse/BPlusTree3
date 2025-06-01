@@ -41,7 +41,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 ## Phase 4 – Compiler Flags & Build Hygiene
 
-- [ ] **4.1.1 Structural:** Make `-march=native` and `-ffast-math` opt‑in; default to a safe `-O3` baseline in `setup.py`
+- [x] **4.1.1 Structural:** Make `-march=native` and `-ffast-math` opt‑in; default to a safe `-O3` baseline in `setup.py`
 - [ ] **4.1.2 Behavioral:** Verify CI builds/tests pass under safe flags; add failure if unsafe flags are forced
 - [ ] **4.1.3 Refactor:** Clean up `extra_compile_args` formatting
 
