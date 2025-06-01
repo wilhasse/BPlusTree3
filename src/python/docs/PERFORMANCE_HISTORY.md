@@ -63,6 +63,14 @@ This document tracks the complete performance optimization journey with specific
 | **C Ext (cap=16)** | `860d436` | **148** | **235** | **9** | **5.3x slower/2.5x faster/2x faster** |
 | **SortedDict** | reference | 30 | 600 | 20 | baseline |
 
+### Phase 2C: Dead Allocator Removal  
+**Commit**: `d9f31f7` - "C extension Phase 2.1.3: Remove dead allocator code paths and unify free logic"  
+**C Extension B+ Tree (capacity=16) - CURRENT**  
+- Lookups: ~148 ns/op (no change)  
+- Inserts: ~235 ns/op (no change)  
+- Iteration: ~9 ns/op (no change)  
+- **Key Observation**: No measurable performance change; cleanup only.  
+
 ## 🏆 Performance Achievements
 
 ### ✅ Exceeded Targets
@@ -146,4 +154,4 @@ Each commit includes detailed performance measurements and technical rationale i
 
 ---
 
-*Last updated: Commit `860d436` - C Extension with optimized branching factor (capacity=16)*
+*Last updated: Commit `d9f31f7` - C extension Phase 2.1.3: Remove dead allocator code paths and unify free logic*
