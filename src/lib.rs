@@ -234,13 +234,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let capacity = self.capacity;
         let result = Self::insert_recursive(&mut self.root, key, value, capacity);
 
-        // If the root split, create a new root
-        if let Some((new_node, separator_key)) = result.1 {
-            let new_root = self.new_root(new_node, separator_key);
-            self.root = NodeRef::Branch(Box::new(new_root));
+        match result {
+            InsertResult::Updated(old_value) => old_value,
+            InsertResult::Split(old_value, new_node, separator_key) => {
+                let new_root = self.new_root(new_node, separator_key);
+                self.root = NodeRef::Branch(Box::new(new_root));
+                old_value
+            }
         }
-
-        result.0 // Return the old value if key existed
     }
 
     // ============================================================================
@@ -263,43 +264,42 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively insert a key-value pair into the tree.
-    /// Returns (old_value, split_result) where split_result is None or Some((new_node, separator_key))
+    /// Returns InsertResult indicating whether the node split and any old value.
     fn insert_recursive(
         node: &mut NodeRef<K, V>,
         key: K,
         value: V,
         capacity: usize,
-    ) -> (Option<V>, Option<(NodeRef<K, V>, K)>) {
+    ) -> InsertResult<K, V> {
         match node {
-            NodeRef::Leaf(leaf) => match leaf.insert(key, value) {
-                InsertResult::Updated(old_value) => (old_value, None),
-                InsertResult::Split(old_value, new_node, separator_key) => {
-                    (old_value, Some((new_node, separator_key)))
-                }
-            },
+            NodeRef::Leaf(leaf) => leaf.insert(key, value),
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(&key);
 
                 let child = match branch.get_child_mut(&key) {
                     Some(child) => child,
-                    None => return (None, None), // Invalid child index
+                    None => return InsertResult::Updated(None), // Invalid child index
                 };
 
                 // Recursively insert into the appropriate child
-                let (old_value, split_result) = Self::insert_recursive(child, key, value, capacity);
+                let child_result = Self::insert_recursive(child, key, value, capacity);
 
-                // If child didn't split, we're done
-                if split_result.is_none() {
-                    return (old_value, None);
+                match child_result {
+                    InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
+                    InsertResult::Split(old_value, new_child, separator_key) => {
+                        // Insert the new child and separator into this branch
+                        match branch.insert_child_and_split_if_needed(
+                            child_index,
+                            separator_key,
+                            new_child,
+                        ) {
+                            None => InsertResult::Updated(old_value),
+                            Some((new_node, branch_separator_key)) => {
+                                InsertResult::Split(old_value, new_node, branch_separator_key)
+                            }
+                        }
+                    }
                 }
-
-                let (new_child, separator_key) = split_result.unwrap();
-
-                // Insert the new child and separator into this branch
-                let branch_split =
-                    branch.insert_child_and_split_if_needed(child_index, separator_key, new_child);
-
-                (old_value, branch_split)
             }
         }
     }
@@ -526,13 +526,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Check if the tree maintains B+ tree invariants.
     /// Returns true if all invariants are satisfied.
-    #[cfg(any(test, feature = "testing"))]
     pub fn check_invariants(&self) -> bool {
         self.check_node_invariants(&self.root, None, None, true)
     }
 
     /// Check invariants with detailed error reporting.
-    #[cfg(any(test, feature = "testing"))]
     pub fn check_invariants_detailed(&self) -> Result<(), String> {
         if self.check_node_invariants(&self.root, None, None, true) {
             Ok(())
@@ -542,19 +540,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Alias for check_invariants_detailed (for test compatibility).
-    #[cfg(any(test, feature = "testing"))]
     pub fn validate(&self) -> Result<(), String> {
         self.check_invariants_detailed()
     }
 
     /// Returns all key-value pairs as a vector (for testing/debugging).
-    #[cfg(any(test, feature = "testing"))]
     pub fn slice(&self) -> Vec<(&K, &V)> {
         self.items().collect()
     }
 
     /// Returns the sizes of all leaf nodes (for testing/debugging).
-    #[cfg(any(test, feature = "testing"))]
     pub fn leaf_sizes(&self) -> Vec<usize> {
         let mut sizes = Vec::new();
         self.collect_leaf_sizes(&self.root, &mut sizes);
@@ -562,13 +557,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Prints the node chain for debugging.
-    #[cfg(any(test, feature = "testing"))]
     pub fn print_node_chain(&self) {
         println!("Tree structure:");
         self.print_node(&self.root, 0);
     }
 
-    #[cfg(any(test, feature = "testing"))]
     fn collect_leaf_sizes(&self, node: &NodeRef<K, V>, sizes: &mut Vec<usize>) {
         match node {
             NodeRef::Leaf(leaf) => {
@@ -582,7 +575,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    #[cfg(any(test, feature = "testing"))]
     fn print_node(&self, node: &NodeRef<K, V>, depth: usize) {
         let indent = "  ".repeat(depth);
         match node {
@@ -610,7 +602,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively check invariants for a node and its children.
-    #[cfg(any(test, feature = "testing"))]
     fn check_node_invariants(
         &self,
         node: &NodeRef<K, V>,
@@ -637,11 +628,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     return false; // Node exceeds capacity
                 }
 
-                // TODO: Re-enable this check once proper borrowing/merging is implemented
                 // Check minimum occupancy (except for root)
-                // if !is_root && !leaf.keys.is_empty() && leaf.is_underfull() {
-                //     return false; // Non-root leaf is underfull
-                // }
+                if !_is_root && !leaf.keys.is_empty() && leaf.is_underfull() {
+                    return false; // Non-root leaf is underfull
+                }
 
                 // Check key bounds
                 if let Some(min) = min_key {
@@ -675,11 +665,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     return false; // Node exceeds capacity
                 }
 
-                // TODO: Re-enable this check once proper borrowing/merging is implemented
                 // Check minimum occupancy (except for root)
-                // if !is_root && !branch.keys.is_empty() && branch.is_underfull() {
-                //     return false; // Non-root branch is underfull
-                // }
+                if !_is_root && !branch.keys.is_empty() && branch.is_underfull() {
+                    return false; // Non-root branch is underfull
+                }
 
                 // Check that branch has at least one child
                 if branch.children.is_empty() {
