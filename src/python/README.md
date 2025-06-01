@@ -79,6 +79,9 @@ Run the test suite:
 # Run all tests
 python -m pytest tests/
 
+# Check docstring style (requires pydocstyle)
+python -m pytest tests/test_docstyle.py
+
 # Run specific test file
 python -m pytest tests/test_bplus_tree.py
 

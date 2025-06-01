@@ -181,7 +181,9 @@ static PyTypeObject BPlusTreeIteratorType = {
     .tp_itemsize = 0,
     .tp_dealloc = (destructor)BPlusTreeIterator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "B+ tree iterator",
+    .tp_doc =
+        "B+ tree iterator; generate keys or (key, value) pairs\n"
+        "depending on invocation via keys() or items()",
     .tp_iter = PyObject_SelfIter,
     .tp_iternext = (iternextfunc)BPlusTreeIterator_next,
 };
@@ -349,7 +351,17 @@ BPlusTree_clear(BPlusTree *self) {
 static PyTypeObject BPlusTreeType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "bplustree_c.BPlusTree",
-    .tp_doc = "High-performance B+ tree implementation",
+    .tp_doc =
+        "High-performance B+ tree implementation\n"
+        "\n"
+        "Mapping interface:\n"
+        "  __getitem__(key) -> value\n"
+        "  __setitem__(key, value)\n"
+        "  __delitem__(key)\n"
+        "  __contains__(key) -> bool\n"
+        "  __len__() -> int\n"
+        "  keys() -> iterator of keys\n"
+        "  items() -> iterator of (key, value) pairs",
     .tp_basicsize = sizeof(BPlusTree),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
@@ -369,7 +381,9 @@ static PyTypeObject BPlusTreeType = {
 static PyModuleDef bplustree_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "bplustree_c",
-    .m_doc = "High-performance B+ tree C extension",
+    .m_doc =
+        "High-performance B+ tree C extension supporting mapping interface:\n"
+        "efficient insertion, deletion, lookup, and range scans",
     .m_size = -1,
     .m_methods = module_methods,
 };

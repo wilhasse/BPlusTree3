@@ -59,9 +59,9 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 - [x] **5.3.2 Green:** Add `try/except ImportError` in package `__init__.py` to fallback to Python version
 - [x] **5.3.3 Refactor:** Clean up import logic and update docstring
 
-- [ ] **5.4.1 Behavioral:** Enable `pydocstyle`/`flake8-docstrings`; capture doc failures
-- [ ] **5.4.2 Green:** Add concise `tp_doc` entries for key methods (`insert`, `__getitem__`, range scans, etc.)
-- [ ] **5.4.3 Refactor:** Ensure uniform doc style and update Sphinx/docs as needed
+- [x] **5.4.1 Behavioral:** Enable `pydocstyle`/`flake8-docstrings`; capture doc failures
+- [x] **5.4.2 Green:** Add concise `tp_doc` entries for key methods (`insert`, `__getitem__`, range scans, etc.)
+- [x] **5.4.3 Refactor:** Ensure uniform doc style and update Sphinx/docs as needed
 
 ## Phase 6 – SIMD/Vector and PGO (Stretch Goals)
 
