@@ -23,7 +23,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 - [x] **2.1.1 Behavioral:** Add self‑test verifying `node->data` is aligned to `CACHE_LINE_SIZE`
 - [x] **2.1.2 Green:** Replace `PyMem_Malloc` in `node_create` with cache‑aligned allocator (`cache_aligned_alloc`/`posix_memalign`)
-- [ ] **2.1.3 Refactor:** Remove dead allocator code paths and unify free logic
+- [x] **2.1.3 Refactor:** Remove dead allocator code paths and unify free logic
 
 ## Phase 3 – In‑Node Search & Prefetch/SIMD Foundation
 

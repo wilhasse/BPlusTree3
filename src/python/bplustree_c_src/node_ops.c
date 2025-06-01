@@ -335,23 +335,18 @@ PyObject* node_get(BPlusNode *node, PyObject *key) {
 void* cache_aligned_alloc(size_t size) {
 #ifdef _WIN32
     return _aligned_malloc(size, CACHE_LINE_SIZE);
-#elif defined(__APPLE__) || defined(__linux__)
+#else
     void *ptr;
     if (posix_memalign(&ptr, CACHE_LINE_SIZE, size) != 0) {
         return NULL;
     }
     return ptr;
-#else
-    /* Fallback to regular malloc if no aligned allocation available */
-    return malloc(size);
 #endif
 }
 
 void cache_aligned_free(void* ptr) {
 #ifdef _WIN32
     _aligned_free(ptr);
-#elif defined(__APPLE__) || defined(__linux__)
-    free(ptr);
 #else
     free(ptr);
 #endif

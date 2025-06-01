@@ -221,6 +221,32 @@ static PyMappingMethods BPlusTree_as_mapping = {
     (objobjargproc)BPlusTree_setitem
 };
 
+/* Module-level methods for testing and diagnostics */
+static PyObject *
+py_check_data_alignment(PyObject *self, PyObject *args)
+{
+    unsigned int capacity = DEFAULT_CAPACITY;
+    if (!PyArg_ParseTuple(args, "|I", &capacity)) {
+        return NULL;
+    }
+    BPlusNode *node = node_create(NODE_LEAF, capacity);
+    if (!node) {
+        return NULL;
+    }
+    uintptr_t addr = (uintptr_t)node->data;
+    node_destroy(node);
+    if (addr % CACHE_LINE_SIZE == 0) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
+
+static PyMethodDef module_methods[] = {
+    {"_check_data_alignment", py_check_data_alignment, METH_VARARGS,
+     "Return True if node->data is aligned to CACHE_LINE_SIZE (optional capacity)"},
+    {NULL, NULL, 0, NULL}
+};
+
 /* Sequence protocol (for 'in' operator) */
 
 static PySequenceMethods BPlusTree_as_sequence = {
@@ -259,6 +285,7 @@ static PyModuleDef bplustree_module = {
     .m_name = "bplustree_c",
     .m_doc = "High-performance B+ tree C extension",
     .m_size = -1,
+    .m_methods = module_methods,
 };
 
 PyMODINIT_FUNC
