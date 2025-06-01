@@ -265,29 +265,47 @@ static PySequenceMethods BPlusTree_as_sequence = {
     (objobjproc)BPlusTree_contains, /* sq_contains */
 };
 
-/* GC: traverse and clear references in the tree and its nodes */
+/* Common GC operation: traverse or clear Python references in a node and its children. */
 static int
-node_traverse(BPlusNode *node, visitproc visit, void *arg) {
+node_gc_op(BPlusNode *node, visitproc visit, void *arg, int clear)
+{
     if (!node) {
         return 0;
     }
     for (int i = 0; i < node->num_keys; i++) {
-        Py_VISIT(node_get_key(node, i));
+        if (clear) {
+            Py_CLEAR(node->data[i]);
+        } else {
+            Py_VISIT(node_get_key(node, i));
+        }
     }
     if (node->type == NODE_LEAF) {
         for (int i = 0; i < node->num_keys; i++) {
-            Py_VISIT(node_get_value(node, i));
+            if (clear) {
+                Py_CLEAR(node->data[node->capacity + i]);
+            } else {
+                Py_VISIT(node_get_value(node, i));
+            }
         }
     } else {
         for (int i = 0; i <= node->num_keys; i++) {
             BPlusNode *child = node_get_child(node, i);
-            if (child && node_traverse(child, visit, arg)) {
+            if (clear) {
+                node_gc_op(child, NULL, NULL, 1);
+            } else if (child && node_gc_op(child, visit, arg, 0)) {
                 return -1;
             }
         }
     }
     return 0;
 }
+
+static int
+node_traverse(BPlusNode *node, visitproc visit, void *arg)
+{
+    return node_gc_op(node, visit, arg, 0);
+}
+
 
 static int
 BPlusTree_traverse(BPlusTree *self, visitproc visit, void *arg) {
@@ -299,26 +317,6 @@ BPlusTree_traverse(BPlusTree *self, visitproc visit, void *arg) {
     return 0;
 }
 
-static void
-node_clear_gc(BPlusNode *node) {
-    if (!node) {
-        return;
-    }
-    /* Clear Python object references (keys and leaf values) */
-    for (int i = 0; i < node->num_keys; i++) {
-        Py_CLEAR(node->data[i]);
-    }
-    if (node->type == NODE_LEAF) {
-        for (int i = 0; i < node->num_keys; i++) {
-            Py_CLEAR(node->data[node->capacity + i]);
-        }
-    } else {
-        for (int i = 0; i <= node->num_keys; i++) {
-            BPlusNode *child = node_get_child(node, i);
-            node_clear_gc(child);
-        }
-    }
-}
 
 static int
 BPlusTree_clear(BPlusTree *self) {

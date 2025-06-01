@@ -49,7 +49,7 @@ A phased roadmap (Red → Green → Refactor, Tidy‑First) to systematically fi
 
 - [x] **5.1.1 Behavioral:** Write pytest for GC support: self‑referencing key/value, then `gc.collect()` should free memory
 - [x] **5.1.2 Green:** Add `Py_TPFLAGS_HAVE_GC`, implement `tp_traverse` and `tp_clear` to visit and clear node payloads
-- [ ] **5.1.3 Refactor:** Extract common GC traversal helpers
+- [x] **5.1.3 Refactor:** Extract common GC traversal helpers
 
 - [ ] **5.2.1 Behavioral:** Multithreaded pytest: measure throughput of concurrent lookups
 - [ ] **5.2.2 Green:** Surround pure‑C lookup loops with `Py_BEGIN_ALLOW_THREADS`/`Py_END_ALLOW_THREADS`
