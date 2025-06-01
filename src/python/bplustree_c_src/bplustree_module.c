@@ -70,7 +70,11 @@ BPlusTree_dealloc(BPlusTree *self) {
 
 PyObject *
 BPlusTree_getitem(BPlusTree *self, PyObject *key) {
-    return tree_get(self, key);
+    PyObject *value;
+    Py_BEGIN_ALLOW_THREADS;
+    value = tree_get(self, key);
+    Py_END_ALLOW_THREADS;
+    return value;
 }
 
 int
@@ -100,7 +104,10 @@ BPlusTree_length(BPlusTree *self) {
 
 int
 BPlusTree_contains(BPlusTree *self, PyObject *key) {
-    PyObject *value = tree_get(self, key);
+    PyObject *value;
+    Py_BEGIN_ALLOW_THREADS;
+    value = tree_get(self, key);
+    Py_END_ALLOW_THREADS;
     if (value) {
         Py_DECREF(value);
         return 1;
@@ -304,6 +311,12 @@ static int
 node_traverse(BPlusNode *node, visitproc visit, void *arg)
 {
     return node_gc_op(node, visit, arg, 0);
+}
+
+static int
+node_clear_gc(BPlusNode *node)
+{
+    return node_gc_op(node, NULL, NULL, 1);
 }
 
 
