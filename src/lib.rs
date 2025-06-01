@@ -713,21 +713,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         }
     }
 
-    /// Split this leaf node, returning the new right node.
-    pub fn split(&mut self) -> Box<LeafNode<K, V>> {
-        // Find the midpoint
-        let mid = self.keys.len() / 2;
-
-        // Create new leaf for right half
-        let mut new_leaf = Box::new(LeafNode::new(self.capacity));
-
-        // Move right half of keys/values to new leaf
-        new_leaf.keys = self.keys.split_off(mid);
-        new_leaf.values = self.values.split_off(mid);
-
-        new_leaf
-    }
-
     /// Get value for a key from this leaf node.
     pub fn get(&self, key: &K) -> Option<&V> {
         match self.keys.binary_search(key) {
@@ -742,6 +727,21 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             Ok(index) => Some(&mut self.values[index]),
             Err(_) => None,
         }
+    }
+
+    /// Split this leaf node, returning the new right node.
+    pub fn split(&mut self) -> Box<LeafNode<K, V>> {
+        // Find the midpoint
+        let mid = self.keys.len() / 2;
+
+        // Create new leaf for right half
+        let mut new_leaf = Box::new(LeafNode::new(self.capacity));
+
+        // Move right half of keys/values to new leaf
+        new_leaf.keys = self.keys.split_off(mid);
+        new_leaf.values = self.values.split_off(mid);
+
+        new_leaf
     }
 
     /// Remove a key from this leaf node.
