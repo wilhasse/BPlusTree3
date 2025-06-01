@@ -358,10 +358,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
 
                 // Child needs rebalancing - try to fix it
-                let rebalanced = Self::rebalance_child(branch, child_index, capacity);
+                let _rebalanced = Self::rebalance_child(branch, child_index, capacity);
 
                 // Check if this branch node now needs rebalancing
-                let branch_needs_rebalancing = !is_root && !rebalanced && branch.is_underfull();
+                // After rebalancing a child, the branch itself might become underfull
+                let branch_needs_rebalancing = !is_root && branch.is_underfull();
 
                 (removed_value, branch_needs_rebalancing)
             }
@@ -533,9 +534,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         }
                     }
                 }
+                (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
+                    // Move one key and child from right to left
+                    if !right_branch.keys.is_empty() && !right_branch.children.is_empty() {
+                        // Move the first key and child from right to left
+                        let borrowed_key = right_branch.keys.remove(0);
+                        let borrowed_child = right_branch.children.remove(0);
+
+                        // The separator becomes the new last key in left branch
+                        left_branch.keys.push(branch.keys[child_index].clone());
+                        left_branch.children.push(borrowed_child);
+
+                        // Update the separator to be the borrowed key
+                        branch.keys[child_index] = borrowed_key;
+                    }
+                }
                 _ => {
-                    // For now, just leave branch-to-branch borrowing unimplemented
-                    // This is a more complex case that we'll handle later
+                    // Mixed node types - this shouldn't happen in a well-formed tree
                 }
             }
         }
@@ -543,44 +558,62 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Merge child with its left sibling.
     fn merge_with_left_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
-        // For now, implement a simple version that works for leaf nodes
-        // TODO: Extend to handle branch nodes
-
         // Extract the right child first
         let right_child = branch.children.remove(child_index);
+        let separator_key = branch.keys.remove(child_index - 1);
 
-        // Now we can safely access the left child
-        if let (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) =
-            (&mut branch.children[child_index - 1], &right_child)
-        {
-            // Move all keys and values from right to left
-            left_leaf.keys.extend_from_slice(&right_leaf.keys);
-            left_leaf.values.extend_from_slice(&right_leaf.values);
+        // Now we can safely access the left child and merge
+        match (&mut branch.children[child_index - 1], &right_child) {
+            (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) => {
+                // Move all keys and values from right to left
+                left_leaf.keys.extend_from_slice(&right_leaf.keys);
+                left_leaf.values.extend_from_slice(&right_leaf.values);
+            }
+            (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
+                // For branch nodes, the separator key becomes part of the merged node
+                left_branch.keys.push(separator_key);
+                left_branch.keys.extend_from_slice(&right_branch.keys);
+                left_branch
+                    .children
+                    .extend_from_slice(&right_branch.children);
+            }
+            _ => {
+                // Mixed node types - this shouldn't happen in a well-formed tree
+                // Put the separator key back since we couldn't merge
+                branch.keys.insert(child_index - 1, separator_key);
+                branch.children.insert(child_index, right_child);
+            }
         }
-
-        // Remove the separator key
-        branch.keys.remove(child_index - 1);
     }
 
     /// Merge child with its right sibling.
     fn merge_with_right_sibling(branch: &mut BranchNode<K, V>, child_index: usize) {
-        // For now, implement a simple version that works for leaf nodes
-        // TODO: Extend to handle branch nodes
-
         // Extract the right child first
         let right_child = branch.children.remove(child_index + 1);
+        let separator_key = branch.keys.remove(child_index);
 
-        // Now we can safely access the left child
-        if let (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) =
-            (&mut branch.children[child_index], &right_child)
-        {
-            // Move all keys and values from right to left
-            left_leaf.keys.extend_from_slice(&right_leaf.keys);
-            left_leaf.values.extend_from_slice(&right_leaf.values);
+        // Now we can safely access the left child and merge
+        match (&mut branch.children[child_index], &right_child) {
+            (NodeRef::Leaf(left_leaf), NodeRef::Leaf(right_leaf)) => {
+                // Move all keys and values from right to left
+                left_leaf.keys.extend_from_slice(&right_leaf.keys);
+                left_leaf.values.extend_from_slice(&right_leaf.values);
+            }
+            (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
+                // For branch nodes, the separator key becomes part of the merged node
+                left_branch.keys.push(separator_key);
+                left_branch.keys.extend_from_slice(&right_branch.keys);
+                left_branch
+                    .children
+                    .extend_from_slice(&right_branch.children);
+            }
+            _ => {
+                // Mixed node types - this shouldn't happen in a well-formed tree
+                // Put the separator key back since we couldn't merge
+                branch.keys.insert(child_index, separator_key);
+                branch.children.insert(child_index + 1, right_child);
+            }
         }
-
-        // Remove the separator key
-        branch.keys.remove(child_index);
     }
 
     /// Collapse the root if it's a branch with only one child or no children.
