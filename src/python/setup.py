@@ -20,6 +20,11 @@ if os.environ.get('BPLUSTREE_C_FAST_MATH'):
 if os.environ.get('BPLUSTREE_C_MARCH_NATIVE'):
     extra_compile_args.append('-march=native')
 
+extra_link_args = []
+if os.environ.get('BPLUSTREE_C_SANITIZE'):
+    extra_compile_args.extend(['-fsanitize=address', '-fno-omit-frame-pointer'])
+    extra_link_args.extend(['-fsanitize=address'])
+
 # Define the extension module
 bplustree_c = Extension(
     'bplustree_c',
@@ -30,6 +35,7 @@ bplustree_c = Extension(
     ],
     include_dirs=['bplustree_c_src'],
     extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
     define_macros=[
         ('NDEBUG', '1'),  # Disable debug assertions
     ],

@@ -218,7 +218,7 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
         
         /* Split at midpoint - exactly like Python code */
         int mid = node->capacity / 2;  /* Same as Python: self.capacity // 2 */
-        
+
         /* Keep first half in current node */
         node->num_keys = mid;
         for (int i = 0; i < mid; i++) {
@@ -227,7 +227,15 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
             node_set_key(node, i, temp_keys[i]);
             node_set_value(node, i, temp_values[i]);
         }
-        
+
+        /* Clear old slots beyond midpoint */
+        for (int i = mid; i < node->capacity; i++) {
+            Py_XDECREF(node_get_key(node, i));
+            Py_XDECREF(node_get_value(node, i));
+            node_set_key(node, i, NULL);
+            node_set_value(node, i, NULL);
+        }
+
         /* Move second half to new node */
         int total_items = node->capacity + 1;
         (*new_node)->num_keys = total_items - mid;

@@ -75,11 +75,8 @@ BPlusTree_dealloc(BPlusTree *self) {
 
 PyObject *
 BPlusTree_getitem(BPlusTree *self, PyObject *key) {
-    PyObject *value;
-    ENTER_TREE_LOOP;
-    value = tree_get(self, key);
-    EXIT_TREE_LOOP;
-    return value;
+    /* Direct lookup without releasing the GIL to avoid unsafe Python API use */
+    return tree_get(self, key);
 }
 
 int
@@ -109,10 +106,8 @@ BPlusTree_length(BPlusTree *self) {
 
 int
 BPlusTree_contains(BPlusTree *self, PyObject *key) {
-    PyObject *value;
-    ENTER_TREE_LOOP;
-    value = tree_get(self, key);
-    EXIT_TREE_LOOP;
+    /* Check containment without releasing the GIL */
+    PyObject *value = tree_get(self, key);
     if (value) {
         Py_DECREF(value);
         return 1;

@@ -89,6 +89,17 @@ python -m pytest tests/test_bplus_tree.py
 python -m pytest tests/ --cov=bplus_tree
 ```
 
+## Debugging the C extension with AddressSanitizer
+
+To diagnose low-level memory errors and segmentation faults in the C extension, build with AddressSanitizer:
+
+```bash
+cd src/python
+export BPLUSTREE_C_SANITIZE=1
+python setup.py build_ext --inplace
+python -m pytest tests/test_c_extension.py::test_c_extension_basic -vv --disable-warnings --maxfail=1
+```
+
 ### Fuzz Testing
 
 The implementation includes comprehensive fuzz testing to ensure robustness:

@@ -7,11 +7,11 @@
 #include "bplustree.h"
 
 /* Find leaf node that should contain the key */
+/* Find leaf node that should contain the key */
 BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key) {
     BPlusNode *node = tree->root;
     
     while (node->type == NODE_BRANCH) {
-        /* For branch nodes, we need bisect_right logic to find child */
         int pos = node_find_position(node, key);
         if (pos < 0) {
             return NULL;
@@ -119,7 +119,6 @@ int tree_delete(BPlusTree *tree, PyObject *key) {
 PyObject* tree_get(BPlusTree *tree, PyObject *key) {
     BPlusNode *leaf = tree_find_leaf(tree, key);
     if (!leaf) return NULL;
-    
     return node_get(leaf, key);
 }
 
@@ -172,6 +171,7 @@ int node_insert_branch(BPlusNode *node, PyObject *key, BPlusNode *right_child,
         /* Keep first half in current node */
         node->num_keys = mid;
         for (int i = 0; i < mid; i++) {
+            Py_INCREF(temp_keys[i]);
             node_set_key(node, i, temp_keys[i]);
         }
         for (int i = 0; i <= mid; i++) {
@@ -181,6 +181,7 @@ int node_insert_branch(BPlusNode *node, PyObject *key, BPlusNode *right_child,
         /* Move second half to new node */
         (*new_node)->num_keys = node->capacity - mid;
         for (int i = 0; i < (*new_node)->num_keys; i++) {
+            Py_INCREF(temp_keys[mid + 1 + i]);
             node_set_key(*new_node, i, temp_keys[mid + 1 + i]);
         }
         for (int i = 0; i <= (*new_node)->num_keys; i++) {
