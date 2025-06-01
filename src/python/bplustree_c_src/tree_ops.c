@@ -27,7 +27,13 @@ BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key) {
                 pos++;
             }
         }
-        node = node_get_child(node, pos);
+        {
+            BPlusNode *next = node_get_child(node, pos);
+#ifdef PREFETCH_HINTS
+            PREFETCH(next, 0, 3);
+#endif
+            node = next;
+        }
     }
     
     return node;
