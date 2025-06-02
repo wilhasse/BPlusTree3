@@ -6,6 +6,13 @@
 // Constants
 const MIN_CAPACITY: usize = 4;
 
+/// Node ID type for arena-based allocation
+pub type NodeId = u32;
+
+/// Special node ID constants
+pub const NULL_NODE: NodeId = u32::MAX;
+pub const ROOT_NODE: NodeId = 0;
+
 /// Error type for B+ tree operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BPlusTreeError {
@@ -63,8 +70,24 @@ pub enum BPlusTreeError {
 pub struct BPlusTreeMap<K, V> {
     /// Maximum number of keys per node.
     capacity: usize,
-    /// The root node of the tree.
+    /// The root node of the tree (for now, keeping old system).
     root: NodeRef<K, V>,
+
+    // Arena-based allocation for leaf nodes
+    /// Arena storage for leaf nodes.
+    leaf_arena: Vec<Option<LeafNode<K, V>>>,
+    /// Free leaf node IDs available for reuse.
+    free_leaf_ids: Vec<NodeId>,
+    /// Next leaf node ID to allocate.
+    next_leaf_id: NodeId,
+
+    // Arena-based allocation for branch nodes (for future use)
+    /// Arena storage for branch nodes.
+    branch_arena: Vec<Option<BranchNode<K, V>>>,
+    /// Free branch node IDs available for reuse.
+    free_branch_ids: Vec<NodeId>,
+    /// Next branch node ID to allocate.
+    next_branch_id: NodeId,
 }
 
 /// Node reference that can be either a leaf or branch node
@@ -116,6 +139,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         Ok(Self {
             capacity,
             root: NodeRef::Leaf(Box::new(LeafNode::new(capacity))),
+            // Initialize arena storage
+            leaf_arena: Vec::new(),
+            free_leaf_ids: Vec::new(),
+            next_leaf_id: 0,
+            branch_arena: Vec::new(),
+            free_branch_ids: Vec::new(),
+            next_branch_id: 0,
         })
     }
 
