@@ -2156,8 +2156,23 @@ fn test_linked_list_range_performance() {
 #[test]
 fn test_debug_range_iterator() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
-    for i in 0..20 {
+    
+    // First, let me just see what happens when we insert exactly the failing sequence
+    for i in 0..15 {
+        println!("Inserting {}", i);
         tree.insert(i, format!("value{}", i));
+        println!("After inserting {}: tree.len() = {}", i, tree.len());
+        
+        // After insertion 14, let's check what's in the tree
+        if i == 14 {
+            println!("After inserting 14, all keys in tree:");
+            for k in 0..20 {
+                if tree.contains_key(&k) {
+                    println!("  Key {} is present", k);
+                }
+            }
+            break; // Stop here to focus on the corruption
+        }
     }
 
     println!("Tree structure after insertions:");

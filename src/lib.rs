@@ -373,10 +373,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             
             match child_result {
                 InsertResult::Updated(old_value) => return old_value,
-                InsertResult::Split(_old_value, _new_node, _separator_key) => {
-                    // Handle split in arena branch - for now, just return
-                    // This would require implementing arena-aware split handling
-                    return None; // Temporary: should handle split
+                InsertResult::Split(old_value, new_node, separator_key) => {
+                    // Handle split - need to update the branch
+                    if let Some(arena_branch) = self.get_branch_mut(id) {
+                        if let Some((new_branch_node, promoted_key)) = 
+                            arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
+                            // Branch split, need to create new root
+                            let new_root = self.new_root(new_branch_node, promoted_key);
+                            let root_id = self.allocate_branch(new_root);
+                            self.root = NodeRef::ArenaBranch(root_id);
+                        }
+                        // If no split, the child was inserted successfully
+                    }
+                    return old_value;
                 }
                 InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
                     // Allocate new leaf and update branch
@@ -403,9 +412,28 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             }
         }
         
-        // If we reach here, it means the root type is not handled above
-        // This should not happen with a fully arena-based implementation
-        panic!("Unhandled root type in insert - this should not happen with arena-based implementation")
+        // Fallback for non-arena root types (Box-based)
+        // This is for compatibility during the migration phase
+        let result = Self::insert_recursive(&mut self.root, key, value, self.capacity);
+        match result {
+            InsertResult::Updated(old_value) => old_value,
+            InsertResult::Split(old_value, new_node, separator_key) => {
+                // Root split - create new root
+                let new_root = self.new_root(new_node, separator_key);
+                let root_id = self.allocate_branch(new_root);
+                self.root = NodeRef::ArenaBranch(root_id);
+                old_value
+            }
+            InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
+                // Convert arena split to normal split
+                let new_id = self.allocate_leaf(new_leaf_data);
+                let new_node = NodeRef::ArenaLeaf(new_id);
+                let new_root = self.new_root(new_node, separator_key);
+                let root_id = self.allocate_branch(new_root);
+                self.root = NodeRef::ArenaBranch(root_id);
+                old_value
+            }
+        }
     }
 
     // ============================================================================
@@ -418,10 +446,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         new_root.keys.push(separator_key);
 
         // Move the current root to be the left child
-        let old_root = std::mem::replace(
-            &mut self.root,
-            NodeRef::Leaf(Box::new(LeafNode::new(self.capacity))),
-        );
+        // For arena-based implementation, create a placeholder arena leaf
+        let placeholder_id = self.allocate_leaf(LeafNode::new(self.capacity));
+        let placeholder = NodeRef::ArenaLeaf(placeholder_id);
+        let old_root = std::mem::replace(&mut self.root, placeholder);
+        
         new_root.children.push(old_root);
         new_root.children.push(new_node);
         new_root
@@ -584,25 +613,69 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
             }
             NodeRef::Branch(branch) => {
-                // For regular Branch nodes, we need to be careful about mutable access
-                // This is a complex case that requires restructuring
-                // For now, return Updated to avoid crashes
-                InsertResult::Updated(None)
+                // Handle regular Branch nodes by converting to arena
+                let branch_clone = branch.clone();
+                let branch_id = self.allocate_branch(*branch_clone);
+                // Now we can use the arena branch logic
+                self.insert_recursive_with_arena(&NodeRef::ArenaBranch(branch_id), key, value)
             }
             NodeRef::ArenaBranch(id) => {
-                if let Some(arena_branch) = self.get_branch(*id) {
-                    let child_index = arena_branch.find_child_index(&key);
-                    if child_index < arena_branch.children.len() {
-                        let child = arena_branch.children[child_index].clone();
-                        let child_result = self.insert_recursive_with_arena(&child, key, value);
-                        // Handle the result and potential splits...
-                        // For now, just return the result without handling splits
-                        child_result
+                let id = *id;
+                
+                // First get child info without mutable borrow
+                let (child_index, child_ref) = {
+                    if let Some(arena_branch) = self.get_branch(id) {
+                        let child_index = arena_branch.find_child_index(&key);
+                        if child_index < arena_branch.children.len() {
+                            (child_index, arena_branch.children[child_index].clone())
+                        } else {
+                            return InsertResult::Updated(None);
+                        }
                     } else {
-                        InsertResult::Updated(None)
+                        return InsertResult::Updated(None);
                     }
-                } else {
-                    InsertResult::Updated(None)
+                };
+                
+                // Recursively insert
+                let child_result = self.insert_recursive_with_arena(&child_ref, key, value);
+                
+                // Handle the result
+                match child_result {
+                    InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
+                    InsertResult::Split(old_value, new_node, separator_key) => {
+                        // Need to insert the new child into this branch
+                        if let Some(arena_branch) = self.get_branch_mut(id) {
+                            if let Some((new_branch_node, promoted_key)) = 
+                                arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
+                                // This branch split too
+                                InsertResult::Split(old_value, new_branch_node, promoted_key)
+                            } else {
+                                // No split needed
+                                InsertResult::Updated(old_value)
+                            }
+                        } else {
+                            InsertResult::Updated(old_value)
+                        }
+                    }
+                    InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
+                        // Allocate the new leaf
+                        let new_id = self.allocate_leaf(new_leaf_data);
+                        let new_node = NodeRef::ArenaLeaf(new_id);
+                        
+                        // Insert into this branch
+                        if let Some(arena_branch) = self.get_branch_mut(id) {
+                            if let Some((new_branch_node, promoted_key)) = 
+                                arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
+                                // This branch split too
+                                InsertResult::Split(old_value, new_branch_node, promoted_key)
+                            } else {
+                                // No split needed
+                                InsertResult::Updated(old_value)
+                            }
+                        } else {
+                            InsertResult::Updated(old_value)
+                        }
+                    }
                 }
             }
         }
@@ -990,8 +1063,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             match &self.root {
                 NodeRef::Branch(branch) => {
                     if branch.children.is_empty() {
-                        // Root branch has no children, replace with empty leaf
-                        self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
+                        // Root branch has no children, replace with empty arena leaf
+                        let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
+                        self.root = NodeRef::ArenaLeaf(empty_id);
                         break;
                     } else if branch.children.len() == 1 {
                         // Root branch has only one child, replace root with that child
@@ -1006,8 +1080,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 NodeRef::ArenaBranch(id) => {
                     if let Some(arena_branch) = self.get_branch(*id) {
                         if arena_branch.children.is_empty() {
-                            // Root branch has no children, replace with empty leaf
-                            self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
+                            // Root branch has no children, replace with empty arena leaf
+                            let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
+                            self.root = NodeRef::ArenaLeaf(empty_id);
                             break;
                         } else if arena_branch.children.len() == 1 {
                             // Root branch has only one child, replace root with that child
@@ -1019,8 +1094,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             break;
                         }
                     } else {
-                        // Missing arena branch, replace with empty leaf
-                        self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
+                        // Missing arena branch, replace with empty arena leaf
+                        let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
+                        self.root = NodeRef::ArenaLeaf(empty_id);
                         break;
                     }
                 }
