@@ -86,6 +86,7 @@ pub struct BPlusTreeMap<K, V> {
 #[derive(Debug, Clone)]
 pub enum NodeRef<K, V> {
     Leaf(Box<LeafNode<K, V>>),
+    ArenaLeaf(NodeId),
     Branch(Box<BranchNode<K, V>>),
 }
 
@@ -128,13 +129,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             )));
         }
 
+        // Initialize arena with the first leaf at id=1
+        let mut leaf_arena = Vec::new();
+        leaf_arena.push(None);  // Index 0 is reserved (NULL_NODE)
+        leaf_arena.push(Some(LeafNode::new(capacity)));  // First leaf at id=1
+
+        // Root is a clone of the first arena leaf
+        let root_leaf = leaf_arena[1].as_ref().unwrap().clone();
+
         Ok(Self {
             capacity,
-            root: NodeRef::Leaf(Box::new(LeafNode::new(capacity))),
-            // Initialize arena storage
-            leaf_arena: Vec::new(),
+            root: NodeRef::Leaf(Box::new(root_leaf)),
+            // Initialize arena storage with first leaf
+            leaf_arena,
             free_leaf_ids: Vec::new(),
-            next_leaf_id: 0,
+            next_leaf_id: 2,  // Next available id after the first leaf
         })
     }
 
@@ -187,6 +196,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
         match &mut self.root {
             NodeRef::Leaf(leaf) => leaf.get_mut(key),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => branch.get_mut(key),
         }
     }
@@ -198,6 +208,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn get_recursive<'a>(node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
         match node {
             NodeRef::Leaf(leaf) => leaf.get(key),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 if let Some(child) = branch.get_child(key) {
                     Self::get_recursive(child, key)
@@ -278,6 +289,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ) -> InsertResult<K, V> {
         match node {
             NodeRef::Leaf(leaf) => leaf.insert(key, value),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(&key);
 
@@ -347,6 +359,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ) -> (Option<V>, bool) {
         match node {
             NodeRef::Leaf(leaf) => leaf.remove_and_check_rebalancing(key, is_root),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 let child_index = branch.find_child_index(key);
                 let child = match branch.get_child_mut(key) {
@@ -384,6 +397,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Check if the child is actually empty and should be removed
         let child_is_empty = match &branch.children[child_index] {
             NodeRef::Leaf(leaf) => leaf.is_empty(),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(child_branch) => child_branch.children.is_empty(),
         };
 
@@ -419,6 +433,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Check if the child is actually underfull
         let child_is_underfull = match &branch.children[child_index] {
             NodeRef::Leaf(leaf) => leaf.is_underfull(),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(child_branch) => child_branch.is_underfull(),
         };
 
@@ -430,6 +445,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         if child_index > 0 {
             let can_borrow_from_left = match &branch.children[child_index - 1] {
                 NodeRef::Leaf(left_leaf) => left_leaf.can_donate(),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(left_branch) => left_branch.can_donate(),
             };
 
@@ -443,6 +459,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         if child_index < branch.children.len() - 1 {
             let can_borrow_from_right = match &branch.children[child_index + 1] {
                 NodeRef::Leaf(right_leaf) => right_leaf.can_donate(),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(right_branch) => right_branch.can_donate(),
             };
 
@@ -490,6 +507,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         // Update the separator key
                         branch.keys[child_index - 1] = key;
                     }
+                }
+                (NodeRef::ArenaLeaf(_), _) | (_, NodeRef::ArenaLeaf(_)) => {
+                    panic!("ArenaLeaf not yet implemented");
                 }
                 (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
                     // Move one key and child from left to right
@@ -539,6 +559,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         }
                     }
                 }
+                (NodeRef::ArenaLeaf(_), _) | (_, NodeRef::ArenaLeaf(_)) => {
+                    panic!("ArenaLeaf not yet implemented");
+                }
                 (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
                     // Move one key and child from right to left
                     if !right_branch.keys.is_empty() && !right_branch.children.is_empty() {
@@ -574,6 +597,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 left_leaf.keys.extend_from_slice(&right_leaf.keys);
                 left_leaf.values.extend_from_slice(&right_leaf.values);
             }
+            (NodeRef::ArenaLeaf(_), _) | (_, NodeRef::ArenaLeaf(_)) => {
+                panic!("ArenaLeaf not yet implemented");
+            }
             (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
                 // For branch nodes, the separator key becomes part of the merged node
                 left_branch.keys.push(separator_key);
@@ -603,6 +629,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 // Move all keys and values from right to left
                 left_leaf.keys.extend_from_slice(&right_leaf.keys);
                 left_leaf.values.extend_from_slice(&right_leaf.values);
+            }
+            (NodeRef::ArenaLeaf(_), _) | (_, NodeRef::ArenaLeaf(_)) => {
+                panic!("ArenaLeaf not yet implemented");
             }
             (NodeRef::Branch(left_branch), NodeRef::Branch(right_branch)) => {
                 // For branch nodes, the separator key becomes part of the merged node
@@ -644,6 +673,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     // Root is already a leaf, no collapse needed
                     break;
                 }
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             }
         }
     }
@@ -656,6 +686,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn len(&self) -> usize {
         match &self.root {
             NodeRef::Leaf(leaf) => leaf.len(),
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => branch.len(),
         }
     }
@@ -674,6 +705,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     pub fn leaf_count(&self) -> usize {
         match &self.root {
             NodeRef::Leaf(_) => 1,
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => branch.leaf_count(),
         }
     }
@@ -867,6 +899,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             NodeRef::Leaf(leaf) => {
                 sizes.push(leaf.keys.len());
             }
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 for child in &branch.children {
                     self.collect_leaf_sizes(child, sizes);
@@ -886,6 +919,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     leaf.keys.len()
                 );
             }
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 println!(
                     "{}Branch[{}]: {} keys, {} children",
@@ -953,6 +987,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
                 true
             }
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 // Check branch invariants
                 if branch.keys.len() + 1 != branch.children.len() {
@@ -1313,6 +1348,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         if child_index < self.children.len() {
             match &self.children[child_index] {
                 NodeRef::Leaf(leaf) => leaf.get(key),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(branch) => branch.get(key),
             }
         } else {
@@ -1326,6 +1362,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         if child_index < self.children.len() {
             match &mut self.children[child_index] {
                 NodeRef::Leaf(leaf) => leaf.get_mut(key),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(branch) => branch.get_mut(key),
             }
         } else {
@@ -1443,6 +1480,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         if child_index < self.children.len() {
             match &mut self.children[child_index] {
                 NodeRef::Leaf(leaf) => leaf.remove(key),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(branch) => branch.remove(key),
             }
         } else {
@@ -1512,6 +1550,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
             .iter()
             .map(|child| match child {
                 NodeRef::Leaf(leaf) => leaf.len(),
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(branch) => branch.len(),
             })
             .sum()
@@ -1523,6 +1562,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
             .iter()
             .map(|child| match child {
                 NodeRef::Leaf(_) => 1,
+                NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
                 NodeRef::Branch(branch) => branch.leaf_count(),
             })
             .sum()
@@ -1581,6 +1621,7 @@ impl<'a, K: Ord, V> ItemIterator<'a, K, V> {
                     items.push((key, value));
                 }
             }
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 for child in &branch.children {
                     Self::collect_items(child, items);
@@ -1684,6 +1725,7 @@ impl<'a, K: Ord, V> RangeIterator<'a, K, V> {
                     }
                 }
             }
+            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf not yet implemented"),
             NodeRef::Branch(branch) => {
                 for (i, child) in branch.children.iter().enumerate() {
                     // Check if this child could contain keys in our range

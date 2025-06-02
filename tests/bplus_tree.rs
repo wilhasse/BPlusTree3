@@ -831,10 +831,10 @@ fn test_arena_leaf_allocation() {
     let id2 = tree.allocate_leaf(leaf2);
     let id3 = tree.allocate_leaf(leaf3);
 
-    // IDs should be sequential starting from 0
-    assert_eq!(id1, 0, "First allocation should get ID 0");
-    assert_eq!(id2, 1, "Second allocation should get ID 1");
-    assert_eq!(id3, 2, "Third allocation should get ID 2");
+    // IDs should be sequential starting from 2 (since 0 is NULL and 1 is the initial arena leaf)
+    assert_eq!(id1, 2, "First allocation should get ID 2");
+    assert_eq!(id2, 3, "Second allocation should get ID 3");
+    assert_eq!(id3, 4, "Third allocation should get ID 4");
 
     // Test retrieval
     assert!(

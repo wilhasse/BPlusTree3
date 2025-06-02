@@ -38,7 +38,8 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(tree:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   },
