@@ -380,6 +380,633 @@ fn test_range_iterator() {
 
 // These tests will be implemented when we add the Node trait and specific node operations
 
+// ============================================================================
+// STEP 5: BASIC INSERT THROUGH BRANCHNODES
+// ============================================================================
+
+#[test]
+fn test_insert_through_branch_node() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // First, create a tree with a branch root by inserting enough items
+    // to cause a leaf split and root promotion
+    for i in 1..=5 {
+        tree.insert(i, format!("value_{}", i));
+    }
+
+    // Verify we have a branch root (not a leaf root)
+    assert!(
+        !tree.is_leaf_root(),
+        "Tree should have a branch root after inserting 5 items"
+    );
+
+    // Now insert a new item that should traverse through the branch node
+    // to reach the appropriate leaf
+    let old_value = tree.insert(3, "updated_value_3".to_string());
+
+    // Verify the insertion worked correctly
+    assert_eq!(
+        old_value,
+        Some("value_3".to_string()),
+        "Should return old value when updating existing key"
+    );
+    assert_eq!(
+        tree.get(&3),
+        Some(&"updated_value_3".to_string()),
+        "Updated value should be retrievable"
+    );
+
+    // Insert a completely new key that should also traverse through branch
+    let old_value = tree.insert(6, "value_6".to_string());
+    assert_eq!(old_value, None, "Should return None when inserting new key");
+    assert_eq!(
+        tree.get(&6),
+        Some(&"value_6".to_string()),
+        "New value should be retrievable"
+    );
+
+    // Verify tree structure is still valid
+    assert!(
+        tree.check_invariants(),
+        "Tree should maintain invariants after insertions through branch"
+    );
+    assert_eq!(tree.len(), 6, "Tree should have 6 items");
+}
+
+// ============================================================================
+// STEP 6: LEAF SPLITTING WITH PARENT UPDATES
+// ============================================================================
+
+#[test]
+fn test_leaf_split_updates_parent_branch() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // First, create a tree with a branch root by inserting enough items
+    // to cause a leaf split and root promotion
+    for i in 1..=5 {
+        tree.insert(i, format!("value_{}", i));
+    }
+
+    // Verify we have a branch root
+    assert!(!tree.is_leaf_root(), "Tree should have a branch root");
+    let initial_leaf_count = tree.leaf_count();
+
+    // Now insert enough items to cause another leaf split
+    // This should update the parent branch node with a new separator key
+    for i in 6..=9 {
+        tree.insert(i, format!("value_{}", i));
+    }
+
+    // Verify that a leaf split occurred (more leaf nodes)
+    let final_leaf_count = tree.leaf_count();
+    assert!(
+        final_leaf_count > initial_leaf_count,
+        "Should have more leaf nodes after causing another split. Initial: {}, Final: {}",
+        initial_leaf_count,
+        final_leaf_count
+    );
+
+    // Verify all items are still accessible
+    for i in 1..=9 {
+        assert_eq!(
+            tree.get(&i),
+            Some(&format!("value_{}", i)),
+            "Item {} should be accessible after leaf split",
+            i
+        );
+    }
+
+    // Verify tree structure is still valid
+    assert!(
+        tree.check_invariants(),
+        "Tree should maintain invariants after leaf split with parent update"
+    );
+    assert_eq!(tree.len(), 9, "Tree should have 9 items");
+
+    // Verify that the range query works correctly across the split
+    let range: Vec<_> = tree.range(Some(&1), Some(&10)).collect();
+    assert_eq!(range.len(), 9, "Range query should return all 9 items");
+
+    // Verify items are in sorted order
+    for i in 0..range.len() - 1 {
+        assert!(
+            range[i].0 < range[i + 1].0,
+            "Items should be in sorted order: {:?} should be < {:?}",
+            range[i].0,
+            range[i + 1].0
+        );
+    }
+}
+
+// ============================================================================
+// STEP 7: ROOT PROMOTION (LEAF TO BRANCH)
+// ============================================================================
+
+#[test]
+fn test_root_promotion_leaf_to_branch() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // Initially, the tree should have a leaf root
+    assert!(
+        tree.is_leaf_root(),
+        "New tree should start with a leaf root"
+    );
+    assert_eq!(tree.leaf_count(), 1, "New tree should have exactly 1 leaf");
+
+    // Insert items one by one and track when root promotion occurs
+    tree.insert(1, "value_1".to_string());
+    assert!(
+        tree.is_leaf_root(),
+        "Tree should still have leaf root after 1 item"
+    );
+
+    tree.insert(2, "value_2".to_string());
+    assert!(
+        tree.is_leaf_root(),
+        "Tree should still have leaf root after 2 items"
+    );
+
+    tree.insert(3, "value_3".to_string());
+    assert!(
+        tree.is_leaf_root(),
+        "Tree should still have leaf root after 3 items"
+    );
+
+    tree.insert(4, "value_4".to_string());
+    assert!(
+        tree.is_leaf_root(),
+        "Tree should still have leaf root after 4 items (at capacity)"
+    );
+
+    // This insertion should cause the root leaf to split and promote to a branch
+    tree.insert(5, "value_5".to_string());
+    assert!(
+        !tree.is_leaf_root(),
+        "Tree should have branch root after exceeding leaf capacity"
+    );
+    assert!(
+        tree.leaf_count() >= 2,
+        "Tree should have at least 2 leaves after root split"
+    );
+
+    // Verify all data is still accessible after root promotion
+    for i in 1..=5 {
+        assert_eq!(
+            tree.get(&i),
+            Some(&format!("value_{}", i)),
+            "Item {} should be accessible after root promotion",
+            i
+        );
+    }
+
+    // Verify tree structure is valid
+    assert!(
+        tree.check_invariants(),
+        "Tree should maintain invariants after root promotion"
+    );
+    assert_eq!(tree.len(), 5, "Tree should have 5 items");
+
+    // Verify that operations still work correctly after root promotion
+    let old_value = tree.insert(3, "updated_value_3".to_string());
+    assert_eq!(
+        old_value,
+        Some("value_3".to_string()),
+        "Should be able to update existing key"
+    );
+
+    let new_value = tree.insert(6, "value_6".to_string());
+    assert_eq!(new_value, None, "Should be able to insert new key");
+
+    // Verify range queries work across the promoted structure
+    let range: Vec<_> = tree.range(Some(&1), Some(&7)).collect();
+    assert_eq!(range.len(), 6, "Range query should return all 6 items");
+
+    // Verify items are in sorted order
+    for i in 0..range.len() - 1 {
+        assert!(
+            range[i].0 < range[i + 1].0,
+            "Items should be in sorted order after root promotion"
+        );
+    }
+}
+
+// ============================================================================
+// STEP 8: BRANCHNODE SPLITTING
+// ============================================================================
+
+#[test]
+fn test_branch_node_split_creates_new_level() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // Insert enough items to create a multi-level tree structure
+    // This should eventually cause branch node splits
+    let mut items_inserted = 0;
+    let initial_leaf_count = tree.leaf_count();
+
+    // Insert items until we have a significant tree structure
+    // With capacity 4, we need enough items to fill multiple branch nodes
+    for i in 1..=25 {
+        tree.insert(i, format!("value_{}", i));
+        items_inserted += 1;
+
+        // Verify invariants are maintained after each insertion
+        assert!(
+            tree.check_invariants(),
+            "Tree invariants should be maintained after inserting item {}",
+            i
+        );
+    }
+
+    // Verify we have more leaf nodes than we started with
+    let final_leaf_count = tree.leaf_count();
+    assert!(
+        final_leaf_count > initial_leaf_count,
+        "Should have more leaf nodes after inserting {} items. Initial: {}, Final: {}",
+        items_inserted,
+        initial_leaf_count,
+        final_leaf_count
+    );
+
+    // Verify we have a branch root (not a leaf root)
+    assert!(
+        !tree.is_leaf_root(),
+        "Tree should have a branch root after inserting {} items",
+        items_inserted
+    );
+
+    // Verify all items are still accessible
+    for i in 1..=25 {
+        assert_eq!(
+            tree.get(&i),
+            Some(&format!("value_{}", i)),
+            "Item {} should be accessible in multi-level tree",
+            i
+        );
+    }
+
+    // Verify tree structure and size
+    assert_eq!(tree.len(), 25, "Tree should have 25 items");
+
+    // Verify range queries work correctly across the complex structure
+    let range: Vec<_> = tree.range(Some(&1), Some(&26)).collect();
+    assert_eq!(range.len(), 25, "Range query should return all 25 items");
+
+    // Verify items are in sorted order
+    for i in 0..range.len() - 1 {
+        assert!(
+            range[i].0 < range[i + 1].0,
+            "Items should be in sorted order in multi-level tree"
+        );
+    }
+
+    // Test some additional operations to ensure the tree is fully functional
+    let old_value = tree.insert(13, "updated_value_13".to_string());
+    assert_eq!(
+        old_value,
+        Some("value_13".to_string()),
+        "Should be able to update existing key in multi-level tree"
+    );
+
+    let new_value = tree.insert(26, "value_26".to_string());
+    assert_eq!(
+        new_value, None,
+        "Should be able to insert new key in multi-level tree"
+    );
+
+    // Final invariant check
+    assert!(
+        tree.check_invariants(),
+        "Tree should maintain invariants after all operations in multi-level structure"
+    );
+}
+
+// ============================================================================
+// STEP 9: COMPREHENSIVE INSERT TESTING
+// ============================================================================
+
+#[test]
+fn test_comprehensive_insert_scenarios() {
+    // Test with different branching factors
+    for capacity in [4, 8, 16] {
+        println!(
+            "Testing comprehensive insert scenarios with capacity {}",
+            capacity
+        );
+
+        let mut tree = BPlusTreeMap::new(capacity).unwrap();
+
+        // Test 1: Sequential insertion (ascending order)
+        for i in 1..=50 {
+            tree.insert(i, format!("seq_value_{}", i));
+            assert!(
+                tree.check_invariants(),
+                "Sequential insert {} failed invariants with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Verify all sequential items are accessible
+        for i in 1..=50 {
+            assert_eq!(
+                tree.get(&i),
+                Some(&format!("seq_value_{}", i)),
+                "Sequential item {} not found with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Test 2: Reverse insertion (descending order)
+        let mut tree2 = BPlusTreeMap::new(capacity).unwrap();
+        for i in (1..=50).rev() {
+            tree2.insert(i, format!("rev_value_{}", i));
+            assert!(
+                tree2.check_invariants(),
+                "Reverse insert {} failed invariants with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Verify all reverse items are accessible
+        for i in 1..=50 {
+            assert_eq!(
+                tree2.get(&i),
+                Some(&format!("rev_value_{}", i)),
+                "Reverse item {} not found with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Test 3: Random-ish insertion (deterministic pattern)
+        let mut tree3 = BPlusTreeMap::new(capacity).unwrap();
+        let mut keys: Vec<i32> = (1..=50).collect();
+        // Simple deterministic shuffle for reproducibility
+        for i in 0..keys.len() {
+            let j = (i * 17) % keys.len();
+            keys.swap(i, j);
+        }
+
+        for key in &keys {
+            tree3.insert(*key, format!("rand_value_{}", key));
+            assert!(
+                tree3.check_invariants(),
+                "Random insert {} failed invariants with capacity {}",
+                key,
+                capacity
+            );
+        }
+
+        // Verify all random items are accessible
+        for i in 1..=50 {
+            assert_eq!(
+                tree3.get(&i),
+                Some(&format!("rand_value_{}", i)),
+                "Random item {} not found with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Test 4: Multiple updates to same keys
+        for i in 1..=25 {
+            let old_value = tree3.insert(i, format!("updated_value_{}", i));
+            assert_eq!(
+                old_value,
+                Some(format!("rand_value_{}", i)),
+                "Update {} should return old value with capacity {}",
+                i,
+                capacity
+            );
+            assert!(
+                tree3.check_invariants(),
+                "Update {} failed invariants with capacity {}",
+                i,
+                capacity
+            );
+        }
+
+        // Verify final state
+        assert_eq!(tree.len(), 50, "Sequential tree should have 50 items");
+        assert_eq!(tree2.len(), 50, "Reverse tree should have 50 items");
+        assert_eq!(tree3.len(), 50, "Random tree should have 50 items");
+
+        // Test range queries on all trees
+        let range1: Vec<_> = tree.range(Some(&10), Some(&20)).collect();
+        let range2: Vec<_> = tree2.range(Some(&10), Some(&20)).collect();
+        let range3: Vec<_> = tree3.range(Some(&10), Some(&20)).collect();
+
+        assert_eq!(
+            range1.len(),
+            10,
+            "Sequential tree range should have 10 items"
+        );
+        assert_eq!(range2.len(), 10, "Reverse tree range should have 10 items");
+        assert_eq!(range3.len(), 10, "Random tree range should have 10 items");
+
+        println!(
+            "✓ Capacity {} passed all comprehensive insert tests",
+            capacity
+        );
+    }
+}
+
+// ============================================================================
+// ARENA-BASED ALLOCATION TESTS
+// ============================================================================
+
+#[test]
+fn test_arena_leaf_allocation() {
+    let mut tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
+
+    // Create some leaf nodes to allocate
+    let leaf1 = bplustree3::LeafNode::new(4);
+    let leaf2 = bplustree3::LeafNode::new(4);
+    let leaf3 = bplustree3::LeafNode::new(4);
+
+    // Test allocation
+    let id1 = tree.allocate_leaf(leaf1);
+    let id2 = tree.allocate_leaf(leaf2);
+    let id3 = tree.allocate_leaf(leaf3);
+
+    // IDs should be sequential starting from 0
+    assert_eq!(id1, 0, "First allocation should get ID 0");
+    assert_eq!(id2, 1, "Second allocation should get ID 1");
+    assert_eq!(id3, 2, "Third allocation should get ID 2");
+
+    // Test retrieval
+    assert!(
+        tree.get_leaf(id1).is_some(),
+        "Should be able to retrieve leaf 1"
+    );
+    assert!(
+        tree.get_leaf(id2).is_some(),
+        "Should be able to retrieve leaf 2"
+    );
+    assert!(
+        tree.get_leaf(id3).is_some(),
+        "Should be able to retrieve leaf 3"
+    );
+    assert!(
+        tree.get_leaf(999).is_none(),
+        "Should return None for invalid ID"
+    );
+
+    // Test mutable retrieval
+    assert!(
+        tree.get_leaf_mut(id1).is_some(),
+        "Should be able to retrieve mutable leaf 1"
+    );
+    assert!(
+        tree.get_leaf_mut(id2).is_some(),
+        "Should be able to retrieve mutable leaf 2"
+    );
+    assert!(
+        tree.get_leaf_mut(id3).is_some(),
+        "Should be able to retrieve mutable leaf 3"
+    );
+    assert!(
+        tree.get_leaf_mut(999).is_none(),
+        "Should return None for invalid mutable ID"
+    );
+
+    // Test deallocation
+    let deallocated = tree.deallocate_leaf(id2);
+    assert!(deallocated.is_some(), "Should be able to deallocate leaf 2");
+    assert!(
+        tree.get_leaf(id2).is_none(),
+        "Deallocated leaf should not be retrievable"
+    );
+
+    // Test reuse of deallocated ID
+    let leaf4 = bplustree3::LeafNode::new(4);
+    let id4 = tree.allocate_leaf(leaf4);
+    assert_eq!(id4, id2, "Should reuse the deallocated ID");
+    assert!(
+        tree.get_leaf(id4).is_some(),
+        "Should be able to retrieve reused leaf"
+    );
+
+    // Test double deallocation
+    let deallocated_again = tree.deallocate_leaf(id4); // Use id4 since id2 was reused
+    assert!(
+        deallocated_again.is_some(),
+        "Should be able to deallocate the reused leaf"
+    );
+
+    // Now test actual double deallocation
+    let double_deallocated = tree.deallocate_leaf(id4);
+    assert!(
+        double_deallocated.is_none(),
+        "Double deallocation should return None"
+    );
+}
+
+#[test]
+fn test_leaf_linked_list() {
+    let mut tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
+
+    // Create three leaf nodes
+    let leaf1 = bplustree3::LeafNode::new(4);
+    let leaf2 = bplustree3::LeafNode::new(4);
+    let leaf3 = bplustree3::LeafNode::new(4);
+
+    let id1 = tree.allocate_leaf(leaf1);
+    let id2 = tree.allocate_leaf(leaf2);
+    let id3 = tree.allocate_leaf(leaf3);
+
+    // Initially, all next pointers should be NULL
+    assert_eq!(tree.get_leaf_next(id1), None, "Initial next should be None");
+    assert_eq!(tree.get_leaf_next(id2), None, "Initial next should be None");
+    assert_eq!(tree.get_leaf_next(id3), None, "Initial next should be None");
+
+    // Set up a linked list: id1 -> id2 -> id3 -> NULL
+    assert!(
+        tree.set_leaf_next(id1, id2),
+        "Should be able to set next pointer"
+    );
+    assert!(
+        tree.set_leaf_next(id2, id3),
+        "Should be able to set next pointer"
+    );
+
+    // Verify the linked list structure
+    assert_eq!(
+        tree.get_leaf_next(id1),
+        Some(id2),
+        "id1 should point to id2"
+    );
+    assert_eq!(
+        tree.get_leaf_next(id2),
+        Some(id3),
+        "id2 should point to id3"
+    );
+    assert_eq!(tree.get_leaf_next(id3), None, "id3 should point to NULL");
+
+    // Test setting next to NULL_NODE explicitly
+    assert!(
+        tree.set_leaf_next(id2, bplustree3::NULL_NODE),
+        "Should be able to set next to NULL"
+    );
+    assert_eq!(
+        tree.get_leaf_next(id2),
+        None,
+        "id2 should now point to NULL"
+    );
+
+    // Test invalid operations
+    assert!(
+        !tree.set_leaf_next(999, id1),
+        "Should fail to set next on invalid ID"
+    );
+    assert_eq!(
+        tree.get_leaf_next(999),
+        None,
+        "Should return None for invalid ID"
+    );
+
+    // Restore the chain: id1 -> id2 -> id3 -> NULL
+    assert!(
+        tree.set_leaf_next(id2, id3),
+        "Should be able to restore chain"
+    );
+
+    // Test circular reference (id3 -> id1)
+    assert!(
+        tree.set_leaf_next(id3, id1),
+        "Should be able to create circular reference"
+    );
+    assert_eq!(
+        tree.get_leaf_next(id3),
+        Some(id1),
+        "id3 should point to id1"
+    );
+
+    // Verify we can traverse the circular structure: id1 -> id2 -> id3 -> id1 (cycle)
+    let mut current = Some(id1);
+    let mut visited = std::collections::HashSet::new();
+    let mut count = 0;
+
+    while let Some(node_id) = current {
+        if visited.contains(&node_id) || count > 10 {
+            break; // Prevent infinite loop
+        }
+        visited.insert(node_id);
+        current = tree.get_leaf_next(node_id);
+        count += 1;
+    }
+
+    assert_eq!(
+        count, 3,
+        "Should visit exactly 3 nodes before hitting the cycle"
+    );
+    assert!(visited.contains(&id1), "Should have visited id1");
+    assert!(visited.contains(&id2), "Should have visited id2");
+    assert!(visited.contains(&id3), "Should have visited id3");
+}
+
 // TODO: Implement test_leaf_node_creation
 // TODO: Implement test_leaf_node_insert
 // TODO: Implement test_leaf_node_full

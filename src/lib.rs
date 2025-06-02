@@ -80,14 +80,6 @@ pub struct BPlusTreeMap<K, V> {
     free_leaf_ids: Vec<NodeId>,
     /// Next leaf node ID to allocate.
     next_leaf_id: NodeId,
-
-    // Arena-based allocation for branch nodes (for future use)
-    /// Arena storage for branch nodes.
-    branch_arena: Vec<Option<BranchNode<K, V>>>,
-    /// Free branch node IDs available for reuse.
-    free_branch_ids: Vec<NodeId>,
-    /// Next branch node ID to allocate.
-    next_branch_id: NodeId,
 }
 
 /// Node reference that can be either a leaf or branch node
@@ -143,9 +135,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             leaf_arena: Vec::new(),
             free_leaf_ids: Vec::new(),
             next_leaf_id: 0,
-            branch_arena: Vec::new(),
-            free_branch_ids: Vec::new(),
-            next_branch_id: 0,
         })
     }
 
@@ -740,6 +729,98 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
+    // ARENA-BASED ALLOCATION FOR LEAF NODES
+    // ============================================================================
+
+    /// Allocate a new leaf node in the arena and return its ID.
+    pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
+        // Try to reuse a free ID first
+        if let Some(id) = self.free_leaf_ids.pop() {
+            // Reuse existing slot
+            if id as usize >= self.leaf_arena.len() {
+                // Extend arena if needed
+                self.leaf_arena.resize(id as usize + 1, None);
+            }
+            self.leaf_arena[id as usize] = Some(leaf);
+            id
+        } else {
+            // Allocate new ID
+            let id = self.next_leaf_id;
+            self.next_leaf_id += 1;
+
+            // Extend arena if needed
+            if id as usize >= self.leaf_arena.len() {
+                self.leaf_arena.resize(id as usize + 1, None);
+            }
+            self.leaf_arena[id as usize] = Some(leaf);
+            id
+        }
+    }
+
+    /// Deallocate a leaf node from the arena.
+    pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {
+        if (id as usize) < self.leaf_arena.len() {
+            if let Some(leaf) = self.leaf_arena[id as usize].take() {
+                self.free_leaf_ids.push(id);
+                Some(leaf)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get a reference to a leaf node in the arena.
+    pub fn get_leaf(&self, id: NodeId) -> Option<&LeafNode<K, V>> {
+        if (id as usize) < self.leaf_arena.len() {
+            self.leaf_arena[id as usize].as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Get a mutable reference to a leaf node in the arena.
+    pub fn get_leaf_mut(&mut self, id: NodeId) -> Option<&mut LeafNode<K, V>> {
+        if (id as usize) < self.leaf_arena.len() {
+            self.leaf_arena[id as usize].as_mut()
+        } else {
+            None
+        }
+    }
+
+    /// Set the next pointer of a leaf node in the arena.
+    pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
+        if let Some(leaf) = self.get_leaf_mut(id) {
+            leaf.next = next_id;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get the next pointer of a leaf node in the arena.
+    pub fn get_leaf_next(&self, id: NodeId) -> Option<NodeId> {
+        if let Some(leaf) = self.get_leaf(id) {
+            if leaf.next == NULL_NODE {
+                None
+            } else {
+                Some(leaf.next)
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Find the first leaf node in the arena (for range queries).
+    /// This is a temporary method until we fully migrate to arena-based allocation.
+    pub fn find_first_leaf_id(&self) -> Option<NodeId> {
+        // For now, we don't have a first leaf in the arena since we're still using Box-based allocation
+        // This will be implemented when we migrate the tree structure to use arena allocation
+        None
+    }
+
+    // ============================================================================
     // OTHER HELPERS (TEST HELPERS)
     // ============================================================================
 
@@ -946,6 +1027,8 @@ pub struct LeafNode<K, V> {
     keys: Vec<K>,
     /// List of values corresponding to keys.
     values: Vec<V>,
+    /// Next leaf node in the linked list (for range queries).
+    next: NodeId,
 }
 
 /// Internal (branch) node containing keys and child pointers.
@@ -970,7 +1053,23 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             capacity,
             keys: Vec::new(),
             values: Vec::new(),
+            next: NULL_NODE,
         }
+    }
+
+    /// Get a reference to the keys in this leaf node.
+    pub fn keys(&self) -> &Vec<K> {
+        &self.keys
+    }
+
+    /// Get a reference to the values in this leaf node.
+    pub fn values(&self) -> &Vec<V> {
+        &self.values
+    }
+
+    /// Get a mutable reference to the values in this leaf node.
+    pub fn values_mut(&mut self) -> &mut Vec<V> {
+        &mut self.values
     }
 
     // ============================================================================
