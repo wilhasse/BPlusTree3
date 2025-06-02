@@ -96,6 +96,12 @@ pub enum InsertResult<K, V> {
     Updated(Option<V>),
     /// Insertion caused a split. Contains the old value and the new node with separator key.
     Split(Option<V>, NodeRef<K, V>, K),
+    /// Insertion caused a split with arena allocation needed.
+    SplitWithArena {
+        old_value: Option<V>,
+        new_leaf_data: LeafNode<K, V>,
+        separator_key: K,
+    },
 }
 
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
@@ -275,12 +281,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 match result {
                     InsertResult::Updated(old_value) => return old_value,
                     InsertResult::Split(_old_value, _new_node, _separator_key) => {
-                        // For now, convert ArenaLeaf root to regular Leaf before splitting
-                        // This is a temporary solution for Stage 3
-                        let leaf_clone = self.get_leaf(id).unwrap().clone();
-                        self.root = NodeRef::Leaf(Box::new(leaf_clone));
-                        // Now re-run the insert to trigger the split properly
-                        return self.insert(key, value);
+                        // This shouldn't happen anymore with new design
+                        panic!("Unexpected Split from arena leaf - should be SplitWithArena");
+                    }
+                    InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
+                        // Allocate the new leaf in arena
+                        let new_id = self.allocate_leaf(new_leaf_data);
+                        let new_node_ref = NodeRef::ArenaLeaf(new_id);
+                        let new_root = self.new_root(new_node_ref, separator_key);
+                        self.root = NodeRef::Branch(Box::new(new_root));
+                        return old_value;
                     }
                 }
             }
@@ -292,6 +302,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             InsertResult::Updated(old_value) => old_value,
             InsertResult::Split(old_value, new_node, separator_key) => {
                 let new_root = self.new_root(new_node, separator_key);
+                self.root = NodeRef::Branch(Box::new(new_root));
+                old_value
+            }
+            InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
+                // Allocate the new leaf in arena AFTER recursion
+                let new_id = self.allocate_leaf(new_leaf_data);
+                let new_node_ref = NodeRef::ArenaLeaf(new_id);
+                let new_root = self.new_root(new_node_ref, separator_key);
                 self.root = NodeRef::Branch(Box::new(new_root));
                 old_value
             }
@@ -342,6 +360,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 match child_result {
                     InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
                     InsertResult::Split(old_value, new_child, separator_key) => {
+                        // Insert the new child and separator into this branch
+                        match branch.insert_child_and_split_if_needed(
+                            child_index,
+                            separator_key,
+                            new_child,
+                        ) {
+                            None => InsertResult::Updated(old_value),
+                            Some((new_node, branch_separator_key)) => {
+                                InsertResult::Split(old_value, new_node, branch_separator_key)
+                            }
+                        }
+                    }
+                    InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
+                        // Convert arena allocation to regular Box allocation for now
+                        // This is a temporary solution until we fully implement arena allocation in tree structure
+                        let new_child = NodeRef::Leaf(Box::new(new_leaf_data));
+                        
                         // Insert the new child and separator into this branch
                         match branch.insert_child_and_split_if_needed(
                             child_index,
@@ -1283,9 +1318,14 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
                 if self.needs_split() {
                     // Leaf has too many keys, need to split
-                    let new_leaf = self.split();
-                    let separator_key = new_leaf.keys[0].clone();
-                    InsertResult::Split(None, NodeRef::Leaf(new_leaf), separator_key)
+                    let new_leaf_box = self.split();
+                    let separator_key = new_leaf_box.keys[0].clone();
+                    // Return the leaf data for arena allocation
+                    InsertResult::SplitWithArena { 
+                        old_value: None, 
+                        new_leaf_data: *new_leaf_box, 
+                        separator_key 
+                    }
                 } else {
                     // Simple insertion - no split needed
                     InsertResult::Updated(None)
