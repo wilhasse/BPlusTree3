@@ -134,12 +134,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         leaf_arena.push(None);  // Index 0 is reserved (NULL_NODE)
         leaf_arena.push(Some(LeafNode::new(capacity)));  // First leaf at id=1
 
-        // Root is a clone of the first arena leaf
-        let root_leaf = leaf_arena[1].as_ref().unwrap().clone();
-
         Ok(Self {
             capacity,
-            root: NodeRef::Leaf(Box::new(root_leaf)),
+            root: NodeRef::ArenaLeaf(1),  // Root points to the arena leaf at id=1
             // Initialize arena storage with first leaf
             leaf_arena,
             free_leaf_ids: Vec::new(),
@@ -269,6 +266,26 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let capacity = self.capacity;
+        
+        // Special handling for ArenaLeaf root
+        if let NodeRef::ArenaLeaf(id) = &self.root {
+            let id = *id;
+            if let Some(arena_leaf) = self.get_leaf_mut(id) {
+                let result = arena_leaf.insert(key.clone(), value.clone());
+                match result {
+                    InsertResult::Updated(old_value) => return old_value,
+                    InsertResult::Split(_old_value, _new_node, _separator_key) => {
+                        // For now, convert ArenaLeaf root to regular Leaf before splitting
+                        // This is a temporary solution for Stage 3
+                        let leaf_clone = self.get_leaf(id).unwrap().clone();
+                        self.root = NodeRef::Leaf(Box::new(leaf_clone));
+                        // Now re-run the insert to trigger the split properly
+                        return self.insert(key, value);
+                    }
+                }
+            }
+        }
+        
         let result = Self::insert_recursive(&mut self.root, key, value, capacity);
 
         match result {
@@ -349,6 +366,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Remove a key from the tree.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         let capacity = self.capacity;
+        
+        // Special handling for ArenaLeaf root
+        if let NodeRef::ArenaLeaf(id) = &self.root {
+            let id = *id;
+            if let Some(arena_leaf) = self.get_leaf_mut(id) {
+                return arena_leaf.remove(key);
+            }
+        }
+        
         let (removed_value, _needs_rebalancing) =
             Self::remove_recursive(&mut self.root, key, capacity, true);
 
@@ -746,7 +772,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Clear all items from the tree.
     pub fn clear(&mut self) {
-        self.root = NodeRef::Leaf(Box::new(LeafNode::new(self.capacity)));
+        // Clear the existing arena leaf at id=1
+        if let Some(arena_leaf) = self.get_leaf_mut(1) {
+            arena_leaf.keys.clear();
+            arena_leaf.values.clear();
+            arena_leaf.next = NULL_NODE;
+        }
+        // Reset root to point to the cleared arena leaf
+        self.root = NodeRef::ArenaLeaf(1);
     }
 
     /// Returns an iterator over all key-value pairs in sorted order.
@@ -1705,24 +1738,30 @@ pub struct ItemIterator<'a, K, V> {
     index: usize,
 }
 
-impl<'a, K: Ord, V> ItemIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         let mut items = Vec::new();
-        Self::collect_items(&tree.root, &mut items);
+        Self::collect_items(tree, &tree.root, &mut items);
         Self { items, index: 0 }
     }
 
-    fn collect_items(node: &'a NodeRef<K, V>, items: &mut Vec<(&'a K, &'a V)>) {
+    fn collect_items(tree: &'a BPlusTreeMap<K, V>, node: &'a NodeRef<K, V>, items: &mut Vec<(&'a K, &'a V)>) {
         match node {
             NodeRef::Leaf(leaf) => {
                 for (key, value) in leaf.keys.iter().zip(leaf.values.iter()) {
                     items.push((key, value));
                 }
             }
-            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf iteration not yet implemented - requires tree context"),
+            NodeRef::ArenaLeaf(id) => {
+                if let Some(arena_leaf) = tree.get_leaf(*id) {
+                    for (key, value) in arena_leaf.keys.iter().zip(arena_leaf.values.iter()) {
+                        items.push((key, value));
+                    }
+                }
+            }
             NodeRef::Branch(branch) => {
                 for child in &branch.children {
-                    Self::collect_items(child, items);
+                    Self::collect_items(tree, child, items);
                 }
             }
         }
@@ -1748,7 +1787,7 @@ pub struct KeyIterator<'a, K, V> {
     items: ItemIterator<'a, K, V>,
 }
 
-impl<'a, K: Ord, V> KeyIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> KeyIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         Self {
             items: ItemIterator::new(tree),
@@ -1769,7 +1808,7 @@ pub struct ValueIterator<'a, K, V> {
     items: ItemIterator<'a, K, V>,
 }
 
-impl<'a, K: Ord, V> ValueIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> ValueIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         Self {
             items: ItemIterator::new(tree),
@@ -1792,14 +1831,15 @@ pub struct RangeIterator<'a, K, V> {
     index: usize,
 }
 
-impl<'a, K: Ord, V> RangeIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>, start_key: Option<&K>, end_key: Option<&'a K>) -> Self {
         let mut items = Vec::new();
-        Self::collect_range_items(&tree.root, start_key, end_key, &mut items);
+        Self::collect_range_items(tree, &tree.root, start_key, end_key, &mut items);
         Self { items, index: 0 }
     }
 
     fn collect_range_items(
+        tree: &'a BPlusTreeMap<K, V>,
         node: &'a NodeRef<K, V>,
         start_key: Option<&K>,
         end_key: Option<&K>,
@@ -1823,7 +1863,25 @@ impl<'a, K: Ord, V> RangeIterator<'a, K, V> {
                     }
                 }
             }
-            NodeRef::ArenaLeaf(_) => panic!("ArenaLeaf iteration not yet implemented - requires tree context"),
+            NodeRef::ArenaLeaf(id) => {
+                if let Some(arena_leaf) = tree.get_leaf(*id) {
+                    for (key, value) in arena_leaf.keys.iter().zip(arena_leaf.values.iter()) {
+                        // Early termination if we've passed the end key
+                        if let Some(end) = end_key {
+                            if key >= end {
+                                return; // Stop collecting, we've gone past the range
+                            }
+                        }
+
+                        // Check if key is after start
+                        let after_start = start_key.map_or(true, |start| key >= start);
+
+                        if after_start {
+                            items.push((key, value));
+                        }
+                    }
+                }
+            }
             NodeRef::Branch(branch) => {
                 for (i, child) in branch.children.iter().enumerate() {
                     // Check if this child could contain keys in our range
@@ -1853,7 +1911,7 @@ impl<'a, K: Ord, V> RangeIterator<'a, K, V> {
                     }
 
                     // This child might contain keys in our range
-                    Self::collect_range_items(child, start_key, end_key, items);
+                    Self::collect_range_items(tree, child, start_key, end_key, items);
 
                     // Early termination: if we have an end key and this child's max >= end,
                     // we don't need to check further children
