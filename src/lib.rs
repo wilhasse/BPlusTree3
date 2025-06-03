@@ -334,12 +334,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             SplitNodeData::Leaf(new_leaf_data) => {
                                 // Allocate the new leaf in arena
                                 let new_id = self.allocate_leaf(new_leaf_data);
-                                
+
                                 // Update linked list pointers for root leaf split
                                 if let Some(original_leaf) = self.get_leaf_mut(id) {
                                     original_leaf.next = new_id;
                                 }
-                                
+
                                 let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
                                 let new_root = self.new_root(new_node_ref, separator_key);
                                 // Allocate new root in branch arena
@@ -402,7 +402,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     let new_node_ref = match new_node_data {
                         SplitNodeData::Leaf(new_leaf_data) => {
                             let new_id = self.allocate_leaf(new_leaf_data);
-                            
+
                             // Update linked list pointers for leaf splits
                             if let NodeRef::Leaf(original_id, _) = child_ref {
                                 // Update the original leaf's next pointer to point to the new leaf
@@ -410,7 +410,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                     original_leaf.next = new_id;
                                 }
                             }
-                            
+
                             NodeRef::Leaf(new_id, PhantomData)
                         }
                         SplitNodeData::Branch(new_branch_data) => {
@@ -495,11 +495,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             return removed;
         }
 
-        // No fallback needed - all nodes are arena-based
         None
     }
 
-    /// Remove from an arena branch node with proper rebalancing
+    /// Remove a key from a branch node with rebalancing
     fn remove_from_branch(&mut self, branch_id: NodeId, key: &K) -> Option<V> {
         // Find child index
         let child_index = {
@@ -1242,7 +1241,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         let new_node = match new_node_data {
                             SplitNodeData::Leaf(new_leaf_data) => {
                                 let new_id = self.allocate_leaf(new_leaf_data);
-                                
+
                                 // Update linked list pointers for leaf splits
                                 if let NodeRef::Leaf(original_id, _) = child_ref {
                                     // Update the original leaf's next pointer to point to the new leaf
@@ -1250,7 +1249,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                                         original_leaf.next = new_id;
                                     }
                                 }
-                                
+
                                 NodeRef::Leaf(new_id, PhantomData)
                             }
                             SplitNodeData::Branch(new_branch_data) => {
@@ -1533,7 +1532,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None
         }
     }
-
 
     // ============================================================================
     // ARENA-BASED ALLOCATION FOR BRANCH NODES
@@ -1914,7 +1912,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                     // Leaf is at capacity, split first then insert
                     let mut new_leaf_data = self.split();
                     let separator_key = new_leaf_data.keys[0].clone();
-                    
+
                     // Determine which leaf should receive the new key
                     if key < separator_key {
                         // Insert into the current (left) leaf
@@ -1928,7 +1926,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                             }
                         }
                     }
-                    
+
                     // Return the leaf data for arena allocation
                     InsertResult::Split {
                         old_value: None,
@@ -1980,7 +1978,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         // Move right half of keys/values to new leaf
         new_leaf.keys = self.keys.split_off(mid);
         new_leaf.values = self.values.split_off(mid);
-        
+
         // Maintain the linked list: new leaf inherits our next pointer
         new_leaf.next = self.next;
         // Note: The caller must update self.next to point to the new leaf's ID
@@ -2255,7 +2253,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
     // OTHER API OPERATIONS
     // ============================================================================
-
 
     /// Returns true if this branch node is at capacity.
     pub fn is_full(&self) -> bool {
