@@ -60,7 +60,14 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"tree\\.len\\(\\)|tree\\.leaf_count\\(\\)\" --type rust .)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"BranchNode.*\\.len\\(\\)|BranchNode.*\\.leaf_count\\(\\)\" --type rust .)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"find_first_leaf_id\" --type rust .)",
-      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"leaf\\.len\\(\\)\" --type rust .)"
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"leaf\\.len\\(\\)\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n -B 10 -A 10 \"Always insert first, then check if split is needed\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n -B 10 -A 10 \"insert_at_index|children.insert\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"fn add_child.*InsertResult\" -A 30 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"insert_child_at.*then check\" -B 10 -A 10 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"fn insert_child\" -A 30 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"is_full\\(\\)\" -B 2 -A 5 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"min_keys|capacity\" -B 2 -A 2 src/lib.rs)"
     ],
     "deny": []
   },

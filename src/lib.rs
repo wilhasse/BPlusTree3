@@ -1885,13 +1885,26 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             }
             Err(index) => {
                 // Key doesn't exist, need to insert
-                // Always insert first, then check if split is needed
-                self.insert_at_index(index, key, value);
-
-                if self.needs_split() {
-                    // Leaf has too many keys, need to split
-                    let new_leaf_data = self.split();
+                // Check if split is needed BEFORE inserting
+                if self.is_full() {
+                    // Leaf is at capacity, split first then insert
+                    let mut new_leaf_data = self.split();
                     let separator_key = new_leaf_data.keys[0].clone();
+                    
+                    // Determine which leaf should receive the new key
+                    if key < separator_key {
+                        // Insert into the current (left) leaf
+                        self.insert_at_index(index, key, value);
+                    } else {
+                        // Insert into the new (right) leaf
+                        match new_leaf_data.keys.binary_search(&key) {
+                            Ok(_) => panic!("Key should not exist in new leaf"),
+                            Err(new_index) => {
+                                new_leaf_data.insert_at_index(new_index, key, value);
+                            }
+                        }
+                    }
+                    
                     // Return the leaf data for arena allocation
                     InsertResult::Split {
                         old_value: None,
@@ -1899,6 +1912,8 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                         separator_key,
                     }
                 } else {
+                    // Room to insert without splitting
+                    self.insert_at_index(index, key, value);
                     // Simple insertion - no split needed
                     InsertResult::Updated(None)
                 }
@@ -2130,17 +2145,19 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         separator_key: K,
         new_child: NodeRef<K, V>,
     ) -> Option<(BranchNode<K, V>, K)> {
-        // Insert the separator key and new child at the appropriate position
-        self.keys.insert(child_index, separator_key);
-        self.children.insert(child_index + 1, new_child);
-
-        // Check if branch needs to be split
-        if self.needs_split() {
-            // Branch has too many keys, need to split
+        // Check if split is needed BEFORE inserting
+        if self.is_full() {
+            // Branch is at capacity, need to handle split
+            // For branches, we MUST insert first because split promotes a key
+            // With capacity=4: 4 keys → split needs 5 keys (2 left + 1 promoted + 2 right)
+            self.keys.insert(child_index, separator_key);
+            self.children.insert(child_index + 1, new_child);
             // Return raw data - caller should allocate through arena
             Some(self.split_data())
         } else {
-            // No split needed
+            // Room to insert without splitting
+            self.keys.insert(child_index, separator_key);
+            self.children.insert(child_index + 1, new_child);
             None
         }
     }
