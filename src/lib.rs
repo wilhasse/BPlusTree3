@@ -2092,22 +2092,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // GET OPERATIONS
     // ============================================================================
 
-    /// Get value for a key by searching through children.
-    /// Note: This method cannot work with arena-based children as it lacks arena access.
-    pub fn get(&self, key: &K) -> Option<&V> {
-        // In arena-only model, BranchNode methods can't access children
-        // All access should go through the tree's arena-based methods
-        None
-    }
-
-    /// Get a mutable reference to the value for a key by searching through children.
-    /// Note: This method cannot work with arena-based children as it lacks arena access.
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        // In arena-only model, BranchNode methods can't access children
-        // All access should go through the tree's arena-based methods
-        None
-    }
-
     /// Get the child node for a given key.
     pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
         let child_index = self.find_child_index(key);
@@ -2210,18 +2194,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         new_branch.children = self.children.split_off(mid + 1);
 
         (new_branch, promoted_key)
-    }
-
-    // ============================================================================
-    // DELETE OPERATIONS
-    // ============================================================================
-
-    /// Remove a key from this branch by searching through children.
-    /// Note: This method cannot work with arena-based children as it lacks arena access.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        // In arena-only model, BranchNode methods can't access children
-        // All access should go through the tree's arena-based methods
-        None
     }
 
     // ============================================================================
