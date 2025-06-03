@@ -80,16 +80,12 @@ pub struct BPlusTreeMap<K, V> {
     leaf_arena: Vec<Option<LeafNode<K, V>>>,
     /// Free leaf node IDs available for reuse.
     free_leaf_ids: Vec<NodeId>,
-    /// Next leaf node ID to allocate.
-    next_leaf_id: NodeId,
 
     // Arena-based allocation for branch nodes
     /// Arena storage for branch nodes.
     branch_arena: Vec<Option<BranchNode<K, V>>>,
     /// Free branch node IDs available for reuse.
     free_branch_ids: Vec<NodeId>,
-    /// Next branch node ID to allocate.
-    next_branch_id: NodeId,
 }
 
 /// Node reference that can be either a leaf or branch node
@@ -161,10 +157,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             // Initialize arena storage
             leaf_arena,
             free_leaf_ids: Vec::new(),
-            next_leaf_id: 1,  // Next available id after the first leaf
             branch_arena,
             free_branch_ids: Vec::new(),
-            next_branch_id: 0,  // First branch will get id=0
         })
     }
 
@@ -1370,29 +1364,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ARENA-BASED ALLOCATION FOR LEAF NODES
     // ============================================================================
 
+    /// Get the next available leaf ID (either from free list or arena length).
+    fn next_leaf_id(&mut self) -> NodeId {
+        self.free_leaf_ids.pop().unwrap_or(self.leaf_arena.len() as NodeId)
+    }
+
     /// Allocate a new leaf node in the arena and return its ID.
     pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
-        // Try to reuse a free ID first
-        if let Some(id) = self.free_leaf_ids.pop() {
-            // Reuse existing slot
-            if id as usize >= self.leaf_arena.len() {
-                // Extend arena if needed
-                self.leaf_arena.resize(id as usize + 1, None);
-            }
-            self.leaf_arena[id as usize] = Some(leaf);
-            id
-        } else {
-            // Allocate new ID
-            let id = self.next_leaf_id;
-            self.next_leaf_id += 1;
-
-            // Extend arena if needed
-            if id as usize >= self.leaf_arena.len() {
-                self.leaf_arena.resize(id as usize + 1, None);
-            }
-            self.leaf_arena[id as usize] = Some(leaf);
-            id
+        let id = self.next_leaf_id();
+        
+        // Extend arena if needed
+        if id as usize >= self.leaf_arena.len() {
+            self.leaf_arena.resize(id as usize + 1, None);
         }
+        
+        self.leaf_arena[id as usize] = Some(leaf);
+        id
     }
 
     /// Deallocate a leaf node from the arena.
@@ -1462,29 +1449,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ARENA-BASED ALLOCATION FOR BRANCH NODES
     // ============================================================================
 
+    /// Get the next available branch ID (either from free list or arena length).
+    fn next_branch_id(&mut self) -> NodeId {
+        self.free_branch_ids.pop().unwrap_or(self.branch_arena.len() as NodeId)
+    }
+
     /// Allocate a new branch node in the arena and return its ID.
     pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
-        // Try to reuse a free ID first
-        if let Some(id) = self.free_branch_ids.pop() {
-            // Reuse existing slot
-            if id as usize >= self.branch_arena.len() {
-                // Extend arena if needed
-                self.branch_arena.resize(id as usize + 1, None);
-            }
-            self.branch_arena[id as usize] = Some(branch);
-            id
-        } else {
-            // Allocate new ID
-            let id = self.next_branch_id;
-            self.next_branch_id += 1;
-
-            // Extend arena if needed
-            if id as usize >= self.branch_arena.len() {
-                self.branch_arena.resize(id as usize + 1, None);
-            }
-            self.branch_arena[id as usize] = Some(branch);
-            id
+        let id = self.next_branch_id();
+        
+        // Extend arena if needed
+        if id as usize >= self.branch_arena.len() {
+            self.branch_arena.resize(id as usize + 1, None);
         }
+        
+        self.branch_arena[id as usize] = Some(branch);
+        id
     }
 
     /// Deallocate a branch node from the arena.
