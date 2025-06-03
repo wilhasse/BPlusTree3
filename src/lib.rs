@@ -99,16 +99,20 @@ pub enum NodeRef<K, V> {
     Branch(NodeId, PhantomData<(K, V)>),
 }
 
-/// Result of an insertion operation on a leaf node.
+/// Node data that can be allocated in the arena after a split.
+pub enum SplitNodeData<K, V> {
+    Leaf(LeafNode<K, V>),
+    Branch(BranchNode<K, V>),
+}
+
+/// Result of an insertion operation on a node.
 pub enum InsertResult<K, V> {
     /// Insertion completed without splitting. Contains the old value if key existed.
     Updated(Option<V>),
-    /// Insertion caused a split. Contains the old value and the new node with separator key.
-    Split(Option<V>, NodeRef<K, V>, K),
     /// Insertion caused a split with arena allocation needed.
-    SplitWithArena {
+    Split {
         old_value: Option<V>,
-        new_leaf_data: LeafNode<K, V>,
+        new_node_data: SplitNodeData<K, V>,
         separator_key: K,
     },
 }
@@ -331,19 +335,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 let result = arena_leaf.insert(key.clone(), value.clone());
                 match result {
                     InsertResult::Updated(old_value) => return old_value,
-                    InsertResult::Split(_old_value, _new_node, _separator_key) => {
-                        // This shouldn't happen anymore with new design
-                        panic!("Unexpected Split from arena leaf - should be SplitWithArena");
-                    }
-                    InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
-                        // Allocate the new leaf in arena
-                        let new_id = self.allocate_leaf(new_leaf_data);
-                        let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
-                        let new_root = self.new_root(new_node_ref, separator_key);
-                        // Allocate new root in branch arena
-                        let root_id = self.allocate_branch(new_root);
-                        self.root = NodeRef::Branch(root_id, PhantomData);
-                        return old_value;
+                    InsertResult::Split { old_value, new_node_data, separator_key } => {
+                        match new_node_data {
+                            SplitNodeData::Leaf(new_leaf_data) => {
+                                // Allocate the new leaf in arena
+                                let new_id = self.allocate_leaf(new_leaf_data);
+                                let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
+                                let new_root = self.new_root(new_node_ref, separator_key);
+                                // Allocate new root in branch arena
+                                let root_id = self.allocate_branch(new_root);
+                                self.root = NodeRef::Branch(root_id, PhantomData);
+                                return old_value;
+                            }
+                            SplitNodeData::Branch(_) => {
+                                // This should never happen - a leaf can only split into a leaf
+                                unreachable!("Leaf node cannot return Branch split data");
+                            }
+                        }
                     }
                 }
             }
@@ -385,26 +393,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             
             match child_result {
                 InsertResult::Updated(old_value) => return old_value,
-                InsertResult::Split(old_value, new_node, separator_key) => {
-                    // Handle split - need to update the branch
-                    if let Some(arena_branch) = self.get_branch_mut(id) {
-                        if let Some((new_branch_data, promoted_key)) = 
-                            arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                            // Branch split, allocate new branch through arena and create new root
-                            let new_branch_id = self.allocate_branch(new_branch_data);
-                            let new_branch_ref = NodeRef::Branch(new_branch_id, PhantomData);
-                            let new_root = self.new_root(new_branch_ref, promoted_key);
-                            let root_id = self.allocate_branch(new_root);
-                            self.root = NodeRef::Branch(root_id, PhantomData);
+                InsertResult::Split { old_value, new_node_data, separator_key } => {
+                    // Allocate the new node based on its type
+                    let new_node_ref = match new_node_data {
+                        SplitNodeData::Leaf(new_leaf_data) => {
+                            let new_id = self.allocate_leaf(new_leaf_data);
+                            NodeRef::Leaf(new_id, PhantomData)
                         }
-                        // If no split, the child was inserted successfully
-                    }
-                    return old_value;
-                }
-                InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
-                    // Allocate new leaf and update branch
-                    let new_id = self.allocate_leaf(new_leaf_data);
-                    let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
+                        SplitNodeData::Branch(new_branch_data) => {
+                            let new_id = self.allocate_branch(new_branch_data);
+                            NodeRef::Branch(new_id, PhantomData)
+                        }
+                    };
                     
                     // Now update the branch using the proper method
                     if let Some(arena_branch) = self.get_branch_mut(id) {
@@ -1165,36 +1165,29 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 // Handle the result
                 match child_result {
                     InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
-                    InsertResult::Split(old_value, new_node, separator_key) => {
-                        // Need to insert the new child into this branch
-                        if let Some(arena_branch) = self.get_branch_mut(id) {
-                            if let Some((new_branch_data, promoted_key)) = 
-                                arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                                // This branch split too - allocate in arena
-                                let new_branch_id = self.allocate_branch(new_branch_data);
-                                let new_branch_ref = NodeRef::Branch(new_branch_id, PhantomData);
-                                InsertResult::Split(old_value, new_branch_ref, promoted_key)
-                            } else {
-                                // No split needed
-                                InsertResult::Updated(old_value)
+                    InsertResult::Split { old_value, new_node_data, separator_key } => {
+                        // Allocate the new node based on its type
+                        let new_node = match new_node_data {
+                            SplitNodeData::Leaf(new_leaf_data) => {
+                                let new_id = self.allocate_leaf(new_leaf_data);
+                                NodeRef::Leaf(new_id, PhantomData)
                             }
-                        } else {
-                            InsertResult::Updated(old_value)
-                        }
-                    }
-                    InsertResult::SplitWithArena { old_value, new_leaf_data, separator_key } => {
-                        // Allocate the new leaf
-                        let new_id = self.allocate_leaf(new_leaf_data);
-                        let new_node = NodeRef::Leaf(new_id, PhantomData);
+                            SplitNodeData::Branch(new_branch_data) => {
+                                let new_id = self.allocate_branch(new_branch_data);
+                                NodeRef::Branch(new_id, PhantomData)
+                            }
+                        };
                         
                         // Insert into this branch
                         if let Some(arena_branch) = self.get_branch_mut(id) {
                             if let Some((new_branch_data, promoted_key)) = 
                                 arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                                // This branch split too - allocate in arena
-                                let new_branch_id = self.allocate_branch(new_branch_data);
-                                let new_branch_ref = NodeRef::Branch(new_branch_id, PhantomData);
-                                InsertResult::Split(old_value, new_branch_ref, promoted_key)
+                                // This branch split too - return raw branch data
+                                InsertResult::Split { 
+                                    old_value, 
+                                    new_node_data: SplitNodeData::Branch(new_branch_data), 
+                                    separator_key: promoted_key 
+                                }
                             } else {
                                 // No split needed
                                 InsertResult::Updated(old_value)
@@ -1854,9 +1847,9 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                     let new_leaf_data = self.split();
                     let separator_key = new_leaf_data.keys[0].clone();
                     // Return the leaf data for arena allocation
-                    InsertResult::SplitWithArena { 
+                    InsertResult::Split { 
                         old_value: None, 
-                        new_leaf_data, 
+                        new_node_data: SplitNodeData::Leaf(new_leaf_data), 
                         separator_key 
                     }
                 } else {
@@ -2166,12 +2159,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         (new_branch, promoted_key)
     }
 
-    /// Legacy split method for compatibility - avoid using this.
-    /// Note: This method is deprecated in the arena-only model.
-    pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
-        // In arena-only model, splits should be handled through the tree's arena methods
-        None
-    }
 
     // ============================================================================
     // DELETE OPERATIONS
