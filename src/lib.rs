@@ -148,25 +148,23 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             )));
         }
 
-        // Initialize arena with the first leaf at id=1
+        // Initialize arena with the first leaf at id=0
         let mut leaf_arena = Vec::new();
-        leaf_arena.push(None);  // Index 0 is reserved (NULL_NODE)
-        leaf_arena.push(Some(LeafNode::new(capacity)));  // First leaf at id=1
+        leaf_arena.push(Some(LeafNode::new(capacity)));  // First leaf at id=0
 
         // Initialize branch arena (starts empty)
-        let mut branch_arena = Vec::new();
-        branch_arena.push(None);  // Index 0 is reserved (NULL_NODE)
+        let branch_arena = Vec::new();
 
         Ok(Self {
             capacity,
-            root: NodeRef::Leaf(1, PhantomData),  // Root points to the arena leaf at id=1
+            root: NodeRef::Leaf(0, PhantomData),  // Root points to the arena leaf at id=0
             // Initialize arena storage
             leaf_arena,
             free_leaf_ids: Vec::new(),
-            next_leaf_id: 2,  // Next available id after the first leaf
+            next_leaf_id: 1,  // Next available id after the first leaf
             branch_arena,
             free_branch_ids: Vec::new(),
-            next_branch_id: 1,  // First branch will get id=1
+            next_branch_id: 0,  // First branch will get id=0
         })
     }
 
@@ -1313,14 +1311,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Clear all items from the tree.
     pub fn clear(&mut self) {
-        // Clear the existing arena leaf at id=1
-        if let Some(arena_leaf) = self.get_leaf_mut(1) {
+        // Clear the existing arena leaf at id=0
+        if let Some(arena_leaf) = self.get_leaf_mut(0) {
             arena_leaf.keys.clear();
             arena_leaf.values.clear();
             arena_leaf.next = NULL_NODE;
         }
         // Reset root to point to the cleared arena leaf
-        self.root = NodeRef::Leaf(1, PhantomData);
+        self.root = NodeRef::Leaf(0, PhantomData);
     }
 
     /// Returns an iterator over all key-value pairs in sorted order.
