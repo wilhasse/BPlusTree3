@@ -2198,3 +2198,40 @@ fn test_debug_range_iterator() {
 
 // TODO: Add fuzz tests against BTreeMap
 // TODO: Add performance benchmarks
+
+#[test]
+fn test_leaf_deallocation_reuses_ids() {
+    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    
+    // Insert enough items to create multiple leaves (force splits)
+    for i in 0..20 {
+        tree.insert(i, format!("value{}", i));
+    }
+    
+    // Get initial free list size (should be empty or small)
+    let initial_free_count = tree.free_leaf_count();
+    
+    // Remove items to trigger leaf merges and deallocations
+    // Removing from the beginning should cause merges
+    for i in 0..15 {
+        tree.remove(&i);
+    }
+    
+    // Check that we have more free IDs after deletions
+    let after_delete_free_count = tree.free_leaf_count();
+    assert!(after_delete_free_count > initial_free_count, 
+            "Free list should grow after deletions: {} -> {}", 
+            initial_free_count, after_delete_free_count);
+    
+    // Insert new items - these should reuse the freed IDs
+    let free_count_before_reinsert = tree.free_leaf_count();
+    for i in 20..25 {
+        tree.insert(i, format!("value{}", i));
+    }
+    
+    // Free list should shrink as IDs are reused
+    let free_count_after_reinsert = tree.free_leaf_count();
+    assert!(free_count_after_reinsert < free_count_before_reinsert,
+            "Free list should shrink as IDs are reused: {} -> {}",
+            free_count_before_reinsert, free_count_after_reinsert);
+}

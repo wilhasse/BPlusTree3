@@ -71,7 +71,10 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"next_leaf|prev_leaf|next:|prev:\" src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"InsertResult::Split.*Leaf\" -B 5 -A 10 src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"SplitNodeData::Leaf\" -B 10 -A 10 src/lib.rs)",
-      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"allocate_leaf.*new_leaf_data\" src/lib.rs)"
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"allocate_leaf.*new_leaf_data\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"merge.*leaf|merge_with_right\" -B 5 -A 10 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"deallocate_leaf\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"pub fn leaf_count\" -B 5 -A 5 src/lib.rs)"
     ],
     "deny": []
   },

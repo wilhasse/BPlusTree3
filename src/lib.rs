@@ -1114,21 +1114,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             }
         };
 
-        // Move all keys and values from child to left
-        let (mut keys, mut values) = {
+        // Move all keys and values from child to left, and get child's next pointer
+        let (mut keys, mut values, child_next) = {
             if let Some(child_leaf) = self.get_leaf_mut(child_id) {
                 (
                     std::mem::take(&mut child_leaf.keys),
                     std::mem::take(&mut child_leaf.values),
+                    child_leaf.next,
                 )
             } else {
                 return false;
             }
         };
 
+        // Merge the child into the left leaf and update linked list
         if let Some(left_leaf) = self.get_leaf_mut(left_id) {
             left_leaf.keys.append(&mut keys);
             left_leaf.values.append(&mut values);
+            // Update linked list: left leaf's next should point to what child was pointing to
+            left_leaf.next = child_next;
         } else {
             return false;
         }
@@ -1163,21 +1167,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             }
         };
 
-        // Move all keys and values from right to child
-        let (mut keys, mut values) = {
+        // Move all keys and values from right to child, and get right's next pointer
+        let (mut keys, mut values, right_next) = {
             if let Some(right_leaf) = self.get_leaf_mut(right_id) {
                 (
                     std::mem::take(&mut right_leaf.keys),
                     std::mem::take(&mut right_leaf.values),
+                    right_leaf.next,
                 )
             } else {
                 return false;
             }
         };
 
+        // Merge the right leaf into the left leaf and update linked list
         if let Some(child_leaf) = self.get_leaf_mut(child_id) {
             child_leaf.keys.append(&mut keys);
             child_leaf.values.append(&mut values);
+            // Update linked list: left leaf's next should point to what right was pointing to
+            child_leaf.next = right_next;
         } else {
             return false;
         }
@@ -1377,6 +1385,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Returns the number of leaf nodes in the tree.
     pub fn leaf_count(&self) -> usize {
         self.leaf_count_recursive(&self.root)
+    }
+
+    /// Get the number of free leaf IDs in the arena (for testing/debugging).
+    pub fn free_leaf_count(&self) -> usize {
+        self.free_leaf_ids.len()
+    }
+
+    /// Get the number of free branch IDs in the arena (for testing/debugging).
+    pub fn free_branch_count(&self) -> usize {
+        self.free_branch_ids.len()
     }
 
     /// Recursively count leaf nodes with proper arena access.
