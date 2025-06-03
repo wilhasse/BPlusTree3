@@ -376,10 +376,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 InsertResult::Split(old_value, new_node, separator_key) => {
                     // Handle split - need to update the branch
                     if let Some(arena_branch) = self.get_branch_mut(id) {
-                        if let Some((new_branch_node, promoted_key)) = 
+                        if let Some((new_branch_data, promoted_key)) = 
                             arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                            // Branch split, need to create new root
-                            let new_root = self.new_root(new_branch_node, promoted_key);
+                            // Branch split, allocate new branch through arena and create new root
+                            let new_branch_id = self.allocate_branch(new_branch_data);
+                            let new_branch_ref = NodeRef::ArenaBranch(new_branch_id);
+                            let new_root = self.new_root(new_branch_ref, promoted_key);
                             let root_id = self.allocate_branch(new_root);
                             self.root = NodeRef::ArenaBranch(root_id);
                         }
@@ -394,13 +396,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     
                     // Now update the branch using the proper method
                     if let Some(arena_branch) = self.get_branch_mut(id) {
-                        if let Some((new_branch_node, promoted_key)) = arena_branch.insert_child_and_split_if_needed(
+                        if let Some((new_branch_data, promoted_key)) = arena_branch.insert_child_and_split_if_needed(
                             child_index, 
                             separator_key, 
                             new_node_ref
                         ) {
-                            // Branch split, need to create new root
-                            let new_root = self.new_root(new_branch_node, promoted_key);
+                            // Branch split, allocate new branch through arena and create new root
+                            let new_branch_id = self.allocate_branch(new_branch_data);
+                            let new_branch_ref = NodeRef::ArenaBranch(new_branch_id);
+                            let new_root = self.new_root(new_branch_ref, promoted_key);
                             let root_id = self.allocate_branch(new_root);
                             self.root = NodeRef::ArenaBranch(root_id);
                         }
@@ -488,7 +492,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             new_child,
                         ) {
                             None => InsertResult::Updated(old_value),
-                            Some((new_node, branch_separator_key)) => {
+                            Some((new_branch_data, branch_separator_key)) => {
+                                // Convert split data to Box NodeRef for compatibility with legacy code
+                                let new_node = NodeRef::Branch(Box::new(new_branch_data));
                                 InsertResult::Split(old_value, new_node, branch_separator_key)
                             }
                         }
@@ -505,7 +511,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             new_child,
                         ) {
                             None => InsertResult::Updated(old_value),
-                            Some((new_node, branch_separator_key)) => {
+                            Some((new_branch_data, branch_separator_key)) => {
+                                // Convert split data to Box NodeRef for compatibility with legacy code
+                                let new_node = NodeRef::Branch(Box::new(new_branch_data));
                                 InsertResult::Split(old_value, new_node, branch_separator_key)
                             }
                         }
@@ -645,10 +653,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     InsertResult::Split(old_value, new_node, separator_key) => {
                         // Need to insert the new child into this branch
                         if let Some(arena_branch) = self.get_branch_mut(id) {
-                            if let Some((new_branch_node, promoted_key)) = 
+                            if let Some((new_branch_data, promoted_key)) = 
                                 arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                                // This branch split too
-                                InsertResult::Split(old_value, new_branch_node, promoted_key)
+                                // This branch split too - convert to NodeRef for legacy compatibility
+                                let new_branch_ref = NodeRef::Branch(Box::new(new_branch_data));
+                                InsertResult::Split(old_value, new_branch_ref, promoted_key)
                             } else {
                                 // No split needed
                                 InsertResult::Updated(old_value)
@@ -664,10 +673,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         
                         // Insert into this branch
                         if let Some(arena_branch) = self.get_branch_mut(id) {
-                            if let Some((new_branch_node, promoted_key)) = 
+                            if let Some((new_branch_data, promoted_key)) = 
                                 arena_branch.insert_child_and_split_if_needed(child_index, separator_key, new_node) {
-                                // This branch split too
-                                InsertResult::Split(old_value, new_branch_node, promoted_key)
+                                // This branch split too - convert to NodeRef for legacy compatibility
+                                let new_branch_ref = NodeRef::Branch(Box::new(new_branch_data));
+                                InsertResult::Split(old_value, new_branch_ref, promoted_key)
                             } else {
                                 // No split needed
                                 InsertResult::Updated(old_value)
@@ -1835,12 +1845,12 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
                 if self.needs_split() {
                     // Leaf has too many keys, need to split
-                    let new_leaf_box = self.split();
-                    let separator_key = new_leaf_box.keys[0].clone();
+                    let new_leaf_data = self.split();
+                    let separator_key = new_leaf_data.keys[0].clone();
                     // Return the leaf data for arena allocation
                     InsertResult::SplitWithArena { 
                         old_value: None, 
-                        new_leaf_data: *new_leaf_box, 
+                        new_leaf_data, 
                         separator_key 
                     }
                 } else {
@@ -1862,7 +1872,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     /// Split this leaf node, returning the new right node.
-    pub fn split(&mut self) -> Box<LeafNode<K, V>> {
+    pub fn split(&mut self) -> LeafNode<K, V> {
         // For B+ trees, we need to ensure both resulting nodes have at least min_keys
         // When splitting a full node (capacity keys), we want to distribute them
         // so that both nodes have at least min_keys
@@ -1880,8 +1890,8 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             "Right side would be underfull"
         );
 
-        // Create new leaf for right half
-        let mut new_leaf = Box::new(LeafNode::new(self.capacity));
+        // Create new leaf for right half (no Box allocation)
+        let mut new_leaf = LeafNode::new(self.capacity);
 
         // Move right half of keys/values to new leaf
         new_leaf.keys = self.keys.split_off(mid);
@@ -2097,13 +2107,14 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
 
     /// Insert a separator key and new child into this branch node.
-    /// Returns None if no split needed, or Some((new_branch, promoted_key)) if split occurred.
+    /// Returns None if no split needed, or Some((new_branch_data, promoted_key)) if split occurred.
+    /// The caller should handle arena allocation for the split data.
     pub fn insert_child_and_split_if_needed(
         &mut self,
         child_index: usize,
         separator_key: K,
         new_child: NodeRef<K, V>,
-    ) -> Option<(NodeRef<K, V>, K)> {
+    ) -> Option<(BranchNode<K, V>, K)> {
         // Insert the separator key and new child at the appropriate position
         self.keys.insert(child_index, separator_key);
         self.children.insert(child_index + 1, new_child);
@@ -2111,7 +2122,8 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // Check if branch needs to be split
         if self.needs_split() {
             // Branch has too many keys, need to split
-            self.split()
+            // Return raw data - caller should allocate through arena
+            Some(self.split_data())
         } else {
             // No split needed
             None
@@ -2123,7 +2135,9 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
 
     /// Split this branch node, returning the new right node and promoted key.
-    pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
+    /// Split this branch node, returning the new right node data and promoted key.
+    /// The arena-allocating code should handle creating the actual NodeRef.
+    pub fn split_data(&mut self) -> (BranchNode<K, V>, K) {
         // For branch nodes, we need to ensure both resulting nodes have at least min_keys
         // The middle key gets promoted, so we need at least min_keys on each side
         let min_keys = self.min_keys();
@@ -2147,8 +2161,8 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // The middle key gets promoted to the parent
         let promoted_key = self.keys[mid].clone();
 
-        // Create new branch for right half
-        let mut new_branch = Box::new(BranchNode::new(self.capacity));
+        // Create new branch for right half (no Box allocation)
+        let mut new_branch = BranchNode::new(self.capacity);
 
         // Move right half of keys to new branch (excluding the promoted key)
         new_branch.keys = self.keys.split_off(mid + 1);
@@ -2157,7 +2171,18 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // Move right half of children to new branch
         new_branch.children = self.children.split_off(mid + 1);
 
-        Some((NodeRef::Branch(new_branch), promoted_key))
+        (new_branch, promoted_key)
+    }
+
+    /// Legacy split method for compatibility - avoid using this.
+    pub fn split(&mut self) -> Option<(NodeRef<K, V>, K)> {
+        if self.needs_split() {
+            let (new_branch_data, promoted_key) = self.split_data();
+            // This creates a Box allocation - should be avoided in arena-based code
+            Some((NodeRef::Branch(Box::new(new_branch_data)), promoted_key))
+        } else {
+            None
+        }
     }
 
     // ============================================================================
