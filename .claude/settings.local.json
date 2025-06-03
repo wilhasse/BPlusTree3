@@ -47,7 +47,20 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -A10 \"pub fn range\" src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -B5 \"fn items_range\" src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -B10 -A5 \"items_range.*RangeIterator\" src/lib.rs)",
-      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"arena_\" --type rust src/)"
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"arena_\" --type rust src/)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"pub fn (merge_with_right|borrow_from_left|borrow_from_right)\\(\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"borrow_from_left|borrow_from_right|merge_with_right\" src/lib.rs -n)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"leaf\\.(borrow_from_left|borrow_from_right|merge_with_right)\" src/lib.rs -n)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"remove_and_check_rebalancing\" src/lib.rs -n)",
+      "Bash(RUSTFLAGS=\"-D dead_code\" cargo build 2 >& 1)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"pub fn (borrow_from_left|borrow_from_right|merge_with_right|remove_and_check_rebalancing|len|leaf_count|find_first_leaf_id)\" src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"\\.borrow_from_left\\(|\\.borrow_from_right\\(|\\.remove_and_check_rebalancing\\(\" src/ tests/ benches/ examples/)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"LeafNode.*::(borrow_from_left|borrow_from_right|merge_with_right|remove_and_check_rebalancing)\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"\\.len\\(\\)|\\.leaf_count\\(\\)|\\.find_first_leaf_id\\(\\)\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"tree\\.len\\(\\)|tree\\.leaf_count\\(\\)\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"BranchNode.*\\.len\\(\\)|BranchNode.*\\.leaf_count\\(\\)\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"find_first_leaf_id\" --type rust .)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"leaf\\.len\\(\\)\" --type rust .)"
     ],
     "deny": []
   },

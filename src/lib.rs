@@ -72,7 +72,7 @@ pub enum BPlusTreeError {
 pub struct BPlusTreeMap<K, V> {
     /// Maximum number of keys per node.
     capacity: usize,
-    /// The root node of the tree (for now, keeping old system).
+    /// The root node of the tree.
     root: NodeRef<K, V>,
 
     // Arena-based allocation for leaf nodes
@@ -1510,13 +1510,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-    /// Find the first leaf node in the arena (for range queries).
-    /// This is a temporary method until we fully migrate to arena-based allocation.
-    pub fn find_first_leaf_id(&self) -> Option<NodeId> {
-        // For now, we don't have a first leaf in the arena since we're still using Box-based allocation
-        // This will be implemented when we migrate the tree structure to use arena allocation
-        None
-    }
 
     // ============================================================================
     // ARENA-BASED ALLOCATION FOR BRANCH NODES
@@ -1973,7 +1966,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Remove a key and check if rebalancing is needed.
     /// Returns (removed_value, needs_rebalancing).
-    pub fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
+    fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
         let removed_value = self.remove(key);
         let needs_rebalancing = removed_value.is_some() && !is_root && self.is_underfull();
         (removed_value, needs_rebalancing)
@@ -1981,7 +1974,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Borrow a key-value pair from the left sibling.
     /// Updates the separator key in the parent.
-    pub fn borrow_from_left(&mut self, left: &mut LeafNode<K, V>, separator: &mut K) {
+    fn borrow_from_left(&mut self, left: &mut LeafNode<K, V>, separator: &mut K) {
         if left.keys.is_empty() {
             return; // Nothing to borrow
         }
@@ -1999,7 +1992,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Borrow a key-value pair from the right sibling.
     /// Updates the separator key in the parent.
-    pub fn borrow_from_right(&mut self, right: &mut LeafNode<K, V>, separator: &mut K) {
+    fn borrow_from_right(&mut self, right: &mut LeafNode<K, V>, separator: &mut K) {
         if right.keys.is_empty() {
             return; // Nothing to borrow
         }
@@ -2019,7 +2012,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
     /// Merge this leaf with the right sibling.
     /// Returns true if merge was successful.
-    pub fn merge_with_right(&mut self, mut right: LeafNode<K, V>) -> bool {
+    fn merge_with_right(&mut self, mut right: LeafNode<K, V>) -> bool {
         // Move all keys and values from right to this node
         self.keys.append(&mut right.keys);
         self.values.append(&mut right.values);
@@ -2217,21 +2210,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // OTHER API OPERATIONS
     // ============================================================================
 
-    /// Count all keys in this branch and its children.
-    /// Note: This method cannot work with arena-based children as it lacks arena access.
-    pub fn len(&self) -> usize {
-        // In arena-only model, BranchNode methods can't access children
-        // All access should go through the tree's arena-based methods
-        0
-    }
-
-    /// Count all leaf nodes in this branch and its children.
-    /// Note: This method cannot work with arena-based children as it lacks arena access.
-    pub fn leaf_count(&self) -> usize {
-        // In arena-only model, BranchNode methods can't access children
-        // All access should go through the tree's arena-based methods
-        0
-    }
 
     /// Returns true if this branch node is at capacity.
     pub fn is_full(&self) -> bool {
