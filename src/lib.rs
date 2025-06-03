@@ -334,6 +334,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             SplitNodeData::Leaf(new_leaf_data) => {
                                 // Allocate the new leaf in arena
                                 let new_id = self.allocate_leaf(new_leaf_data);
+                                
+                                // Update linked list pointers for root leaf split
+                                if let Some(original_leaf) = self.get_leaf_mut(id) {
+                                    original_leaf.next = new_id;
+                                }
+                                
                                 let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
                                 let new_root = self.new_root(new_node_ref, separator_key);
                                 // Allocate new root in branch arena
@@ -396,6 +402,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     let new_node_ref = match new_node_data {
                         SplitNodeData::Leaf(new_leaf_data) => {
                             let new_id = self.allocate_leaf(new_leaf_data);
+                            
+                            // Update linked list pointers for leaf splits
+                            if let NodeRef::Leaf(original_id, _) = child_ref {
+                                // Update the original leaf's next pointer to point to the new leaf
+                                if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                    original_leaf.next = new_id;
+                                }
+                            }
+                            
                             NodeRef::Leaf(new_id, PhantomData)
                         }
                         SplitNodeData::Branch(new_branch_data) => {
@@ -1227,6 +1242,15 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         let new_node = match new_node_data {
                             SplitNodeData::Leaf(new_leaf_data) => {
                                 let new_id = self.allocate_leaf(new_leaf_data);
+                                
+                                // Update linked list pointers for leaf splits
+                                if let NodeRef::Leaf(original_id, _) = child_ref {
+                                    // Update the original leaf's next pointer to point to the new leaf
+                                    if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                        original_leaf.next = new_id;
+                                    }
+                                }
+                                
                                 NodeRef::Leaf(new_id, PhantomData)
                             }
                             SplitNodeData::Branch(new_branch_data) => {
@@ -1956,6 +1980,11 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         // Move right half of keys/values to new leaf
         new_leaf.keys = self.keys.split_off(mid);
         new_leaf.values = self.values.split_off(mid);
+        
+        // Maintain the linked list: new leaf inherits our next pointer
+        new_leaf.next = self.next;
+        // Note: The caller must update self.next to point to the new leaf's ID
+        // This can't be done here as we don't know the new leaf's arena ID yet
 
         new_leaf
     }
