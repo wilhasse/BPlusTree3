@@ -818,7 +818,7 @@ fn test_comprehensive_insert_scenarios() {
 // ============================================================================
 
 #[test]
-fn test_arena_leaf_allocation() {
+fn test_leaf_allocation() {
     let mut tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
 
     // Create some leaf nodes to allocate
@@ -2156,13 +2156,13 @@ fn test_linked_list_range_performance() {
 #[test]
 fn test_debug_range_iterator() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
-    
+
     // First, let me just see what happens when we insert exactly the failing sequence
     for i in 0..15 {
         println!("Inserting {}", i);
         tree.insert(i, format!("value{}", i));
         println!("After inserting {}: tree.len() = {}", i, tree.len());
-        
+
         // After insertion 14, let's check what's in the tree
         if i == 14 {
             println!("After inserting 14, all keys in tree:");
