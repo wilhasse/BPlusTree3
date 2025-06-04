@@ -75,7 +75,11 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"merge.*leaf|merge_with_right\" -B 5 -A 10 src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"deallocate_leaf\" src/lib.rs)",
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"pub fn leaf_count\" -B 5 -A 5 src/lib.rs)",
-      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"remove_and_check_rebalancing|borrow_from_left|borrow_from_right|merge_with_right\" src/lib.rs -n)"
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg \"remove_and_check_rebalancing|borrow_from_left|borrow_from_right|merge_with_right\" src/lib.rs -n)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"struct ItemIterator\" -A 20 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"pub fn validate\" -A 30 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"fn check_invariants_detailed\" -A 50 src/lib.rs)",
+      "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n \"fn check_node_invariants\" -A 100 src/lib.rs)"
     ],
     "deny": []
   },

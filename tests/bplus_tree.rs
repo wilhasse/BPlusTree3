@@ -2200,6 +2200,67 @@ fn test_debug_range_iterator() {
 // TODO: Add performance benchmarks
 
 #[test]
+fn test_linked_list_invariants() {
+    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    
+    // Validate empty tree
+    assert!(tree.validate().is_ok());
+    
+    // Insert items to create multiple leaves
+    for i in 0..50 {
+        tree.insert(i, format!("value{}", i));
+        // Validate after each insertion
+        if let Err(e) = tree.validate() {
+            panic!("Invariant violation after inserting {}: {}", i, e);
+        }
+    }
+    
+    // Remove items in various patterns
+    for i in (0..25).step_by(2) {
+        tree.remove(&i);
+        // Validate after each removal
+        if let Err(e) = tree.validate() {
+            panic!("Invariant violation after removing {}: {}", i, e);
+        }
+    }
+    
+    // Verify iteration still works correctly
+    let collected: Vec<i32> = tree.keys().copied().collect();
+    let mut expected: Vec<i32> = (0..50).filter(|i| i % 2 == 1 || *i >= 25).collect();
+    assert_eq!(collected, expected);
+}
+
+#[test]
+fn test_linked_list_iterator() {
+    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    
+    // Insert items in random order
+    let items = vec![5, 1, 9, 3, 7, 2, 8, 4, 6, 10];
+    for i in &items {
+        tree.insert(*i, format!("value{}", i));
+    }
+    
+    // Collect all items through iteration
+    let collected: Vec<(i32, String)> = tree.items()
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+    
+    // Should be in sorted order
+    assert_eq!(collected.len(), 10);
+    for i in 0..10 {
+        assert_eq!(collected[i].0, (i + 1) as i32);
+        assert_eq!(collected[i].1, format!("value{}", i + 1));
+    }
+    
+    // Test that iterator works after deletions
+    tree.remove(&5);
+    tree.remove(&6);
+    
+    let collected_after: Vec<i32> = tree.keys().copied().collect();
+    assert_eq!(collected_after, vec![1, 2, 3, 4, 7, 8, 9, 10]);
+}
+
+#[test]
 fn test_leaf_deallocation_reuses_ids() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
     

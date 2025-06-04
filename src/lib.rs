@@ -1619,11 +1619,40 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Check invariants with detailed error reporting.
     pub fn check_invariants_detailed(&self) -> Result<(), String> {
-        if self.check_node_invariants(&self.root, None, None, true) {
-            Ok(())
-        } else {
-            Err("Tree invariants violated".to_string())
+        // First check the tree structure invariants
+        if !self.check_node_invariants(&self.root, None, None, true) {
+            return Err("Tree invariants violated".to_string());
         }
+        
+        // Then check the linked list invariants
+        self.check_linked_list_invariants()?;
+        
+        Ok(())
+    }
+    
+    /// Check that the leaf linked list is properly ordered and complete.
+    fn check_linked_list_invariants(&self) -> Result<(), String> {
+        // Use the iterator to get all keys
+        let keys: Vec<&K> = self.keys().collect();
+        
+        // Check that keys are sorted
+        for i in 1..keys.len() {
+            if keys[i-1] >= keys[i] {
+                return Err(format!(
+                    "Iterator returned unsorted keys at index {}", i
+                ));
+            }
+        }
+        
+        // Verify we got the right number of keys
+        if keys.len() != self.len() {
+            return Err(format!(
+                "Iterator returned {} keys but tree has {} items",
+                keys.len(), self.len()
+            ));
+        }
+        
+        Ok(())
     }
 
     /// Alias for check_invariants_detailed (for test compatibility).
@@ -2245,53 +2274,61 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     }
 }
 
-/// Iterator over key-value pairs in the B+ tree.
+/// Iterator over key-value pairs in the B+ tree using the leaf linked list.
 pub struct ItemIterator<'a, K, V> {
-    items: Vec<(&'a K, &'a V)>,
-    index: usize,
+    tree: &'a BPlusTreeMap<K, V>,
+    current_leaf_id: Option<NodeId>,
+    current_leaf_index: usize,
 }
 
 impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
-        let mut items = Vec::new();
-        Self::collect_items(tree, &tree.root, &mut items);
-        Self { items, index: 0 }
-    }
-
-    fn collect_items(
-        tree: &'a BPlusTreeMap<K, V>,
-        node: &'a NodeRef<K, V>,
-        items: &mut Vec<(&'a K, &'a V)>,
-    ) {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = tree.get_leaf(*id) {
-                    for (key, value) in leaf.keys.iter().zip(leaf.values.iter()) {
-                        items.push((key, value));
-                    }
-                }
-            }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = tree.get_branch(*id) {
-                    for child in &branch.children {
-                        Self::collect_items(tree, child, items);
-                    }
-                }
-            }
+        // Start with the first leaf in the arena (leftmost leaf)
+        let leftmost_id = if tree.leaf_arena.is_empty() || tree.leaf_arena[0].is_none() {
+            None
+        } else {
+            Some(0)
+        };
+        
+        Self {
+            tree,
+            current_leaf_id: leftmost_id,
+            current_leaf_index: 0,
         }
     }
 }
 
-impl<'a, K, V> Iterator for ItemIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.items.len() {
-            let item = self.items[self.index];
-            self.index += 1;
-            Some(item)
-        } else {
-            None
+        loop {
+            if let Some(leaf_id) = self.current_leaf_id {
+                if let Some(leaf) = self.tree.get_leaf(leaf_id) {
+                    // Check if we have more items in the current leaf
+                    if self.current_leaf_index < leaf.keys.len() {
+                        let key = &leaf.keys[self.current_leaf_index];
+                        let value = &leaf.values[self.current_leaf_index];
+                        self.current_leaf_index += 1;
+                        return Some((key, value));
+                    } else {
+                        // Move to next leaf
+                        self.current_leaf_id = if leaf.next != NULL_NODE {
+                            Some(leaf.next)
+                        } else {
+                            None
+                        };
+                        self.current_leaf_index = 0;
+                        // Continue loop to try next leaf
+                    }
+                } else {
+                    // Invalid leaf ID
+                    return None;
+                }
+            } else {
+                // No more leaves
+                return None;
+            }
         }
     }
 }
@@ -2309,7 +2346,7 @@ impl<'a, K: Ord + Clone, V: Clone> KeyIterator<'a, K, V> {
     }
 }
 
-impl<'a, K, V> Iterator for KeyIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for KeyIterator<'a, K, V> {
     type Item = &'a K;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2330,7 +2367,7 @@ impl<'a, K: Ord + Clone, V: Clone> ValueIterator<'a, K, V> {
     }
 }
 
-impl<'a, K, V> Iterator for ValueIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for ValueIterator<'a, K, V> {
     type Item = &'a V;
 
     fn next(&mut self) -> Option<Self::Item> {
