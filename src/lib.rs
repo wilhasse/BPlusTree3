@@ -2021,66 +2021,6 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
     }
 
     // ============================================================================
-    // HELPERS FOR DELETE OPERATIONS
-    // ============================================================================
-
-    /// Remove a key and check if rebalancing is needed.
-    /// Returns (removed_value, needs_rebalancing).
-    fn remove_and_check_rebalancing(&mut self, key: &K, is_root: bool) -> (Option<V>, bool) {
-        let removed_value = self.remove(key);
-        let needs_rebalancing = removed_value.is_some() && !is_root && self.is_underfull();
-        (removed_value, needs_rebalancing)
-    }
-
-    /// Borrow a key-value pair from the left sibling.
-    /// Updates the separator key in the parent.
-    fn borrow_from_left(&mut self, left: &mut LeafNode<K, V>, separator: &mut K) {
-        if left.keys.is_empty() {
-            return; // Nothing to borrow
-        }
-
-        // Move the last key-value from left to the beginning of this node
-        let borrowed_key = left.keys.pop().unwrap();
-        let borrowed_value = left.values.pop().unwrap();
-
-        self.keys.insert(0, borrowed_key.clone());
-        self.values.insert(0, borrowed_value);
-
-        // Update the separator to be the first key of this node
-        *separator = borrowed_key;
-    }
-
-    /// Borrow a key-value pair from the right sibling.
-    /// Updates the separator key in the parent.
-    fn borrow_from_right(&mut self, right: &mut LeafNode<K, V>, separator: &mut K) {
-        if right.keys.is_empty() {
-            return; // Nothing to borrow
-        }
-
-        // Move the first key-value from right to the end of this node
-        let borrowed_key = right.keys.remove(0);
-        let borrowed_value = right.values.remove(0);
-
-        self.keys.push(borrowed_key);
-        self.values.push(borrowed_value);
-
-        // Update the separator to be the first key of the right node
-        if !right.keys.is_empty() {
-            *separator = right.keys[0].clone();
-        }
-    }
-
-    /// Merge this leaf with the right sibling.
-    /// Returns true if merge was successful.
-    fn merge_with_right(&mut self, mut right: LeafNode<K, V>) -> bool {
-        // Move all keys and values from right to this node
-        self.keys.append(&mut right.keys);
-        self.values.append(&mut right.values);
-
-        true
-    }
-
-    // ============================================================================
     // OTHER API OPERATIONS
     // ============================================================================
 
