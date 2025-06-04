@@ -387,7 +387,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
                 NodeRef::Branch(_, _) => {
                     // For deeper trees, recursively insert with arena access
-                    self.insert_recursive_with_arena(&child_ref, key, value)
+                    self.insert_recursive(&child_ref, key, value)
                 }
             };
 
@@ -1203,12 +1203,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Recursively insert a key with proper arena access.
-    fn insert_recursive_with_arena(
-        &mut self,
-        node: &NodeRef<K, V>,
-        key: K,
-        value: V,
-    ) -> InsertResult<K, V> {
+    fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
         match node {
             NodeRef::Leaf(id, _) => {
                 if let Some(leaf) = self.get_leaf_mut(*id) {
@@ -1235,7 +1230,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 };
 
                 // Recursively insert
-                let child_result = self.insert_recursive_with_arena(&child_ref, key, value);
+                let child_result = self.insert_recursive(&child_ref, key, value);
 
                 // Handle the result
                 match child_result {
@@ -1623,35 +1618,34 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         if !self.check_node_invariants(&self.root, None, None, true) {
             return Err("Tree invariants violated".to_string());
         }
-        
+
         // Then check the linked list invariants
         self.check_linked_list_invariants()?;
-        
+
         Ok(())
     }
-    
+
     /// Check that the leaf linked list is properly ordered and complete.
     fn check_linked_list_invariants(&self) -> Result<(), String> {
         // Use the iterator to get all keys
         let keys: Vec<&K> = self.keys().collect();
-        
+
         // Check that keys are sorted
         for i in 1..keys.len() {
-            if keys[i-1] >= keys[i] {
-                return Err(format!(
-                    "Iterator returned unsorted keys at index {}", i
-                ));
+            if keys[i - 1] >= keys[i] {
+                return Err(format!("Iterator returned unsorted keys at index {}", i));
             }
         }
-        
+
         // Verify we got the right number of keys
         if keys.len() != self.len() {
             return Err(format!(
                 "Iterator returned {} keys but tree has {} items",
-                keys.len(), self.len()
+                keys.len(),
+                self.len()
             ));
         }
-        
+
         Ok(())
     }
 
@@ -2289,7 +2283,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         } else {
             Some(0)
         };
-        
+
         Self {
             tree,
             current_leaf_id: leftmost_id,

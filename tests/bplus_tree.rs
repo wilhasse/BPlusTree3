@@ -2202,10 +2202,10 @@ fn test_debug_range_iterator() {
 #[test]
 fn test_linked_list_invariants() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-    
+
     // Validate empty tree
     assert!(tree.validate().is_ok());
-    
+
     // Insert items to create multiple leaves
     for i in 0..50 {
         tree.insert(i, format!("value{}", i));
@@ -2214,7 +2214,7 @@ fn test_linked_list_invariants() {
             panic!("Invariant violation after inserting {}: {}", i, e);
         }
     }
-    
+
     // Remove items in various patterns
     for i in (0..25).step_by(2) {
         tree.remove(&i);
@@ -2223,39 +2223,37 @@ fn test_linked_list_invariants() {
             panic!("Invariant violation after removing {}: {}", i, e);
         }
     }
-    
+
     // Verify iteration still works correctly
     let collected: Vec<i32> = tree.keys().copied().collect();
-    let mut expected: Vec<i32> = (0..50).filter(|i| i % 2 == 1 || *i >= 25).collect();
+    let expected: Vec<i32> = (0..50).filter(|i| i % 2 == 1 || *i >= 25).collect();
     assert_eq!(collected, expected);
 }
 
 #[test]
 fn test_linked_list_iterator() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-    
+
     // Insert items in random order
     let items = vec![5, 1, 9, 3, 7, 2, 8, 4, 6, 10];
     for i in &items {
         tree.insert(*i, format!("value{}", i));
     }
-    
+
     // Collect all items through iteration
-    let collected: Vec<(i32, String)> = tree.items()
-        .map(|(k, v)| (*k, v.clone()))
-        .collect();
-    
+    let collected: Vec<(i32, String)> = tree.items().map(|(k, v)| (*k, v.clone())).collect();
+
     // Should be in sorted order
     assert_eq!(collected.len(), 10);
     for i in 0..10 {
         assert_eq!(collected[i].0, (i + 1) as i32);
         assert_eq!(collected[i].1, format!("value{}", i + 1));
     }
-    
+
     // Test that iterator works after deletions
     tree.remove(&5);
     tree.remove(&6);
-    
+
     let collected_after: Vec<i32> = tree.keys().copied().collect();
     assert_eq!(collected_after, vec![1, 2, 3, 4, 7, 8, 9, 10]);
 }
@@ -2263,36 +2261,42 @@ fn test_linked_list_iterator() {
 #[test]
 fn test_leaf_deallocation_reuses_ids() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-    
+
     // Insert enough items to create multiple leaves (force splits)
     for i in 0..20 {
         tree.insert(i, format!("value{}", i));
     }
-    
+
     // Get initial free list size (should be empty or small)
     let initial_free_count = tree.free_leaf_count();
-    
+
     // Remove items to trigger leaf merges and deallocations
     // Removing from the beginning should cause merges
     for i in 0..15 {
         tree.remove(&i);
     }
-    
+
     // Check that we have more free IDs after deletions
     let after_delete_free_count = tree.free_leaf_count();
-    assert!(after_delete_free_count > initial_free_count, 
-            "Free list should grow after deletions: {} -> {}", 
-            initial_free_count, after_delete_free_count);
-    
+    assert!(
+        after_delete_free_count > initial_free_count,
+        "Free list should grow after deletions: {} -> {}",
+        initial_free_count,
+        after_delete_free_count
+    );
+
     // Insert new items - these should reuse the freed IDs
     let free_count_before_reinsert = tree.free_leaf_count();
     for i in 20..25 {
         tree.insert(i, format!("value{}", i));
     }
-    
+
     // Free list should shrink as IDs are reused
     let free_count_after_reinsert = tree.free_leaf_count();
-    assert!(free_count_after_reinsert < free_count_before_reinsert,
-            "Free list should shrink as IDs are reused: {} -> {}",
-            free_count_before_reinsert, free_count_after_reinsert);
+    assert!(
+        free_count_after_reinsert < free_count_before_reinsert,
+        "Free list should shrink as IDs are reused: {} -> {}",
+        free_count_before_reinsert,
+        free_count_after_reinsert
+    );
 }
