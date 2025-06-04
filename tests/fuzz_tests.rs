@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 #[test]
 #[ignore]
 fn fuzz_test_bplus_tree() {
-    // Test with various branching factors
-    for branching_factor in 2..=10 {
+    // Test with various branching factors (minimum 4 required)
+    for branching_factor in 4..=10 {
         println!("\n=== Testing branching factor {} ===", branching_factor);
 
         let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
@@ -150,7 +150,7 @@ fn fuzz_test_bplus_tree() {
 #[ignore]
 fn fuzz_test_with_random_keys() {
     // Test with random insertion order
-    for branching_factor in [2, 3, 5, 8] {
+    for branching_factor in [4, 5, 8] {
         println!(
             "\n=== Testing branching factor {} with random keys ===",
             branching_factor
@@ -259,7 +259,7 @@ fn fuzz_test_with_random_keys() {
 #[ignore]
 fn fuzz_test_with_updates() {
     // Test updating existing keys
-    for branching_factor in [2, 4, 7] {
+    for branching_factor in [4, 7] {
         println!(
             "\n=== Testing branching factor {} with updates ===",
             branching_factor
@@ -345,7 +345,7 @@ fn fuzz_test_timed() {
 
     while start_time.elapsed() < duration {
         // Cycle through different branching factors
-        for branching_factor in [2, 3, 4, 5, 7, 8, 10] {
+        for branching_factor in [4, 5, 7, 8, 10] {
             if start_time.elapsed() >= duration {
                 break;
             }
