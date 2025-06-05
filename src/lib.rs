@@ -1547,6 +1547,42 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
+    // NODE DISPATCH HELPERS (Phase 1)
+    // ============================================================================
+
+    /// Invoke `f` on a branch node if it exists, returning `None` otherwise.
+    pub fn with_branch<T, F>(&self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&BranchNode<K, V>) -> T,
+    {
+        self.get_branch(id).map(f)
+    }
+
+    /// Invoke `f` on a mutable branch node if it exists, returning `None` otherwise.
+    pub fn with_branch_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut BranchNode<K, V>) -> T,
+    {
+        self.get_branch_mut(id).map(f)
+    }
+
+    /// Invoke `f` on a leaf node if it exists, returning `None` otherwise.
+    pub fn with_leaf<T, F>(&self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&LeafNode<K, V>) -> T,
+    {
+        self.get_leaf(id).map(f)
+    }
+
+    /// Invoke `f` on a mutable leaf node if it exists, returning `None` otherwise.
+    pub fn with_leaf_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
+    where
+        F: FnOnce(&mut LeafNode<K, V>) -> T,
+    {
+        self.get_leaf_mut(id).map(f)
+    }
+
+    // ============================================================================
     // ARENA-BASED ALLOCATION FOR BRANCH NODES
     // ============================================================================
 
