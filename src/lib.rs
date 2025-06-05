@@ -819,15 +819,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Get the data from right branch
-        let (mut right_keys, mut right_children) = {
-            if let Some(right_branch) = self.get_branch_mut(right_id) {
-                (
-                    std::mem::take(&mut right_branch.keys),
-                    std::mem::take(&mut right_branch.children),
-                )
-            } else {
-                return false;
-            }
+        let (mut right_keys, mut right_children) = match self.get_branch_mut(right_id)
+            .map(|right_branch| (
+                std::mem::take(&mut right_branch.keys),
+                std::mem::take(&mut right_branch.children),
+            )) {
+            Some(tuple) => tuple,
+            None => return false,
         };
 
         // Merge into child branch
