@@ -128,6 +128,13 @@ pub enum InsertResult<K, V> {
     },
 }
 
+/// Result of a removal operation on a node.
+pub enum RemoveResult<V> {
+    /// Removal completed. Contains the removed value if key existed.
+    /// The bool indicates if this node is now underfull and needs rebalancing.
+    Updated(Option<V>, bool),
+}
+
 impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
     // CONSTRUCTION
@@ -500,80 +507,65 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
+    /// Recursively remove a key with proper arena access.
+    fn remove_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> RemoveResult<V> {
+        match node {
+            NodeRef::Leaf(id, _) => {
+                if let Some(leaf) = self.get_leaf_mut(*id) {
+                    let removed_value = leaf.remove(key);
+                    let is_underfull = leaf.is_underfull();
+                    RemoveResult::Updated(removed_value, is_underfull)
+                } else {
+                    RemoveResult::Updated(None, false)
+                }
+            }
+            NodeRef::Branch(id, _) => {
+                let id = *id;
+
+                // First get child info without mutable borrow
+                let (child_index, child_ref) = match self.get_child_for_key(id, key) {
+                    Some(info) => info,
+                    None => return RemoveResult::Updated(None, false),
+                };
+
+                // Recursively remove
+                let child_result = self.remove_recursive(&child_ref, key);
+
+                // Handle the result
+                match child_result {
+                    RemoveResult::Updated(removed_value, child_became_underfull) => {
+                        // If child became underfull, try to rebalance
+                        if removed_value.is_some() && child_became_underfull {
+                            let _child_still_exists = self.rebalance_child(id, child_index);
+                        }
+
+                        // Check if this branch is now underfull after rebalancing
+                        let is_underfull = self.is_node_underfull(&NodeRef::Branch(id, PhantomData));
+                        RemoveResult::Updated(removed_value, is_underfull)
+                    }
+                }
+            }
+        }
+    }
+
     // ============================================================================
     // DELETE OPERATIONS
     // ============================================================================
 
     /// Remove a key from the tree.
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        // Special handling for Leaf root
-        if let NodeRef::Leaf(id, _) = &self.root {
-            let id = *id;
-            if let Some(leaf) = self.get_leaf_mut(id) {
-                let removed = leaf.remove(key);
-                // No rebalancing needed for root leaf
-                return removed;
+        // Use remove_recursive to handle the removal
+        let result = self.remove_recursive(&self.root.clone(), key);
+
+        match result {
+            RemoveResult::Updated(removed_value, _root_became_underfull) => {
+                // Check if root needs collapsing after removal
+                if removed_value.is_some() {
+                    self.collapse_root_if_needed();
+                }
+                removed_value
             }
         }
-
-        // Special handling for Branch root
-        if let NodeRef::Branch(id, _) = &self.root {
-            let removed = self.remove_from_branch(*id, key);
-
-            // Check if root needs collapsing after removal
-            if removed.is_some() {
-                self.collapse_root_if_needed();
-            }
-
-            return removed;
-        }
-
-        None
-    }
-
-    /// Remove a key from a branch node with rebalancing
-    fn remove_from_branch(&mut self, branch_id: NodeId, key: &K) -> Option<V> {
-        // Find child index
-        let child_index = self
-            .get_branch(branch_id)
-            .map(|branch| branch.find_child_index(key))?;
-
-        // Get child reference
-        let child_ref = self
-            .get_branch(branch_id)
-            .and_then(|branch| branch.children.get(child_index).cloned())?;
-
-        // Remove from child
-        let (removed_value, child_became_underfull) = match child_ref {
-            NodeRef::Leaf(leaf_id, _) => {
-                let removed = self.get_leaf_mut(leaf_id).and_then(|leaf| leaf.remove(key));
-
-                // Check if leaf became underfull
-                let is_underfull = self.is_node_underfull(&NodeRef::Leaf(leaf_id, PhantomData));
-
-                (removed, is_underfull)
-            }
-            NodeRef::Branch(child_branch_id, _) => {
-                let removed = self.remove_from_branch(child_branch_id, key);
-
-                // Check if branch became underfull
-                let is_underfull =
-                    self.is_node_underfull(&NodeRef::Branch(child_branch_id, PhantomData));
-
-                (removed, is_underfull)
-            }
-        };
-
-        // If child became underfull, try to rebalance
-        if removed_value.is_some() && child_became_underfull {
-            let _child_still_exists = self.rebalance_child(branch_id, child_index);
-
-            // After rebalancing (which might involve merging), check if the parent branch
-            // itself became underfull. However, we don't propagate this up since the
-            // caller will check this.
-        }
-
-        removed_value
     }
 
     /// Rebalance an underfull child in an arena branch
