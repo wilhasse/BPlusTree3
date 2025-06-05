@@ -388,10 +388,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         let new_id = self.allocate_leaf(new_leaf_data);
 
                         // Update linked list pointers for root leaf split
-                        if let NodeRef::Leaf(original_id, _) = &self.root {
-                            self.get_leaf_mut(*original_id)
-                                .map(|leaf| leaf.next = new_id);
-                        }
+                        matches!(&self.root, NodeRef::Leaf(_, _))
+                            .then(|| self.root.id())
+                            .and_then(|original_id| self.get_leaf_mut(original_id))
+                            .map(|leaf| leaf.next = new_id);
 
                         NodeRef::Leaf(new_id, PhantomData)
                     }
