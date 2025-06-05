@@ -303,7 +303,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             child_index + 1
         };
 
-        match (branch.children.get(child_index), branch.children.get(sibling_index)) {
+        match (
+            branch.children.get(child_index),
+            branch.children.get(sibling_index),
+        ) {
             (Some(NodeRef::Branch(_, _)), Some(NodeRef::Branch(_, _))) => {
                 branch.children.get(sibling_index).cloned()
             }
@@ -507,6 +510,36 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
+    // ============================================================================
+    // DELETE OPERATIONS
+    // ============================================================================
+
+    /// Remove a key from the tree.
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        // Use remove_recursive to handle the removal
+        let result = self.remove_recursive(&self.root.clone(), key);
+
+        match result {
+            RemoveResult::Updated(removed_value, _root_became_underfull) => {
+                // Check if root needs collapsing after removal
+                if removed_value.is_some() {
+                    self.collapse_root_if_needed();
+                }
+                removed_value
+            }
+        }
+    }
+
+    /// Remove a key from the tree, returning an error if the key doesn't exist.
+    /// This is equivalent to Python's `del tree[key]`.
+    pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
+        self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
+    }
+
+    // ============================================================================
+    // HELPERS FOR DELETE OPERATIONS
+    // ============================================================================
+
     /// Recursively remove a key with proper arena access.
     fn remove_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> RemoveResult<V> {
         match node {
@@ -540,34 +573,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         }
 
                         // Check if this branch is now underfull after rebalancing
-                        let is_underfull = self.is_node_underfull(&NodeRef::Branch(id, PhantomData));
+                        let is_underfull =
+                            self.is_node_underfull(&NodeRef::Branch(id, PhantomData));
                         RemoveResult::Updated(removed_value, is_underfull)
                     }
                 }
             }
         }
     }
-
-    // ============================================================================
-    // DELETE OPERATIONS
-    // ============================================================================
-
-    /// Remove a key from the tree.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        // Use remove_recursive to handle the removal
-        let result = self.remove_recursive(&self.root.clone(), key);
-
-        match result {
-            RemoveResult::Updated(removed_value, _root_became_underfull) => {
-                // Check if root needs collapsing after removal
-                if removed_value.is_some() {
-                    self.collapse_root_if_needed();
-                }
-                removed_value
-            }
-        }
-    }
-
     /// Rebalance an underfull child in an arena branch
     fn rebalance_child(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Get information about the child and its siblings
@@ -1090,16 +1103,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         true // Child still exists
     }
-
-    /// Remove a key from the tree, returning an error if the key doesn't exist.
-    /// This is equivalent to Python's `del tree[key]`.
-    pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
-        self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
-    }
-
-    // ============================================================================
-    // HELPERS FOR DELETE OPERATIONS
-    // ============================================================================
 
     /// Collapse the root if it's a branch with only one child or no children.
     fn collapse_root_if_needed(&mut self) {
