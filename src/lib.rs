@@ -483,26 +483,27 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         };
 
                         // Insert into this branch
-                        if let Some(branch) = self.get_branch_mut(id) {
-                            if let Some((new_branch_data, promoted_key)) = branch
-                                .insert_child_and_split_if_needed(
+                        match self.get_branch_mut(id)
+                            .and_then(|branch| {
+                                branch.insert_child_and_split_if_needed(
                                     child_index,
                                     separator_key,
                                     new_node,
                                 )
-                            {
+                            })
+                        {
+                            Some((new_branch_data, promoted_key)) => {
                                 // This branch split too - return raw branch data
                                 InsertResult::Split {
                                     old_value,
                                     new_node_data: SplitNodeData::Branch(new_branch_data),
                                     separator_key: promoted_key,
                                 }
-                            } else {
-                                // No split needed
+                            }
+                            None => {
+                                // No split needed or branch not found
                                 InsertResult::Updated(old_value)
                             }
-                        } else {
-                            InsertResult::Updated(old_value)
                         }
                     }
                 }
