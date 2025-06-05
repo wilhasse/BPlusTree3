@@ -95,6 +95,39 @@ pub enum NodeRef<K, V> {
     Branch(NodeId, PhantomData<(K, V)>),
 }
 
+impl<K, V> NodeRef<K, V> {
+    /// Return the raw node ID.
+    pub fn id(&self) -> NodeId {
+        match *self {
+            NodeRef::Leaf(id, _) => id,
+            NodeRef::Branch(id, _) => id,
+        }
+    }
+
+    /// Returns true if this reference points to a leaf node.
+    pub fn is_leaf(&self) -> bool {
+        matches!(self, NodeRef::Leaf(_, _))
+    }
+}
+
+#[cfg(test)]
+mod node_ref_tests {
+    use super::NodeRef;
+    use crate::NodeId;
+    use std::marker::PhantomData;
+
+    #[test]
+    fn test_node_ref_id_and_is_leaf() {
+        let leaf: NodeRef<i32, i32> = NodeRef::Leaf(7, PhantomData);
+        assert_eq!(leaf.id(), 7);
+        assert!(leaf.is_leaf());
+
+        let branch: NodeRef<i32, i32> = NodeRef::Branch(13, PhantomData);
+        assert_eq!(branch.id(), 13);
+        assert!(!branch.is_leaf());
+    }
+}
+
 /// Node data that can be allocated in the arena after a split.
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
