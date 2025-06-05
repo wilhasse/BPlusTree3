@@ -40,22 +40,6 @@ memory or logic errors.
 2. Update code that matches on `NodeRef::Leaf` / `NodeRef::Branch` to use the new
    helpers for dispatching to child nodes.
 
-## Phase 4: `RebalanceableNode` Trait
-
-**Objective:** Unify leaf and branch rebalance logic under a single driver using a
-trait, reducing near-duplicate implementations.
-
-**Implementation steps:**
-
-1. Define a trait `RebalanceableNode<K, V>` with methods:
-   ```rust
-   fn can_donate(&self) -> bool;
-   fn is_underfull(&self) -> bool;
-   fn borrow_from(&mut self, sibling: &mut Self, sep_key: &mut K, from_left: bool);
-   fn merge_with(&mut self, sibling: &mut Self, sep_key: Option<K>, from_left: bool);
-   ```
-2. Implement the trait for `LeafNode<K, V>` and `BranchNode<K, V>`.
-3. Write a generic `rebalance_child` driver that calls into `RebalanceableNode`.
 
 ## Phase 5: `move_node_contents` Helper for Merges
 
