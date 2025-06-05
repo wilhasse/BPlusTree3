@@ -1583,6 +1583,29 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
+    // CHILD LOOKUP HELPERS (Phase 2)
+    // ============================================================================
+
+    /// Find the child index and `NodeRef` for `key` in the specified branch,
+    /// returning `None` if the branch does not exist or index is out of range.
+    pub fn find_child(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
+        self.get_branch(branch_id).and_then(|branch| {
+            let idx = branch.find_child_index(key);
+            branch.children.get(idx).cloned().map(|child| (idx, child))
+        })
+    }
+
+    /// Mutable version of `find_child`.
+    pub fn find_child_mut(&mut self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
+        if let Some(branch) = self.get_branch_mut(branch_id) {
+            let idx = branch.find_child_index(key);
+            branch.children.get(idx).cloned().map(|child| (idx, child))
+        } else {
+            None
+        }
+    }
+
+    // ============================================================================
     // ARENA-BASED ALLOCATION FOR BRANCH NODES
     // ============================================================================
 
