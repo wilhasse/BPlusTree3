@@ -296,19 +296,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             child_index + 1
         };
 
-        branch.children.get(child_index).and_then(|current| {
-            if let NodeRef::Branch(_, _) = current {
-                branch.children.get(sibling_index).and_then(|sibling| {
-                    if let NodeRef::Branch(_, _) = sibling {
-                        Some(sibling.clone())
-                    } else {
-                        None
-                    }
-                })
-            } else {
-                None
+        match (branch.children.get(child_index), branch.children.get(sibling_index)) {
+            (Some(NodeRef::Branch(_, _)), Some(NodeRef::Branch(_, _))) => {
+                branch.children.get(sibling_index).cloned()
             }
-        })
+            _ => None,
+        }
     }
 
     /// Extract adjacent leaf node IDs if both children are leaves
