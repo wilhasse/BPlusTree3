@@ -8,33 +8,13 @@ rebalance logic, merges, and split insertion) into small, well‑tested utilitie
 we can shrink and simplify the implementation surface and reduce risks of
 memory or logic errors.
 
-## Phase 1: `with_branch` / `with_branch_mut` / `with_leaf` / `with_leaf_mut`
-
-**Objective:** Remove repetitive `if let Some(branch) = self.get_branch(id)` and
-`self.get_leaf(id)` boilerplate.
-
-**Implementation steps:**
-1. Define four helpers in `src/lib.rs`:
-   ```rust
-   fn with_branch<T, F>(&self, id: NodeId, f: F) -> Option<T>
-   where F: FnOnce(&BranchNode<K, V>) -> T;
-   fn with_branch_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
-   where F: FnOnce(&mut BranchNode<K, V>) -> T;
-   fn with_leaf<T, F>(&self, id: NodeId, f: F) -> Option<T>
-   where F: FnOnce(&LeafNode<K, V>) -> T;
-   fn with_leaf_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
-   where F: FnOnce(&mut LeafNode<K, V>) -> T;
-   ```
-2. Add unit tests verifying each helper returns `None` on missing nodes.
-3. Refactor all existing `get_branch` / `get_leaf` pattern matches to call the new
-   helpers, restoring identical semantics.
-
 ## Phase 2: `find_child` / `find_child_mut`
 
 **Objective:** Collapse the two-step computation of child index and child enum
 (`NodeRef`) into a single helper.
 
 **Implementation steps:**
+
 1. Implement:
    ```rust
    fn find_child(&self, branch_id: NodeId, key: &K)
@@ -51,6 +31,7 @@ memory or logic errors.
 **Objective:** Provide ergonomic accessors on `NodeRef<K,V>` to reduce pattern matches.
 
 **Implementation steps:**
+
 1. On `NodeRef<K, V>`, add:
    ```rust
    fn id(&self) -> NodeId;
@@ -65,6 +46,7 @@ memory or logic errors.
 trait, reducing near-duplicate implementations.
 
 **Implementation steps:**
+
 1. Define a trait `RebalanceableNode<K, V>` with methods:
    ```rust
    fn can_donate(&self) -> bool;
@@ -81,6 +63,7 @@ trait, reducing near-duplicate implementations.
 merge routines (left/right × leaf/branch).
 
 **Implementation steps:**
+
 1. Add a generic helper:
    ```rust
    fn move_node_contents<N, F>(
@@ -96,6 +79,7 @@ merge routines (left/right × leaf/branch).
 on `BranchNode<K,V>`, eliminating repetitive arena bookkeeping and root-update code.
 
 **Implementation steps:**
+
 1. On `BranchNode<K, V>`, implement:
    ```rust
    fn insert_child(

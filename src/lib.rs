@@ -260,9 +260,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Traverse to child
         match child_ref {
-            NodeRef::Leaf(leaf_id, _) => {
-                self.get_leaf_mut(leaf_id).and_then(|leaf| leaf.get_mut(key))
-            }
+            NodeRef::Leaf(leaf_id, _) => self
+                .get_leaf_mut(leaf_id)
+                .and_then(|leaf| leaf.get_mut(key)),
             NodeRef::Branch(child_branch_id, _) => self.get_mut_in_branch(child_branch_id, key),
         }
     }
@@ -275,16 +275,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn get_child_for_key(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
         let branch = self.get_branch(branch_id)?;
         let child_index = branch.find_child_index(key);
-        branch.children.get(child_index).cloned().map(|child| (child_index, child))
+        branch
+            .children
+            .get(child_index)
+            .cloned()
+            .map(|child| (child_index, child))
     }
 
     /// Helper to check if a node is underfull
     fn is_node_underfull(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id)
+            NodeRef::Leaf(id, _) => self
+                .get_leaf(*id)
                 .map(|leaf| leaf.is_underfull())
                 .unwrap_or(false),
-            NodeRef::Branch(id, _) => self.get_branch(*id)
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
                 .map(|branch| branch.is_underfull())
                 .unwrap_or(false),
         }
@@ -293,44 +299,56 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Helper to check if a node can donate
     fn can_node_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
         match node_ref {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id)
+            NodeRef::Leaf(id, _) => self
+                .get_leaf(*id)
                 .map(|leaf| leaf.can_donate())
                 .unwrap_or(false),
-            NodeRef::Branch(id, _) => self.get_branch(*id)
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
                 .map(|branch| branch.can_donate())
                 .unwrap_or(false),
         }
     }
 
     /// Get sibling node reference if it exists and types match
-    fn get_branch_sibling(&self, branch_id: NodeId, child_index: usize, get_left: bool) -> Option<NodeRef<K, V>> {
+    fn get_branch_sibling(
+        &self,
+        branch_id: NodeId,
+        child_index: usize,
+        get_left: bool,
+    ) -> Option<NodeRef<K, V>> {
         let branch = self.get_branch(branch_id)?;
-        let sibling_index = if get_left { 
+        let sibling_index = if get_left {
             child_index.checked_sub(1)?
-        } else { 
-            child_index + 1 
+        } else {
+            child_index + 1
         };
-        
-        branch.children.get(child_index)
-            .and_then(|current| {
-                if let NodeRef::Branch(_, _) = current {
-                    branch.children.get(sibling_index).and_then(|sibling| {
-                        if let NodeRef::Branch(_, _) = sibling {
-                            Some(sibling.clone())
-                        } else {
-                            None
-                        }
-                    })
-                } else {
-                    None
-                }
-            })
+
+        branch.children.get(child_index).and_then(|current| {
+            if let NodeRef::Branch(_, _) = current {
+                branch.children.get(sibling_index).and_then(|sibling| {
+                    if let NodeRef::Branch(_, _) = sibling {
+                        Some(sibling.clone())
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            }
+        })
     }
 
     /// Extract adjacent leaf node IDs if both children are leaves
-    fn get_adjacent_leaf_ids(&self, branch_id: NodeId, child_index: usize) -> Option<(NodeId, NodeId)> {
+    fn get_adjacent_leaf_ids(
+        &self,
+        branch_id: NodeId,
+        child_index: usize,
+    ) -> Option<(NodeId, NodeId)> {
         let branch = self.get_branch(branch_id)?;
-        branch.children.get(child_index)
+        branch
+            .children
+            .get(child_index)
             .zip(branch.children.get(child_index + 1))
             .and_then(|(left, right)| {
                 if let (NodeRef::Leaf(left_id, _), NodeRef::Leaf(right_id, _)) = (left, right) {
@@ -343,14 +361,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
         match node {
-            NodeRef::Leaf(id, _) => {
-                self.get_leaf(*id).and_then(|leaf| leaf.get(key))
-            }
-            NodeRef::Branch(id, _) => {
-                self.get_branch(*id)
-                    .and_then(|branch| branch.get_child(key))
-                    .and_then(|child| self.get_recursive(child, key))
-            }
+            NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
+                .and_then(|branch| branch.get_child(key))
+                .and_then(|child| self.get_recursive(child, key)),
         }
     }
 
@@ -555,18 +570,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Remove a key from a branch node with rebalancing
     fn remove_from_branch(&mut self, branch_id: NodeId, key: &K) -> Option<V> {
         // Find child index
-        let child_index = self.get_branch(branch_id)
+        let child_index = self
+            .get_branch(branch_id)
             .map(|branch| branch.find_child_index(key))?;
 
         // Get child reference
-        let child_ref = self.get_branch(branch_id)
+        let child_ref = self
+            .get_branch(branch_id)
             .and_then(|branch| branch.children.get(child_index).cloned())?;
 
         // Remove from child
         let (removed_value, child_became_underfull) = match child_ref {
             NodeRef::Leaf(leaf_id, _) => {
-                let removed = self.get_leaf_mut(leaf_id)
-                    .and_then(|leaf| leaf.remove(key));
+                let removed = self.get_leaf_mut(leaf_id).and_then(|leaf| leaf.remove(key));
 
                 // Check if leaf became underfull
                 let is_underfull = self.is_node_underfull(&NodeRef::Leaf(leaf_id, PhantomData));
@@ -577,7 +593,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 let removed = self.remove_from_branch(child_branch_id, key);
 
                 // Check if branch became underfull
-                let is_underfull = self.is_node_underfull(&NodeRef::Branch(child_branch_id, PhantomData));
+                let is_underfull =
+                    self.is_node_underfull(&NodeRef::Branch(child_branch_id, PhantomData));
 
                 (removed, is_underfull)
             }
@@ -628,7 +645,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ) -> bool {
         // Try borrowing from left sibling first
         if has_left_sibling {
-            let can_borrow = self.get_branch(branch_id)
+            let can_borrow = self
+                .get_branch(branch_id)
                 .and_then(|branch| {
                     if child_index > 0 {
                         Some(&branch.children[child_index - 1])
@@ -646,7 +664,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Try borrowing from right sibling
         if has_right_sibling {
-            let can_borrow = self.get_branch(branch_id)
+            let can_borrow = self
+                .get_branch(branch_id)
                 .and_then(|branch| branch.children.get(child_index + 1))
                 .map(|right_sibling| self.can_node_donate(right_sibling))
                 .unwrap_or(false);
@@ -677,7 +696,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     ) -> bool {
         // Try borrowing from left sibling first
         if has_left_sibling {
-            let can_borrow = self.get_branch_sibling(branch_id, child_index, true)
+            let can_borrow = self
+                .get_branch_sibling(branch_id, child_index, true)
                 .map(|sibling| self.can_node_donate(&sibling))
                 .unwrap_or(false);
 
@@ -688,7 +708,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Try borrowing from right sibling
         if has_right_sibling {
-            let can_borrow = self.get_branch_sibling(branch_id, child_index, false)
+            let can_borrow = self
+                .get_branch_sibling(branch_id, child_index, false)
                 .map(|sibling| self.can_node_donate(&sibling))
                 .unwrap_or(false);
 
@@ -699,7 +720,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Check if we can merge with siblings
         if has_left_sibling {
-            let can_merge = self.get_branch(branch_id)
+            let can_merge = self
+                .get_branch(branch_id)
                 .and_then(|branch| {
                     if let (NodeRef::Branch(left_id, _), NodeRef::Branch(child_id, _)) = (
                         &branch.children[child_index - 1],
@@ -710,7 +732,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         None
                     }
                 })
-                .and_then(|(left_id, child_id)| self.get_branch(*left_id).zip(self.get_branch(*child_id)))
+                .and_then(|(left_id, child_id)| {
+                    self.get_branch(*left_id).zip(self.get_branch(*child_id))
+                })
                 .map(|(left, child)| left.keys.len() + 1 + child.keys.len() <= self.capacity)
                 .unwrap_or(false);
 
@@ -720,7 +744,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         if has_right_sibling {
-            let can_merge = self.get_branch(branch_id)
+            let can_merge = self
+                .get_branch(branch_id)
                 .and_then(|branch| {
                     if let (NodeRef::Branch(child_id, _), NodeRef::Branch(right_id, _)) = (
                         &branch.children[child_index],
@@ -731,7 +756,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         None
                     }
                 })
-                .and_then(|(child_id, right_id)| self.get_branch(*child_id).zip(self.get_branch(*right_id)))
+                .and_then(|(child_id, right_id)| {
+                    self.get_branch(*child_id).zip(self.get_branch(*right_id))
+                })
                 .map(|(child, right)| child.keys.len() + 1 + right.keys.len() <= self.capacity)
                 .unwrap_or(false);
 
@@ -748,8 +775,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Merge branch with left sibling
     fn merge_with_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs
-        let (left_id, child_id, separator_key) = match self.get_branch(parent_id)
-            .and_then(|parent| {
+        let (left_id, child_id, separator_key) =
+            match self.get_branch(parent_id).and_then(|parent| {
                 if let (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) = (
                     &parent.children[child_index - 1],
                     &parent.children[child_index],
@@ -759,9 +786,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Get the data from child branch
         let (mut child_keys, mut child_children) = match self.get_branch_mut(child_id) {
@@ -773,7 +800,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Merge into left branch
-        let merge_success = self.get_branch_mut(left_id)
+        let merge_success = self
+            .get_branch_mut(left_id)
             .map(|left_branch| {
                 // Add separator key from parent
                 left_branch.keys.push(separator_key);
@@ -783,7 +811,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 true
             })
             .unwrap_or(false);
-        
+
         if !merge_success {
             return false;
         }
@@ -803,8 +831,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Merge branch with right sibling
     fn merge_with_right_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs
-        let (child_id, right_id, separator_key) = match self.get_branch(parent_id)
-            .and_then(|parent| {
+        let (child_id, right_id, separator_key) =
+            match self.get_branch(parent_id).and_then(|parent| {
                 if let (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) = (
                     &parent.children[child_index],
                     &parent.children[child_index + 1],
@@ -814,19 +842,21 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Get the data from right branch
-        let (mut right_keys, mut right_children) = match self.get_branch_mut(right_id)
-            .map(|right_branch| (
-                std::mem::take(&mut right_branch.keys),
-                std::mem::take(&mut right_branch.children),
-            )) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+        let (mut right_keys, mut right_children) =
+            match self.get_branch_mut(right_id).map(|right_branch| {
+                (
+                    std::mem::take(&mut right_branch.keys),
+                    std::mem::take(&mut right_branch.children),
+                )
+            }) {
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Merge into child branch
         if let Some(child_branch) = self.get_branch_mut(child_id) {
@@ -1028,7 +1058,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         // Update separator in parent
-        let new_separator = self.get_leaf(right_id)
+        let new_separator = self
+            .get_leaf(right_id)
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
 
         if let Some(new_sep) = new_separator {
@@ -1457,42 +1488,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
-    // NODE DISPATCH HELPERS (Phase 1)
-    // ============================================================================
-
-    /// Invoke `f` on a branch node if it exists, returning `None` otherwise.
-    pub fn with_branch<T, F>(&self, id: NodeId, f: F) -> Option<T>
-    where
-        F: FnOnce(&BranchNode<K, V>) -> T,
-    {
-        self.get_branch(id).map(f)
-    }
-
-    /// Invoke `f` on a mutable branch node if it exists, returning `None` otherwise.
-    pub fn with_branch_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
-    where
-        F: FnOnce(&mut BranchNode<K, V>) -> T,
-    {
-        self.get_branch_mut(id).map(f)
-    }
-
-    /// Invoke `f` on a leaf node if it exists, returning `None` otherwise.
-    pub fn with_leaf<T, F>(&self, id: NodeId, f: F) -> Option<T>
-    where
-        F: FnOnce(&LeafNode<K, V>) -> T,
-    {
-        self.get_leaf(id).map(f)
-    }
-
-    /// Invoke `f` on a mutable leaf node if it exists, returning `None` otherwise.
-    pub fn with_leaf_mut<T, F>(&mut self, id: NodeId, f: F) -> Option<T>
-    where
-        F: FnOnce(&mut LeafNode<K, V>) -> T,
-    {
-        self.get_leaf_mut(id).map(f)
-    }
-
-    // ============================================================================
     // CHILD LOOKUP HELPERS (Phase 2)
     // ============================================================================
 
@@ -1539,10 +1534,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Deallocate a branch node from the arena.
     pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
-        self.branch_arena.get_mut(id as usize)?.take().map(|branch| {
-            self.free_branch_ids.push(id);
-            branch
-        })
+        self.branch_arena
+            .get_mut(id as usize)?
+            .take()
+            .map(|branch| {
+                self.free_branch_ids.push(id);
+                branch
+            })
     }
 
     /// Get a reference to a branch node in the arena.
