@@ -110,7 +110,6 @@ impl<K, V> NodeRef<K, V> {
     }
 }
 
-
 /// Node data that can be allocated in the arena after a split.
 pub enum SplitNodeData<K, V> {
     Leaf(LeafNode<K, V>),
@@ -225,35 +224,24 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Get a mutable reference to the value for a key.
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        match &self.root {
-            NodeRef::Leaf(id, _) => {
-                let id = *id;
-                self.get_leaf_mut(id).and_then(|leaf| leaf.get_mut(key))
-            }
-            NodeRef::Branch(id, _) => {
-                let id = *id;
-                self.get_mut_in_branch(id, key)
-            }
-        }
-    }
-
-    /// Get mutable reference in an arena branch
-    fn get_mut_in_branch(&mut self, branch_id: NodeId, key: &K) -> Option<&mut V> {
-        // Get child info using helper
-        let (_child_index, child_ref) = self.get_child_for_key(branch_id, key)?;
-
-        // Traverse to child
-        match child_ref {
-            NodeRef::Leaf(leaf_id, _) => self
-                .get_leaf_mut(leaf_id)
-                .and_then(|leaf| leaf.get_mut(key)),
-            NodeRef::Branch(child_branch_id, _) => self.get_mut_in_branch(child_branch_id, key),
-        }
+        let root = self.root.clone();
+        self.get_mut_recursive(&root, key)
     }
 
     // ============================================================================
     // HELPERS FOR GET OPERATIONS
     // ============================================================================
+
+    /// Get mutable reference recursively
+    fn get_mut_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> Option<&mut V> {
+        match node {
+            NodeRef::Leaf(id, _) => self.get_leaf_mut(*id).and_then(|leaf| leaf.get_mut(key)),
+            NodeRef::Branch(id, _) => {
+                let (_child_index, child_ref) = self.get_child_for_key(*id, key)?;
+                self.get_mut_recursive(&child_ref, key)
+            }
+        }
+    }
 
     /// Helper to get child info for a key in a branch
     fn get_child_for_key(&self, branch_id: NodeId, key: &K) -> Option<(usize, NodeRef<K, V>)> {
@@ -762,7 +750,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             Some(p) => p,
             None => return false,
         };
-        let (left_id, child_id, separator_key) = match (&parent.children[child_index - 1], &parent.children[child_index]) {
+        let (left_id, child_id, separator_key) = match (
+            &parent.children[child_index - 1],
+            &parent.children[child_index],
+        ) {
             (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
                 (*left, *child, parent.keys[child_index - 1].clone())
             }
@@ -814,7 +805,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             Some(p) => p,
             None => return false,
         };
-        let (child_id, right_id, separator_key) = match (&parent.children[child_index], &parent.children[child_index + 1]) {
+        let (child_id, right_id, separator_key) = match (
+            &parent.children[child_index],
+            &parent.children[child_index + 1],
+        ) {
             (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
                 (*child, *right, parent.keys[child_index].clone())
             }
@@ -863,7 +857,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             Some(p) => p,
             None => return false,
         };
-        let (left_id, child_id, separator_key) = match (&parent.children[child_index - 1], &parent.children[child_index]) {
+        let (left_id, child_id, separator_key) = match (
+            &parent.children[child_index - 1],
+            &parent.children[child_index],
+        ) {
             (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
                 (*left, *child, parent.keys[child_index - 1].clone())
             }
@@ -906,7 +903,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             Some(p) => p,
             None => return false,
         };
-        let (child_id, right_id, separator_key) = match (&parent.children[child_index], &parent.children[child_index + 1]) {
+        let (child_id, right_id, separator_key) = match (
+            &parent.children[child_index],
+            &parent.children[child_index + 1],
+        ) {
             (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
                 (*child, *right, parent.keys[child_index].clone())
             }
@@ -958,9 +958,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Move last key-value from left to child
         let (key, value) = match self.get_leaf_mut(left_id) {
-            Some(left_leaf) if !left_leaf.keys.is_empty() => {
-                (left_leaf.keys.pop().unwrap(), left_leaf.values.pop().unwrap())
-            }
+            Some(left_leaf) if !left_leaf.keys.is_empty() => (
+                left_leaf.keys.pop().unwrap(),
+                left_leaf.values.pop().unwrap(),
+            ),
             _ => return false,
         };
 

@@ -21,6 +21,22 @@ fn test_node_ref_id_and_is_leaf() {
 // ============================================================================
 
 #[test]
+fn test_insert_overwrite_value() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+    
+    // Insert key 1 with value "one"
+    tree.insert(1, "one");
+    assert_eq!(tree.get(&1), Some(&"one"));
+    
+    // Insert key 1 again with value "two"
+    tree.insert(1, "two");
+    
+    // Make sure the value at key 1 is now "two"
+    assert_eq!(tree.get(&1), Some(&"two"));
+    assert_eq!(tree.len(), 1); // Should still be only one item
+}
+
+#[test]
 fn test_create_empty_tree() {
     let tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
     assert_eq!(tree.len(), 0);
