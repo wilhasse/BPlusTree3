@@ -758,37 +758,29 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             _ => return false,
         };
 
-        // Get the data from child branch
-        let (mut child_keys, mut child_children) = match self.get_branch_mut(child_id) {
-            Some(child_branch) => (
-                std::mem::take(&mut child_branch.keys),
-                std::mem::take(&mut child_branch.children),
-            ),
+        // Extract all content from child
+        let mut child_branch = match self.get_branch_mut(child_id) {
+            Some(child_branch) => {
+                let mut extracted = BranchNode::new(child_branch.capacity);
+                std::mem::swap(&mut extracted.keys, &mut child_branch.keys);
+                std::mem::swap(&mut extracted.children, &mut child_branch.children);
+                extracted
+            }
             None => return false,
         };
 
         // Merge into left branch
-        let merge_success = self
-            .get_branch_mut(left_id)
-            .map(|left_branch| {
-                // Add separator key from parent
-                left_branch.keys.push(separator_key);
-                // Add all keys and children from child
-                left_branch.keys.append(&mut child_keys);
-                left_branch.children.append(&mut child_children);
-                true
-            })
-            .unwrap_or(false);
-
-        if !merge_success {
+        if let Some(left_branch) = self.get_branch_mut(left_id) {
+            left_branch.merge_from(separator_key, &mut child_branch);
+        } else {
             return false;
         }
 
         // Remove child from parent
-        self.get_branch_mut(parent_id).map(|parent| {
+        if let Some(parent) = self.get_branch_mut(parent_id) {
             parent.children.remove(child_index);
             parent.keys.remove(child_index - 1);
-        });
+        }
 
         // Deallocate the merged child
         self.deallocate_branch(child_id);
@@ -813,25 +805,20 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             _ => return false,
         };
 
-        // Get the data from right branch
-        let (mut right_keys, mut right_children) =
-            match self.get_branch_mut(right_id).map(|right_branch| {
-                (
-                    std::mem::take(&mut right_branch.keys),
-                    std::mem::take(&mut right_branch.children),
-                )
-            }) {
-                Some(tuple) => tuple,
-                None => return false,
-            };
+        // Extract all content from right sibling
+        let mut right_branch = match self.get_branch_mut(right_id) {
+            Some(right_branch) => {
+                let mut extracted = BranchNode::new(right_branch.capacity);
+                std::mem::swap(&mut extracted.keys, &mut right_branch.keys);
+                std::mem::swap(&mut extracted.children, &mut right_branch.children);
+                extracted
+            }
+            None => return false,
+        };
 
         // Merge into child branch
         if let Some(child_branch) = self.get_branch_mut(child_id) {
-            // Add separator key from parent
-            child_branch.keys.push(separator_key);
-            // Add all keys and children from right
-            child_branch.keys.append(&mut right_keys);
-            child_branch.children.append(&mut right_children);
+            child_branch.merge_from(separator_key, &mut right_branch);
         } else {
             return false;
         }
@@ -865,30 +852,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             _ => return false,
         };
 
-        // Take the last key and child from left sibling
-        let (moved_key, moved_child) = match self.get_branch_mut(left_id).and_then(|left_branch| {
-            match (left_branch.keys.pop(), left_branch.children.pop()) {
-                (Some(k), Some(c)) => Some((k, c)),
-                _ => None,
-            }
-        }) {
-            Some(tuple) => tuple,
+        // Borrow from left branch
+        let (moved_key, moved_child) = match self.get_branch_mut(left_id) {
+            Some(left_branch) => match left_branch.borrow_last() {
+                Some(result) => result,
+                None => return false,
+            },
             None => return false,
         };
 
-        // Insert into child branch at the beginning
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
-            // The separator becomes the first key in child
-            child_branch.keys.insert(0, separator_key);
-            // The moved child becomes the first child
-            child_branch.children.insert(0, moved_child);
+        // Accept into child branch
+        let new_separator = if let Some(child_branch) = self.get_branch_mut(child_id) {
+            child_branch.accept_from_left(separator_key, moved_key, moved_child)
         } else {
             return false;
-        }
+        };
 
-        // Update separator in parent (moved_key becomes new separator)
+        // Update separator in parent
         if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.keys[child_index - 1] = moved_key;
+            parent.keys[child_index - 1] = new_separator;
         }
 
         true
@@ -911,27 +893,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             _ => return false,
         };
 
-        // Take the first key and child from right sibling
+        // Borrow from right branch
         let (moved_key, moved_child) = match self.get_branch_mut(right_id) {
-            Some(right_branch) if !right_branch.keys.is_empty() => {
-                (right_branch.keys.remove(0), right_branch.children.remove(0))
-            }
-            _ => return false,
+            Some(right_branch) => match right_branch.borrow_first() {
+                Some(result) => result,
+                None => return false,
+            },
+            None => return false,
         };
 
-        // Append to child branch
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
-            // The separator becomes the last key in child
-            child_branch.keys.push(separator_key);
-            // The moved child becomes the last child
-            child_branch.children.push(moved_child);
+        // Accept into child branch
+        let new_separator = if let Some(child_branch) = self.get_branch_mut(child_id) {
+            child_branch.accept_from_right(separator_key, moved_key, moved_child)
         } else {
             return false;
-        }
+        };
 
-        // Update separator in parent (moved_key becomes new separator)
+        // Update separator in parent
         if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.keys[child_index] = moved_key;
+            parent.keys[child_index] = new_separator;
         }
 
         true
@@ -939,34 +919,24 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Borrow from left sibling leaf
     fn borrow_from_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        // Extract the needed data to avoid borrow checker issues
-        let branch = match self.get_branch(branch_id) {
-            Some(b) => b,
+        // Extract IDs from parent
+        let (left_id, child_id) = match self.get_adjacent_leaf_ids(branch_id, child_index - 1) {
+            Some(ids) => ids,
             None => return false,
         };
-        let (left_id, child_id, _separator_key) = match (
-            &branch.children[child_index - 1],
-            &branch.children[child_index],
-        ) {
-            (NodeRef::Leaf(left, _), NodeRef::Leaf(child, _)) => {
-                (*left, *child, branch.keys[child_index - 1].clone())
-            }
-            _ => return false,
-        };
 
-        // Move last key-value from left to child
+        // Borrow from left leaf
         let (key, value) = match self.get_leaf_mut(left_id) {
-            Some(left_leaf) if !left_leaf.keys.is_empty() => (
-                left_leaf.keys.pop().unwrap(),
-                left_leaf.values.pop().unwrap(),
-            ),
-            _ => return false,
+            Some(left_leaf) => match left_leaf.borrow_last() {
+                Some(result) => result,
+                None => return false,
+            },
+            None => return false,
         };
 
-        // Insert into child at beginning
+        // Accept into child leaf
         if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.keys.insert(0, key.clone());
-            child_leaf.values.insert(0, value);
+            child_leaf.accept_from_left(key.clone(), value);
         } else {
             return false;
         }
@@ -981,29 +951,29 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Borrow from right sibling leaf
     fn borrow_from_right_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        // Extract the needed data
+        // Extract IDs from parent
         let (child_id, right_id) = match self.get_adjacent_leaf_ids(branch_id, child_index) {
             Some(ids) => ids,
             None => return false,
         };
 
-        // Move first key-value from right to child
+        // Borrow from right leaf
         let (key, value) = match self.get_leaf_mut(right_id) {
-            Some(right_leaf) if !right_leaf.keys.is_empty() => {
-                (right_leaf.keys.remove(0), right_leaf.values.remove(0))
-            }
-            _ => return false,
+            Some(right_leaf) => match right_leaf.borrow_first() {
+                Some(result) => result,
+                None => return false,
+            },
+            None => return false,
         };
 
-        // Append to child
+        // Accept into child leaf
         if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.keys.push(key);
-            child_leaf.values.push(value);
+            child_leaf.accept_from_right(key, value);
         } else {
             return false;
         }
 
-        // Update separator in parent
+        // Update separator in parent (new first key of right sibling)
         let new_separator = self
             .get_leaf(right_id)
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
@@ -1019,34 +989,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Merge with left sibling leaf
     fn merge_with_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        // Extract the needed data
-        let branch = match self.get_branch(branch_id) {
-            Some(b) => b,
-            None => return false,
-        };
-        let (left_id, child_id) = match (
-            &branch.children[child_index - 1],
-            &branch.children[child_index],
-        ) {
-            (NodeRef::Leaf(left, _), NodeRef::Leaf(child, _)) => (*left, *child),
-            _ => return false,
-        };
-
-        // Move all keys and values from child to left, and get child's next pointer
-        let (mut keys, mut values, child_next) = match self.get_leaf_mut(child_id) {
-            Some(child_leaf) => (
-                std::mem::take(&mut child_leaf.keys),
-                std::mem::take(&mut child_leaf.values),
-                child_leaf.next,
-            ),
+        // Extract IDs from parent
+        let (left_id, child_id) = match self.get_adjacent_leaf_ids(branch_id, child_index - 1) {
+            Some(ids) => ids,
             None => return false,
         };
 
-        // Merge the child into the left leaf and update linked list
+        // Extract all content from child
+        let (mut child_keys, mut child_values, child_next) = match self.get_leaf_mut(child_id) {
+            Some(child_leaf) => child_leaf.extract_all(),
+            None => return false,
+        };
+
+        // Merge into left leaf and update linked list
         if let Some(left_leaf) = self.get_leaf_mut(left_id) {
-            left_leaf.keys.append(&mut keys);
-            left_leaf.values.append(&mut values);
-            // Update linked list: left leaf's next should point to what child was pointing to
+            left_leaf.keys.append(&mut child_keys);
+            left_leaf.values.append(&mut child_values);
             left_leaf.next = child_next;
         } else {
             return false;
@@ -1066,27 +1024,22 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Merge with right sibling leaf
     fn merge_with_right_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        // Extract the needed data
+        // Extract IDs from parent
         let (child_id, right_id) = match self.get_adjacent_leaf_ids(branch_id, child_index) {
             Some(ids) => ids,
             None => return false,
         };
 
-        // Move all keys and values from right to child, and get right's next pointer
-        let (mut keys, mut values, right_next) = match self.get_leaf_mut(right_id) {
-            Some(right_leaf) => (
-                std::mem::take(&mut right_leaf.keys),
-                std::mem::take(&mut right_leaf.values),
-                right_leaf.next,
-            ),
+        // Extract all content from right sibling
+        let (mut right_keys, mut right_values, right_next) = match self.get_leaf_mut(right_id) {
+            Some(right_leaf) => right_leaf.extract_all(),
             None => return false,
         };
 
-        // Merge the right leaf into the left leaf and update linked list
+        // Merge into child leaf and update linked list
         if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.keys.append(&mut keys);
-            child_leaf.values.append(&mut values);
-            // Update linked list: left leaf's next should point to what right was pointing to
+            child_leaf.keys.append(&mut right_keys);
+            child_leaf.values.append(&mut right_values);
             child_leaf.next = right_next;
         } else {
             return false;
@@ -1874,6 +1827,56 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         // Exception: root can have fewer keys
         self.capacity / 2
     }
+
+    // ============================================================================
+    // BORROWING AND MERGING HELPERS
+    // ============================================================================
+
+    /// Borrow the last key-value pair from this leaf (used when this is the left sibling)
+    pub fn borrow_last(&mut self) -> Option<(K, V)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        Some((self.keys.pop().unwrap(), self.values.pop().unwrap()))
+    }
+
+    /// Borrow the first key-value pair from this leaf (used when this is the right sibling)
+    pub fn borrow_first(&mut self) -> Option<(K, V)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        Some((self.keys.remove(0), self.values.remove(0)))
+    }
+
+    /// Accept a borrowed key-value pair at the beginning (from left sibling)
+    pub fn accept_from_left(&mut self, key: K, value: V) {
+        self.keys.insert(0, key);
+        self.values.insert(0, value);
+    }
+
+    /// Accept a borrowed key-value pair at the end (from right sibling)
+    pub fn accept_from_right(&mut self, key: K, value: V) {
+        self.keys.push(key);
+        self.values.push(value);
+    }
+
+    /// Merge all content from another leaf into this one, returning the other's next pointer
+    pub fn merge_from(&mut self, other: &mut LeafNode<K, V>) -> NodeId {
+        self.keys.append(&mut other.keys);
+        self.values.append(&mut other.values);
+        let other_next = other.next;
+        other.next = NULL_NODE; // Clear the other's next pointer
+        other_next
+    }
+
+    /// Extract all content from this leaf (used for merging)
+    pub fn extract_all(&mut self) -> (Vec<K>, Vec<V>, NodeId) {
+        let keys = std::mem::take(&mut self.keys);
+        let values = std::mem::take(&mut self.values);
+        let next = self.next;
+        self.next = NULL_NODE;
+        (keys, values, next)
+    }
 }
 
 impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
@@ -2051,6 +2054,55 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // For branch nodes, minimum is floor(capacity / 2)
         // Exception: root can have fewer keys
         self.capacity / 2
+    }
+
+    // ============================================================================
+    // BORROWING AND MERGING HELPERS
+    // ============================================================================
+
+    /// Borrow the last key and child from this branch (used when this is the left sibling)
+    pub fn borrow_last(&mut self) -> Option<(K, NodeRef<K, V>)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        let key = self.keys.pop()?;
+        let child = self.children.pop()?;
+        Some((key, child))
+    }
+
+    /// Borrow the first key and child from this branch (used when this is the right sibling)
+    pub fn borrow_first(&mut self) -> Option<(K, NodeRef<K, V>)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        let key = self.keys.remove(0);
+        let child = self.children.remove(0);
+        Some((key, child))
+    }
+
+    /// Accept a borrowed key and child at the beginning (from left sibling)
+    /// The separator becomes the first key, and the moved child becomes the first child
+    pub fn accept_from_left(&mut self, separator: K, moved_key: K, moved_child: NodeRef<K, V>) -> K {
+        self.keys.insert(0, separator);
+        self.children.insert(0, moved_child);
+        moved_key // Return the new separator for parent
+    }
+
+    /// Accept a borrowed key and child at the end (from right sibling)  
+    /// The separator becomes the last key, and the moved child becomes the last child
+    pub fn accept_from_right(&mut self, separator: K, moved_key: K, moved_child: NodeRef<K, V>) -> K {
+        self.keys.push(separator);
+        self.children.push(moved_child);
+        moved_key // Return the new separator for parent
+    }
+
+    /// Merge all content from another branch into this one, with separator from parent
+    pub fn merge_from(&mut self, separator: K, other: &mut BranchNode<K, V>) {
+        // Add separator key from parent
+        self.keys.push(separator);
+        // Add all keys and children from other
+        self.keys.append(&mut other.keys);
+        self.children.append(&mut other.children);
     }
 }
 
