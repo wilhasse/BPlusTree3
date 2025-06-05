@@ -397,123 +397,43 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// assert_eq!(tree.insert(1, "second"), Some("first"));
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let _capacity = self.capacity;
+        // Use insert_recursive to handle the insertion
+        let result = self.insert_recursive(&self.root.clone(), key, value);
 
-        // Special handling for Leaf root
-        if let NodeRef::Leaf(id, _) = &self.root {
-            let id = *id;
-            if let Some(leaf) = self.get_leaf_mut(id) {
-                let result = leaf.insert(key.clone(), value.clone());
-                match result {
-                    InsertResult::Updated(old_value) => return old_value,
-                    InsertResult::Split {
-                        old_value,
-                        new_node_data,
-                        separator_key,
-                    } => {
-                        match new_node_data {
-                            SplitNodeData::Leaf(new_leaf_data) => {
-                                // Allocate the new leaf in arena
-                                let new_id = self.allocate_leaf(new_leaf_data);
+        match result {
+            InsertResult::Updated(old_value) => old_value,
+            InsertResult::Split {
+                old_value,
+                new_node_data,
+                separator_key,
+            } => {
+                // Root split - need to create a new root
+                let new_node_ref = match new_node_data {
+                    SplitNodeData::Leaf(new_leaf_data) => {
+                        let new_id = self.allocate_leaf(new_leaf_data);
 
-                                // Update linked list pointers for root leaf split
-                                self.get_leaf_mut(id).map(|leaf| leaf.next = new_id);
-
-                                let new_node_ref = NodeRef::Leaf(new_id, PhantomData);
-                                let new_root = self.new_root(new_node_ref, separator_key);
-                                // Allocate new root in branch arena
-                                let root_id = self.allocate_branch(new_root);
-                                self.root = NodeRef::Branch(root_id, PhantomData);
-                                return old_value;
-                            }
-                            SplitNodeData::Branch(_) => {
-                                // This should never happen - a leaf can only split into a leaf
-                                unreachable!("Leaf node cannot return Branch split data");
-                            }
+                        // Update linked list pointers for root leaf split
+                        if let NodeRef::Leaf(original_id, _) = &self.root {
+                            self.get_leaf_mut(*original_id)
+                                .map(|leaf| leaf.next = new_id);
                         }
+
+                        NodeRef::Leaf(new_id, PhantomData)
                     }
-                }
+                    SplitNodeData::Branch(new_branch_data) => {
+                        let new_id = self.allocate_branch(new_branch_data);
+                        NodeRef::Branch(new_id, PhantomData)
+                    }
+                };
+
+                // Create new root with the split nodes
+                let new_root = self.new_root(new_node_ref, separator_key);
+                let root_id = self.allocate_branch(new_root);
+                self.root = NodeRef::Branch(root_id, PhantomData);
+
+                old_value
             }
         }
-
-        // Special handling for Branch root
-        if let NodeRef::Branch(id, _) = &self.root {
-            let id = *id;
-
-            // First, determine child index and type using helper
-            let (child_index, child_ref) = match self.get_child_for_key(id, &key) {
-                Some((index, child_ref)) => (index, child_ref),
-                None => return None, // Invalid branch or child
-            };
-
-            // Now handle the insert based on child type
-            let child_result = match child_ref {
-                NodeRef::Leaf(child_id, _) => {
-                    // Handle arena leaf child - need to access leaf arena
-                    self.get_leaf_mut(child_id)
-                        .map(|leaf| leaf.insert(key, value))
-                        .unwrap_or(InsertResult::Updated(None))
-                }
-                NodeRef::Branch(_, _) => {
-                    // For deeper trees, recursively insert with arena access
-                    self.insert_recursive(&child_ref, key, value)
-                }
-            };
-
-            match child_result {
-                InsertResult::Updated(old_value) => return old_value,
-                InsertResult::Split {
-                    old_value,
-                    new_node_data,
-                    separator_key,
-                } => {
-                    // Allocate the new node based on its type
-                    let new_node_ref = match new_node_data {
-                        SplitNodeData::Leaf(new_leaf_data) => {
-                            let new_id = self.allocate_leaf(new_leaf_data);
-
-                            // Update linked list pointers for leaf splits
-                            if let NodeRef::Leaf(original_id, _) = child_ref {
-                                // Update the original leaf's next pointer to point to the new leaf
-                                if let Some(original_leaf) = self.get_leaf_mut(original_id) {
-                                    original_leaf.next = new_id;
-                                }
-                            }
-
-                            NodeRef::Leaf(new_id, PhantomData)
-                        }
-                        SplitNodeData::Branch(new_branch_data) => {
-                            let new_id = self.allocate_branch(new_branch_data);
-                            NodeRef::Branch(new_id, PhantomData)
-                        }
-                    };
-
-                    // Now update the branch using the proper method
-                    if let Some(branch) = self.get_branch_mut(id) {
-                        if let Some((new_branch_data, promoted_key)) = branch
-                            .insert_child_and_split_if_needed(
-                                child_index,
-                                separator_key,
-                                new_node_ref,
-                            )
-                        {
-                            // Branch split, allocate new branch through arena and create new root
-                            let new_branch_id = self.allocate_branch(new_branch_data);
-                            let new_branch_ref = NodeRef::Branch(new_branch_id, PhantomData);
-                            let new_root = self.new_root(new_branch_ref, promoted_key);
-                            let root_id = self.allocate_branch(new_root);
-                            self.root = NodeRef::Branch(root_id, PhantomData);
-                        }
-                        // If no split, the child was inserted successfully
-                    }
-
-                    return old_value;
-                }
-            }
-        }
-
-        // No fallback needed - all nodes are arena-based
-        None
     }
 
     // ============================================================================
@@ -534,6 +454,85 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         new_root.children.push(old_root);
         new_root.children.push(new_node);
         new_root
+    }
+
+    /// Recursively insert a key with proper arena access.
+    fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
+        match node {
+            NodeRef::Leaf(id, _) => {
+                if let Some(leaf) = self.get_leaf_mut(*id) {
+                    leaf.insert(key, value)
+                } else {
+                    InsertResult::Updated(None)
+                }
+            }
+            NodeRef::Branch(id, _) => {
+                let id = *id;
+
+                // First get child info without mutable borrow
+                let (child_index, child_ref) = match self.get_child_for_key(id, &key) {
+                    Some(info) => info,
+                    None => return InsertResult::Updated(None),
+                };
+
+                // Recursively insert
+                let child_result = self.insert_recursive(&child_ref, key, value);
+
+                // Handle the result
+                match child_result {
+                    InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
+                    InsertResult::Split {
+                        old_value,
+                        new_node_data,
+                        separator_key,
+                    } => {
+                        // Allocate the new node based on its type
+                        let new_node = match new_node_data {
+                            SplitNodeData::Leaf(new_leaf_data) => {
+                                let new_id = self.allocate_leaf(new_leaf_data);
+
+                                // Update linked list pointers for leaf splits
+                                if let NodeRef::Leaf(original_id, _) = child_ref {
+                                    // Update the original leaf's next pointer to point to the new leaf
+                                    if let Some(original_leaf) = self.get_leaf_mut(original_id) {
+                                        original_leaf.next = new_id;
+                                    }
+                                }
+
+                                NodeRef::Leaf(new_id, PhantomData)
+                            }
+                            SplitNodeData::Branch(new_branch_data) => {
+                                let new_id = self.allocate_branch(new_branch_data);
+                                NodeRef::Branch(new_id, PhantomData)
+                            }
+                        };
+
+                        // Insert into this branch
+                        if let Some(branch) = self.get_branch_mut(id) {
+                            if let Some((new_branch_data, promoted_key)) = branch
+                                .insert_child_and_split_if_needed(
+                                    child_index,
+                                    separator_key,
+                                    new_node,
+                                )
+                            {
+                                // This branch split too - return raw branch data
+                                InsertResult::Split {
+                                    old_value,
+                                    new_node_data: SplitNodeData::Branch(new_branch_data),
+                                    separator_key: promoted_key,
+                                }
+                            } else {
+                                // No split needed
+                                InsertResult::Updated(old_value)
+                            }
+                        } else {
+                            InsertResult::Updated(old_value)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ============================================================================
@@ -615,7 +614,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Rebalance an underfull child in an arena branch
     fn rebalance_child(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Get information about the child and its siblings
-        let (has_left_sibling, has_right_sibling, child_is_leaf) = match self.get_branch(branch_id) {
+        let (has_left_sibling, has_right_sibling, child_is_leaf) = match self.get_branch(branch_id)
+        {
             Some(branch) => {
                 let has_left = child_index > 0;
                 let has_right = child_index < branch.children.len() - 1;
@@ -883,8 +883,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Borrow from left sibling branch
     fn borrow_from_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and parent info
-        let (left_id, child_id, separator_key) = match self.get_branch(parent_id)
-            .and_then(|parent| {
+        let (left_id, child_id, separator_key) =
+            match self.get_branch(parent_id).and_then(|parent| {
                 if let (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) = (
                     &parent.children[child_index - 1],
                     &parent.children[child_index],
@@ -894,18 +894,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Take the last key and child from left sibling
-        let (moved_key, moved_child) = match self.get_branch_mut(left_id)
-            .and_then(|left_branch| {
-                match (left_branch.keys.pop(), left_branch.children.pop()) {
-                    (Some(k), Some(c)) => Some((k, c)),
-                    _ => None,
-                }
-            }) {
+        let (moved_key, moved_child) = match self.get_branch_mut(left_id).and_then(|left_branch| {
+            match (left_branch.keys.pop(), left_branch.children.pop()) {
+                (Some(k), Some(c)) => Some((k, c)),
+                _ => None,
+            }
+        }) {
             Some(tuple) => tuple,
             None => return false,
         };
@@ -931,8 +930,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Borrow from right sibling branch
     fn borrow_from_right_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and parent info
-        let (child_id, right_id, separator_key) = match self.get_branch(parent_id)
-            .and_then(|parent| {
+        let (child_id, right_id, separator_key) =
+            match self.get_branch(parent_id).and_then(|parent| {
                 if let (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) = (
                     &parent.children[child_index],
                     &parent.children[child_index + 1],
@@ -942,13 +941,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Take the first key and child from right sibling
-        let (moved_key, moved_child) = match self.get_branch_mut(right_id)
-            .and_then(|right_branch| {
+        let (moved_key, moved_child) =
+            match self.get_branch_mut(right_id).and_then(|right_branch| {
                 if !right_branch.keys.is_empty() {
                     let k = right_branch.keys.remove(0);
                     let c = right_branch.children.remove(0);
@@ -957,9 +956,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Append to child branch
         if let Some(child_branch) = self.get_branch_mut(child_id) {
@@ -982,8 +981,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Borrow from left sibling leaf
     fn borrow_from_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Extract the needed data to avoid borrow checker issues
-        let (left_id, child_id, _separator_key) = match self.get_branch(branch_id)
-            .and_then(|branch| {
+        let (left_id, child_id, _separator_key) =
+            match self.get_branch(branch_id).and_then(|branch| {
                 if let (NodeRef::Leaf(left, _), NodeRef::Leaf(child, _)) = (
                     &branch.children[child_index - 1],
                     &branch.children[child_index],
@@ -993,18 +992,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     None
                 }
             }) {
-            Some(tuple) => tuple,
-            None => return false,
-        };
+                Some(tuple) => tuple,
+                None => return false,
+            };
 
         // Move last key-value from left to child
-        let (key, value) = match self.get_leaf_mut(left_id)
-            .and_then(|left_leaf| {
-                match (left_leaf.keys.pop(), left_leaf.values.pop()) {
-                    (Some(k), Some(v)) => Some((k, v)),
-                    _ => None,
-                }
-            }) {
+        let (key, value) = match self.get_leaf_mut(left_id).and_then(|left_leaf| {
+            match (left_leaf.keys.pop(), left_leaf.values.pop()) {
+                (Some(k), Some(v)) => Some((k, v)),
+                _ => None,
+            }
+        }) {
             Some(tuple) => tuple,
             None => return false,
         };
@@ -1034,14 +1032,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Move first key-value from right to child
-        let (key, value) = match self.get_leaf_mut(right_id)
-            .and_then(|right_leaf| {
-                if !right_leaf.keys.is_empty() {
-                    Some((right_leaf.keys.remove(0), right_leaf.values.remove(0)))
-                } else {
-                    None
-                }
-            }) {
+        let (key, value) = match self.get_leaf_mut(right_id).and_then(|right_leaf| {
+            if !right_leaf.keys.is_empty() {
+                Some((right_leaf.keys.remove(0), right_leaf.values.remove(0)))
+            } else {
+                None
+            }
+        }) {
             Some(tuple) => tuple,
             None => return false,
         };
@@ -1071,17 +1068,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Merge with left sibling leaf
     fn merge_with_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Extract the needed data
-        let (left_id, child_id) = match self.get_branch(branch_id)
-            .and_then(|branch| {
-                if let (NodeRef::Leaf(left, _), NodeRef::Leaf(child, _)) = (
-                    &branch.children[child_index - 1],
-                    &branch.children[child_index],
-                ) {
-                    Some((*left, *child))
-                } else {
-                    None
-                }
-            }) {
+        let (left_id, child_id) = match self.get_branch(branch_id).and_then(|branch| {
+            if let (NodeRef::Leaf(left, _), NodeRef::Leaf(child, _)) = (
+                &branch.children[child_index - 1],
+                &branch.children[child_index],
+            ) {
+                Some((*left, *child))
+            } else {
+                None
+            }
+        }) {
             Some(tuple) => tuple,
             None => return false,
         };
@@ -1158,85 +1154,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         true // Child still exists
     }
 
-    /// Recursively insert a key with proper arena access.
-    fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf_mut(*id) {
-                    leaf.insert(key, value)
-                } else {
-                    InsertResult::Updated(None)
-                }
-            }
-            NodeRef::Branch(id, _) => {
-                let id = *id;
-
-                // First get child info without mutable borrow
-                let (child_index, child_ref) = match self.get_child_for_key(id, &key) {
-                    Some(info) => info,
-                    None => return InsertResult::Updated(None),
-                };
-
-                // Recursively insert
-                let child_result = self.insert_recursive(&child_ref, key, value);
-
-                // Handle the result
-                match child_result {
-                    InsertResult::Updated(old_value) => InsertResult::Updated(old_value),
-                    InsertResult::Split {
-                        old_value,
-                        new_node_data,
-                        separator_key,
-                    } => {
-                        // Allocate the new node based on its type
-                        let new_node = match new_node_data {
-                            SplitNodeData::Leaf(new_leaf_data) => {
-                                let new_id = self.allocate_leaf(new_leaf_data);
-
-                                // Update linked list pointers for leaf splits
-                                if let NodeRef::Leaf(original_id, _) = child_ref {
-                                    // Update the original leaf's next pointer to point to the new leaf
-                                    if let Some(original_leaf) = self.get_leaf_mut(original_id) {
-                                        original_leaf.next = new_id;
-                                    }
-                                }
-
-                                NodeRef::Leaf(new_id, PhantomData)
-                            }
-                            SplitNodeData::Branch(new_branch_data) => {
-                                let new_id = self.allocate_branch(new_branch_data);
-                                NodeRef::Branch(new_id, PhantomData)
-                            }
-                        };
-
-                        // Insert into this branch
-                        if let Some(branch) = self.get_branch_mut(id) {
-                            if let Some((new_branch_data, promoted_key)) = branch
-                                .insert_child_and_split_if_needed(
-                                    child_index,
-                                    separator_key,
-                                    new_node,
-                                )
-                            {
-                                // This branch split too - return raw branch data
-                                InsertResult::Split {
-                                    old_value,
-                                    new_node_data: SplitNodeData::Branch(new_branch_data),
-                                    separator_key: promoted_key,
-                                }
-                            } else {
-                                // No split needed
-                                InsertResult::Updated(old_value)
-                            }
-                        } else {
-                            InsertResult::Updated(old_value)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     /// Remove a key from the tree, returning an error if the key doesn't exist.
     /// This is equivalent to Python's `del tree[key]`.
     pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
@@ -1294,20 +1211,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Recursively count elements with proper arena access.
     fn len_recursive(&self, node: &NodeRef<K, V>) -> usize {
         match node {
-            NodeRef::Leaf(id, _) => {
-                self.get_leaf(*id).map(|leaf| leaf.len()).unwrap_or(0)
-            }
-            NodeRef::Branch(id, _) => {
-                self.get_branch(*id)
-                    .map(|branch| {
-                        branch
-                            .children
-                            .iter()
-                            .map(|child| self.len_recursive(child))
-                            .sum()
-                    })
-                    .unwrap_or(0)
-            }
+            NodeRef::Leaf(id, _) => self.get_leaf(*id).map(|leaf| leaf.len()).unwrap_or(0),
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
+                .map(|branch| {
+                    branch
+                        .children
+                        .iter()
+                        .map(|child| self.len_recursive(child))
+                        .sum()
+                })
+                .unwrap_or(0),
         }
     }
 
@@ -1340,17 +1254,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn leaf_count_recursive(&self, node: &NodeRef<K, V>) -> usize {
         match node {
             NodeRef::Leaf(_, _) => 1, // An arena leaf is one leaf node
-            NodeRef::Branch(id, _) => {
-                self.get_branch(*id)
-                    .map(|branch| {
-                        branch
-                            .children
-                            .iter()
-                            .map(|child| self.leaf_count_recursive(child))
-                            .sum()
-                    })
-                    .unwrap_or(0)
-            }
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
+                .map(|branch| {
+                    branch
+                        .children
+                        .iter()
+                        .map(|child| self.leaf_count_recursive(child))
+                        .sum()
+                })
+                .unwrap_or(0),
         }
     }
 
@@ -1455,10 +1368,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Set the next pointer of a leaf node in the arena.
     pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
-        self.get_leaf_mut(id).map(|leaf| {
-            leaf.next = next_id;
-            true
-        }).unwrap_or(false)
+        self.get_leaf_mut(id)
+            .map(|leaf| {
+                leaf.next = next_id;
+                true
+            })
+            .unwrap_or(false)
     }
 
     /// Get the next pointer of a leaf node in the arena.
@@ -1881,36 +1796,35 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
             Err(index) => {
                 // Key doesn't exist, need to insert
                 // Check if split is needed BEFORE inserting
-                if self.is_full() {
-                    // Leaf is at capacity, split first then insert
-                    let mut new_leaf_data = self.split();
-                    let separator_key = new_leaf_data.keys[0].clone();
-
-                    // Determine which leaf should receive the new key
-                    if key < separator_key {
-                        // Insert into the current (left) leaf
-                        self.insert_at_index(index, key, value);
-                    } else {
-                        // Insert into the new (right) leaf
-                        match new_leaf_data.keys.binary_search(&key) {
-                            Ok(_) => panic!("Key should not exist in new leaf"),
-                            Err(new_index) => {
-                                new_leaf_data.insert_at_index(new_index, key, value);
-                            }
-                        }
-                    }
-
-                    // Return the leaf data for arena allocation
-                    InsertResult::Split {
-                        old_value: None,
-                        new_node_data: SplitNodeData::Leaf(new_leaf_data),
-                        separator_key,
-                    }
-                } else {
+                if !self.is_full() {
                     // Room to insert without splitting
                     self.insert_at_index(index, key, value);
                     // Simple insertion - no split needed
-                    InsertResult::Updated(None)
+                    return InsertResult::Updated(None);
+                }
+                // Leaf is at capacity, split first then insert
+                let mut new_leaf_data = self.split();
+                let separator_key = new_leaf_data.keys[0].clone();
+
+                // Determine which leaf should receive the new key
+                if key < separator_key {
+                    // Insert into the current (left) leaf
+                    self.insert_at_index(index, key, value);
+                } else {
+                    // Insert into the new (right) leaf
+                    match new_leaf_data.keys.binary_search(&key) {
+                        Ok(_) => panic!("Key should not exist in new leaf"),
+                        Err(new_index) => {
+                            new_leaf_data.insert_at_index(new_index, key, value);
+                        }
+                    }
+                }
+
+                // Return the leaf data for arena allocation
+                InsertResult::Split {
+                    old_value: None,
+                    new_node_data: SplitNodeData::Leaf(new_leaf_data),
+                    separator_key,
                 }
             }
         }
