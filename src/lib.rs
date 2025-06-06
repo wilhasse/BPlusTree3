@@ -434,10 +434,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Recursively insert a key with proper arena access.
     fn insert_recursive(&mut self, node: &NodeRef<K, V>, key: K, value: V) -> InsertResult<K, V> {
         match node {
-            NodeRef::Leaf(id, _) => {
-                self.get_leaf_mut(*id)
-                    .map_or(InsertResult::Updated(None), |leaf| leaf.insert(key, value))
-            }
+            NodeRef::Leaf(id, _) => self
+                .get_leaf_mut(*id)
+                .map_or(InsertResult::Updated(None), |leaf| leaf.insert(key, value)),
             NodeRef::Branch(id, _) => {
                 let id = *id;
 
@@ -480,15 +479,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         };
 
                         // Insert into this branch
-                        match self.get_branch_mut(id)
-                            .and_then(|branch| {
-                                branch.insert_child_and_split_if_needed(
-                                    child_index,
-                                    separator_key,
-                                    new_node,
-                                )
-                            })
-                        {
+                        match self.get_branch_mut(id).and_then(|branch| {
+                            branch.insert_child_and_split_if_needed(
+                                child_index,
+                                separator_key,
+                                new_node,
+                            )
+                        }) {
                             Some((new_branch_data, promoted_key)) => {
                                 // This branch split too - return raw branch data
                                 InsertResult::Split {
@@ -542,14 +539,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     fn remove_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> RemoveResult<V> {
         match node {
             NodeRef::Leaf(id, _) => {
-                self.get_leaf_mut(*id).map_or(
-                    RemoveResult::Updated(None, false),
-                    |leaf| {
+                self.get_leaf_mut(*id)
+                    .map_or(RemoveResult::Updated(None, false), |leaf| {
                         let removed_value = leaf.remove(key);
                         let is_underfull = leaf.is_underfull();
                         RemoveResult::Updated(removed_value, is_underfull)
-                    },
-                )
+                    })
             }
             NodeRef::Branch(id, _) => {
                 let id = *id;
@@ -868,7 +863,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Update separator in parent
-        self.get_branch_mut(parent_id).map(|parent| parent.keys[child_index - 1] = new_separator);
+        self.get_branch_mut(parent_id)
+            .map(|parent| parent.keys[child_index - 1] = new_separator);
 
         true
     }
@@ -907,7 +903,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Update separator in parent
-        self.get_branch_mut(parent_id).map(|parent| parent.keys[child_index] = new_separator);
+        self.get_branch_mut(parent_id)
+            .map(|parent| parent.keys[child_index] = new_separator);
 
         true
     }
@@ -937,7 +934,8 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         // Update separator in parent
-        self.get_branch_mut(branch_id).map(|branch| branch.keys[child_index - 1] = key);
+        self.get_branch_mut(branch_id)
+            .map(|branch| branch.keys[child_index - 1] = key);
 
         true
     }
@@ -971,8 +969,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             .get_leaf(right_id)
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
 
-        new_separator
-            .and_then(|new_sep| self.get_branch_mut(branch_id).map(|branch| branch.keys[child_index] = new_sep));
+        new_separator.and_then(|new_sep| {
+            self.get_branch_mut(branch_id)
+                .map(|branch| branch.keys[child_index] = new_sep)
+        });
 
         true
     }
@@ -1954,8 +1954,6 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
     // ============================================================================
 
     /// Split this branch node, returning the new right node and promoted key.
-    /// Split this branch node, returning the new right node data and promoted key.
-    /// The arena-allocating code should handle creating the actual NodeRef.
     pub fn split_data(&mut self) -> (BranchNode<K, V>, K) {
         // For branch nodes, we need to ensure both resulting nodes have at least min_keys
         // The middle key gets promoted, so we need at least min_keys on each side
@@ -1980,17 +1978,12 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         // The middle key gets promoted to the parent
         let promoted_key = self.keys[mid].clone();
 
-        // Create new branch for right half (no Box allocation)
-        let mut new_branch = BranchNode::new(self.capacity);
-
-        // Move right half of keys to new branch (excluding the promoted key)
-        new_branch.keys = self.keys.split_off(mid + 1);
+        let mut right_half = BranchNode::new(self.capacity);
+        right_half.keys = self.keys.split_off(mid + 1);
+        right_half.children = self.children.split_off(mid + 1);
         self.keys.truncate(mid); // Remove the promoted key from left side
 
-        // Move right half of children to new branch
-        new_branch.children = self.children.split_off(mid + 1);
-
-        (new_branch, promoted_key)
+        (right_half, promoted_key)
     }
 
     // ============================================================================
@@ -2072,7 +2065,12 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
 
     /// Accept a borrowed key and child at the beginning (from left sibling)
     /// The separator becomes the first key, and the moved child becomes the first child
-    pub fn accept_from_left(&mut self, separator: K, moved_key: K, moved_child: NodeRef<K, V>) -> K {
+    pub fn accept_from_left(
+        &mut self,
+        separator: K,
+        moved_key: K,
+        moved_child: NodeRef<K, V>,
+    ) -> K {
         self.keys.insert(0, separator);
         self.children.insert(0, moved_child);
         moved_key // Return the new separator for parent
@@ -2080,7 +2078,12 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
 
     /// Accept a borrowed key and child at the end (from right sibling)  
     /// The separator becomes the last key, and the moved child becomes the last child
-    pub fn accept_from_right(&mut self, separator: K, moved_key: K, moved_child: NodeRef<K, V>) -> K {
+    pub fn accept_from_right(
+        &mut self,
+        separator: K,
+        moved_key: K,
+        moved_child: NodeRef<K, V>,
+    ) -> K {
         self.keys.push(separator);
         self.children.push(moved_child);
         moved_key // Return the new separator for parent
