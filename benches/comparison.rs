@@ -308,7 +308,7 @@ fn bench_capacity_optimization(c: &mut Criterion) {
 fn bench_range_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("range_queries");
 
-    let size = 10000;
+    let size = 100000; // Larger dataset to show optimization benefits
 
     // Pre-populate both data structures
     let mut btree = BTreeMap::new();
@@ -319,7 +319,8 @@ fn bench_range_queries(c: &mut Criterion) {
         bplus.insert(i, i * 2);
     }
 
-    for range_size in [10, 100, 1000].iter() {
+    // Test various range sizes to show where optimization shines
+    for range_size in [10, 50, 100, 500, 1000, 5000].iter() {
         let start = size / 2 - range_size / 2;
         let end = start + range_size;
 
@@ -336,7 +337,7 @@ fn bench_range_queries(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("BPlusTreeMap", range_size),
+            BenchmarkId::new("BPlusTreeMap_Optimized", range_size),
             range_size,
             |b, _| {
                 b.iter(|| {
@@ -353,6 +354,91 @@ fn bench_range_queries(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_range_edge_cases(c: &mut Criterion) {
+    let mut group = c.benchmark_group("range_edge_cases");
+
+    let size = 50000;
+
+    // Pre-populate both data structures
+    let mut btree = BTreeMap::new();
+    let mut bplus = BPlusTreeMap::new(16).unwrap();
+
+    for i in 0..size {
+        btree.insert(i, i * 2);
+        bplus.insert(i, i * 2);
+    }
+
+    // Benchmark: Small range at beginning
+    group.bench_function("small_range_start_BTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in btree.range(black_box(0)..black_box(10)) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    group.bench_function("small_range_start_BPlusTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in bplus.items_range(Some(&black_box(0)), Some(&black_box(10))) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    // Benchmark: Small range at end
+    group.bench_function("small_range_end_BTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in btree.range(black_box(size - 10)..black_box(size)) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    group.bench_function("small_range_end_BPlusTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in bplus.items_range(Some(&black_box(size - 10)), Some(&black_box(size))) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    // Benchmark: Range from middle to end (no end bound)
+    group.bench_function("range_to_end_BTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in btree.range(black_box(size / 2)..) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    group.bench_function("range_to_end_BPlusTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in bplus.items_range(Some(&black_box(size / 2)), None) {
+                black_box((key, value));
+            }
+        });
+    });
+
+    // Benchmark: Full iteration
+    group.bench_function("full_iteration_BTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in btree.iter() {
+                black_box((key, value));
+            }
+        });
+    });
+
+    group.bench_function("full_iteration_BPlusTreeMap", |b| {
+        b.iter(|| {
+            for (key, value) in bplus.items() {
+                black_box((key, value));
+            }
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_sequential_insertion,
@@ -362,6 +448,7 @@ criterion_group!(
     bench_deletion,
     bench_mixed_operations,
     bench_capacity_optimization,
-    bench_range_queries
+    bench_range_queries,
+    bench_range_edge_cases
 );
 criterion_main!(benches);

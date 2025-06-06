@@ -395,7 +395,7 @@ fn test_range_iterator() {
         tree.insert(i, format!("value_{}", i));
     }
 
-    let range_items: Vec<_> = tree.range(3..=7).collect();
+    let range_items: Vec<_> = tree.items_range(Some(&3), Some(&8)).collect();
     assert_eq!(range_items, vec![
         (&3, &"value_3".to_string()),
         (&4, &"value_4".to_string()),
@@ -516,7 +516,7 @@ fn test_leaf_split_updates_parent_branch() {
     assert_eq!(tree.len(), 9, "Tree should have 9 items");
 
     // Verify that the range query works correctly across the split
-    let range: Vec<_> = tree.range(Some(&1), Some(&10)).collect();
+    let range: Vec<_> = tree.items_range(Some(&1), Some(&10)).collect();
     assert_eq!(range.len(), 9, "Range query should return all 9 items");
 
     // Verify items are in sorted order
@@ -610,7 +610,7 @@ fn test_root_promotion_leaf_to_branch() {
     assert_eq!(new_value, None, "Should be able to insert new key");
 
     // Verify range queries work across the promoted structure
-    let range: Vec<_> = tree.range(Some(&1), Some(&7)).collect();
+    let range: Vec<_> = tree.items_range(Some(&1), Some(&7)).collect();
     assert_eq!(range.len(), 6, "Range query should return all 6 items");
 
     // Verify items are in sorted order
@@ -680,7 +680,7 @@ fn test_branch_node_split_creates_new_level() {
     assert_eq!(tree.len(), 25, "Tree should have 25 items");
 
     // Verify range queries work correctly across the complex structure
-    let range: Vec<_> = tree.range(Some(&1), Some(&26)).collect();
+    let range: Vec<_> = tree.items_range(Some(&1), Some(&26)).collect();
     assert_eq!(range.len(), 25, "Range query should return all 25 items");
 
     // Verify items are in sorted order
@@ -826,9 +826,9 @@ fn test_comprehensive_insert_scenarios() {
         assert_eq!(tree3.len(), 50, "Random tree should have 50 items");
 
         // Test range queries on all trees
-        let range1: Vec<_> = tree.range(Some(&10), Some(&20)).collect();
-        let range2: Vec<_> = tree2.range(Some(&10), Some(&20)).collect();
-        let range3: Vec<_> = tree3.range(Some(&10), Some(&20)).collect();
+        let range1: Vec<_> = tree.items_range(Some(&10), Some(&20)).collect();
+        let range2: Vec<_> = tree2.items_range(Some(&10), Some(&20)).collect();
+        let range3: Vec<_> = tree3.items_range(Some(&10), Some(&20)).collect();
 
         assert_eq!(
             range1.len(),

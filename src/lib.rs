@@ -50,7 +50,7 @@ pub enum BPlusTreeError {
 /// assert_eq!(tree.len(), 3);
 ///
 /// // Range queries
-/// let range: Vec<_> = tree.range(Some(&1), Some(&3)).collect();
+/// let range: Vec<_> = tree.items_range(Some(&1), Some(&3)).collect();
 /// assert_eq!(range, [(&1, &"one"), (&2, &"two")]);
 /// ```
 ///
@@ -1208,6 +1208,81 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
+    // RANGE QUERY OPTIMIZATION HELPERS
+    // ============================================================================
+
+    /// Find the leaf node and index where a range should start
+    fn find_range_start(&self, start_key: &K) -> Option<(NodeId, usize)> {
+        let mut current = &self.root;
+        
+        // Navigate down to leaf level
+        loop {
+            match current {
+                NodeRef::Leaf(leaf_id, _) => {
+                    if let Some(leaf) = self.get_leaf(*leaf_id) {
+                        // Find the first key >= start_key in this leaf
+                        let index = leaf.keys.iter()
+                            .position(|k| k >= start_key)
+                            .unwrap_or(leaf.keys.len());
+                        
+                        if index < leaf.keys.len() {
+                            return Some((*leaf_id, index));
+                        } else {
+                            // All keys in this leaf are < start_key
+                            // Move to next leaf if it exists
+                            if leaf.next != NULL_NODE {
+                                if let Some(next_leaf) = self.get_leaf(leaf.next) {
+                                    if !next_leaf.keys.is_empty() {
+                                        return Some((leaf.next, 0));
+                                    }
+                                }
+                            }
+                            return None; // No valid start position
+                        }
+                    }
+                    return None;
+                }
+                NodeRef::Branch(branch_id, _) => {
+                    if let Some(branch) = self.get_branch(*branch_id) {
+                        // Find the child that could contain start_key
+                        let child_index = branch.find_child_index(start_key);
+                        
+                        if child_index < branch.children.len() {
+                            current = &branch.children[child_index];
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get the ID of the first (leftmost) leaf in the tree
+    fn get_first_leaf_id(&self) -> Option<NodeId> {
+        let mut current = &self.root;
+        
+        loop {
+            match current {
+                NodeRef::Leaf(leaf_id, _) => return Some(*leaf_id),
+                NodeRef::Branch(branch_id, _) => {
+                    if let Some(branch) = self.get_branch(*branch_id) {
+                        if !branch.children.is_empty() {
+                            current = &branch.children[0];
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================================
     // ARENA-BASED ALLOCATION FOR LEAF NODES
     // ============================================================================
 
@@ -2104,6 +2179,8 @@ pub struct ItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
     current_leaf_index: usize,
+    end_key: Option<&'a K>,
+    finished: bool,
 }
 
 impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
@@ -2119,6 +2196,24 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             tree,
             current_leaf_id: leftmost_id,
             current_leaf_index: 0,
+            end_key: None,
+            finished: false,
+        }
+    }
+
+    /// NEW: Start from specific leaf and index position, optionally bounded by end key
+    fn new_from_position(
+        tree: &'a BPlusTreeMap<K, V>,
+        start_leaf_id: NodeId,
+        start_index: usize,
+        end_key: Option<&'a K>
+    ) -> Self {
+        Self {
+            tree,
+            current_leaf_id: Some(start_leaf_id),
+            current_leaf_index: start_index,
+            end_key,
+            finished: false,
         }
     }
 }
@@ -2127,6 +2222,10 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+
         loop {
             if let Some(leaf_id) = self.current_leaf_id {
                 if let Some(leaf) = self.tree.get_leaf(leaf_id) {
@@ -2134,6 +2233,15 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                     if self.current_leaf_index < leaf.keys.len() {
                         let key = &leaf.keys[self.current_leaf_index];
                         let value = &leaf.values[self.current_leaf_index];
+                        
+                        // Check if we've reached the end bound
+                        if let Some(end) = self.end_key {
+                            if key >= end {
+                                self.finished = true;
+                                return None;
+                            }
+                        }
+                        
                         self.current_leaf_index += 1;
                         return Some((key, value));
                     } else {
@@ -2148,10 +2256,12 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                     }
                 } else {
                     // Invalid leaf ID
+                    self.finished = true;
                     return None;
                 }
             } else {
                 // No more leaves
+                self.finished = true;
                 return None;
             }
         }
@@ -2200,103 +2310,38 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ValueIterator<'a, K, V> {
     }
 }
 
-/// Iterator over a range of key-value pairs in the B+ tree.
-#[derive(Debug)]
+/// Optimized iterator over a range of key-value pairs in the B+ tree.
+/// Uses tree navigation to find start, then linked list traversal for efficiency.
 pub struct RangeIterator<'a, K, V> {
-    items: Vec<(&'a K, &'a V)>,
-    index: usize,
+    iterator: Option<ItemIterator<'a, K, V>>,
 }
 
 impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>, start_key: Option<&K>, end_key: Option<&'a K>) -> Self {
-        let mut items = Vec::new();
-        Self::collect_range_items(tree, &tree.root, start_key, end_key, &mut items);
-        Self { items, index: 0 }
-    }
-
-    fn collect_range_items(
-        tree: &'a BPlusTreeMap<K, V>,
-        node: &'a NodeRef<K, V>,
-        start_key: Option<&K>,
-        end_key: Option<&K>,
-        items: &mut Vec<(&'a K, &'a V)>,
-    ) {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = tree.get_leaf(*id) {
-                    for (key, value) in leaf.keys.iter().zip(leaf.values.iter()) {
-                        // Early termination if we've passed the end key
-                        if let Some(end) = end_key {
-                            if key >= end {
-                                return; // Stop collecting, we've gone past the range
-                            }
-                        }
-
-                        // Check if key is after start
-                        let after_start = start_key.map_or(true, |start| key >= start);
-
-                        if after_start {
-                            items.push((key, value));
-                        }
-                    }
-                }
+        let iterator = if let Some(start) = start_key {
+            // Find the starting position using tree navigation
+            if let Some((leaf_id, index)) = tree.find_range_start(start) {
+                Some(ItemIterator::new_from_position(tree, leaf_id, index, end_key))
+            } else {
+                None // No items in range
             }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = tree.get_branch(*id) {
-                    for (i, child) in branch.children.iter().enumerate() {
-                        // Check if this child could contain keys in our range
-                        let child_min = if i == 0 {
-                            None
-                        } else {
-                            Some(&branch.keys[i - 1])
-                        };
-                        let child_max = if i < branch.keys.len() {
-                            Some(&branch.keys[i])
-                        } else {
-                            None
-                        };
-
-                        // Skip this child if it's entirely before our start key
-                        if let (Some(start), Some(max)) = (start_key, child_max) {
-                            if max <= start {
-                                continue; // This child is entirely before our range
-                            }
-                        }
-
-                        // Skip this child if it's entirely after our end key
-                        if let (Some(end), Some(min)) = (end_key, child_min) {
-                            if min >= end {
-                                return; // This child and all following are after our range
-                            }
-                        }
-
-                        // This child might contain keys in our range
-                        Self::collect_range_items(tree, child, start_key, end_key, items);
-
-                        // Early termination: if we have an end key and this child's max >= end,
-                        // we don't need to check further children
-                        if let (Some(end), Some(max)) = (end_key, child_max) {
-                            if max >= end {
-                                return;
-                            }
-                        }
-                    }
-                }
+        } else {
+            // Start from beginning
+            if let Some(first_leaf) = tree.get_first_leaf_id() {
+                Some(ItemIterator::new_from_position(tree, first_leaf, 0, end_key))
+            } else {
+                None // Empty tree
             }
-        }
+        };
+
+        Self { iterator }
     }
 }
 
-impl<'a, K: Ord, V> Iterator for RangeIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.items.len() {
-            let item = self.items[self.index];
-            self.index += 1;
-            Some(item)
-        } else {
-            None
-        }
+        self.iterator.as_mut()?.next()
     }
 }

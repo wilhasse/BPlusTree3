@@ -29,7 +29,7 @@ fn quick_start_example() {
     tree.insert(2, "two");
 
     // Range query
-    let range: Vec<_> = tree.range(Some(&1), Some(&2)).collect();
+    let range: Vec<_> = tree.items_range(Some(&1), Some(&2)).collect();
     println!("Range [1,2]: {:?}", range); // [(&1, &"one"), (&2, &"two")]
 
     // Sequential access
@@ -78,15 +78,15 @@ fn range_query_examples() {
     tree.insert(25, "twenty-five");
 
     // Get all entries in a range
-    let entries: Vec<_> = tree.range(Some(&5), Some(&15)).collect();
+    let entries: Vec<_> = tree.items_range(Some(&5), Some(&15)).collect();
     println!("Range [5,15]: {:?}", entries);
 
     // Get all entries from a minimum key
-    let entries: Vec<_> = tree.range(Some(&15), None).collect();
+    let entries: Vec<_> = tree.items_range(Some(&15), None).collect();
     println!("Range [15,∞): {:?}", entries);
 
     // Get all entries up to a maximum key
-    let entries: Vec<_> = tree.range(None, Some(&15)).collect();
+    let entries: Vec<_> = tree.items_range(None, Some(&15)).collect();
     println!("Range (-∞,15]: {:?}", entries);
 
     // Get all entries in sorted order
@@ -109,7 +109,7 @@ fn time_series_example() {
     let start_time = 1640995200;
     let end_time = 1641168000;
     let period_data: Vec<_> = time_series
-        .range(Some(&start_time), Some(&end_time))
+        .items_range(Some(&start_time), Some(&end_time))
         .collect();
 
     println!("Time series data from {} to {}:", start_time, end_time);
