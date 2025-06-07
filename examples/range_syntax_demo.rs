@@ -36,7 +36,7 @@ fn main() {
     println!("   {:?}", range5);
     
     println!("\n6. Full range ..:");
-    let range6: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
+    let range6: Vec<_> = tree.range(..).map(|(k, _v)| *k).collect();
     println!("   First 10: {:?}", &range6[0..10]);
     
     // Show that we can use any range type

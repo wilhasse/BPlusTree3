@@ -59,7 +59,7 @@ fn test_concurrent_iteration_modification_attack() {
     }
     
     // Collect keys while iterating
-    let keys: Vec<i32> = tree.keys().cloned().collect();
+    let _keys: Vec<i32> = tree.keys().cloned().collect();
     
     // Now create a new iterator and modify tree during iteration
     let mut iter_count = 0;
