@@ -4,6 +4,7 @@
 //! supporting efficient insertion, deletion, lookup, and range queries.
 
 use std::marker::PhantomData;
+use std::ops::{Bound, RangeBounds};
 
 // Constants
 const MIN_CAPACITY: usize = 4;
@@ -1188,13 +1189,75 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         RangeIterator::new(self, start_key, end_key)
     }
 
-    /// Alias for items_range (for compatibility).
-    pub fn range<'a>(
-        &'a self,
-        start_key: Option<&K>,
-        end_key: Option<&'a K>,
-    ) -> RangeIterator<'a, K, V> {
-        self.items_range(start_key, end_key)
+    /// Returns an iterator over key-value pairs in a range using Rust's range syntax.
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use bplustree3::BPlusTreeMap;
+    /// 
+    /// let mut tree = BPlusTreeMap::new(16).unwrap();
+    /// for i in 0..10 {
+    ///     tree.insert(i, format!("value{}", i));
+    /// }
+    /// 
+    /// // Different range syntaxes
+    /// let range1: Vec<_> = tree.range(3..7).map(|(k, v)| (*k, v.clone())).collect();
+    /// assert_eq!(range1, vec![(3, "value3".to_string()), (4, "value4".to_string()), 
+    ///                         (5, "value5".to_string()), (6, "value6".to_string())]);
+    /// 
+    /// let range2: Vec<_> = tree.range(3..=7).map(|(k, v)| (*k, v.clone())).collect();
+    /// assert_eq!(range2, vec![(3, "value3".to_string()), (4, "value4".to_string()), 
+    ///                         (5, "value5".to_string()), (6, "value6".to_string()), 
+    ///                         (7, "value7".to_string())]);
+    /// 
+    /// let range3: Vec<_> = tree.range(5..).map(|(k, v)| *k).collect();
+    /// assert_eq!(range3, vec![5, 6, 7, 8, 9]);
+    /// 
+    /// let range4: Vec<_> = tree.range(..5).map(|(k, v)| *k).collect();
+    /// assert_eq!(range4, vec![0, 1, 2, 3, 4]);
+    /// 
+    /// let range5: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
+    /// assert_eq!(range5, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    /// ```
+    pub fn range<R>(&self, range: R) -> RangeIterator<'_, K, V>
+    where
+        R: RangeBounds<K>,
+    {
+        // Handle start position and find actual start key/position
+        let (start_info, skip_first) = match range.start_bound() {
+            Bound::Included(key) => {
+                if let Some((leaf_id, index)) = self.find_range_start(key) {
+                    (Some((leaf_id, index)), false)
+                } else {
+                    (None, false)
+                }
+            }
+            Bound::Excluded(key) => {
+                if let Some((leaf_id, index)) = self.find_range_start(key) {
+                    // We need to check if the first item equals the excluded key
+                    (Some((leaf_id, index)), true)
+                } else {
+                    (None, false)
+                }
+            }
+            Bound::Unbounded => {
+                if let Some(first_leaf) = self.get_first_leaf_id() {
+                    (Some((first_leaf, 0)), false)
+                } else {
+                    (None, false)
+                }
+            }
+        };
+        
+        // Handle end bound by creating a cloned end key to avoid lifetime issues
+        let end_info = match range.end_bound() {
+            Bound::Included(key) => Some((key.clone(), true)),
+            Bound::Excluded(key) => Some((key.clone(), false)),
+            Bound::Unbounded => None,
+        };
+        
+        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
     }
 
     /// Returns the first key-value pair in the tree.
@@ -2180,6 +2243,8 @@ pub struct ItemIterator<'a, K, V> {
     current_leaf_id: Option<NodeId>,
     current_leaf_index: usize,
     end_key: Option<&'a K>,
+    end_bound_key: Option<K>,
+    end_inclusive: bool,
     finished: bool,
 }
 
@@ -2197,6 +2262,8 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             current_leaf_id: leftmost_id,
             current_leaf_index: 0,
             end_key: None,
+            end_bound_key: None,
+            end_inclusive: false,
             finished: false,
         }
     }
@@ -2213,6 +2280,32 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             current_leaf_id: Some(start_leaf_id),
             current_leaf_index: start_index,
             end_key,
+            end_bound_key: None,
+            end_inclusive: false,
+            finished: false,
+        }
+    }
+    
+    /// Start from specific position with full bound control using owned keys
+    fn new_from_position_with_bounds(
+        tree: &'a BPlusTreeMap<K, V>,
+        start_leaf_id: NodeId,
+        start_index: usize,
+        end_bound: Bound<&K>
+    ) -> Self {
+        let (end_bound_key, end_inclusive) = match end_bound {
+            Bound::Included(key) => (Some(key.clone()), true),
+            Bound::Excluded(key) => (Some(key.clone()), false),
+            Bound::Unbounded => (None, false),
+        };
+        
+        Self {
+            tree,
+            current_leaf_id: Some(start_leaf_id),
+            current_leaf_index: start_index,
+            end_key: None,
+            end_bound_key,
+            end_inclusive,
             finished: false,
         }
     }
@@ -2235,10 +2328,22 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                         let value = &leaf.values[self.current_leaf_index];
                         
                         // Check if we've reached the end bound
-                        if let Some(end) = self.end_key {
+                        if let Some(ref end) = self.end_key {
                             if key >= end {
                                 self.finished = true;
                                 return None;
+                            }
+                        } else if let Some(ref end) = self.end_bound_key {
+                            if self.end_inclusive {
+                                if key > end {
+                                    self.finished = true;
+                                    return None;
+                                }
+                            } else {
+                                if key >= end {
+                                    self.finished = true;
+                                    return None;
+                                }
                             }
                         }
                         
@@ -2314,6 +2419,8 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ValueIterator<'a, K, V> {
 /// Uses tree navigation to find start, then linked list traversal for efficiency.
 pub struct RangeIterator<'a, K, V> {
     iterator: Option<ItemIterator<'a, K, V>>,
+    skip_first: bool,
+    first_key: Option<K>,
 }
 
 impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
@@ -2334,7 +2441,48 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
             }
         };
 
-        Self { iterator }
+        Self { 
+            iterator,
+            skip_first: false,
+            first_key: None,
+        }
+    }
+    
+    fn new_with_skip_owned(
+        tree: &'a BPlusTreeMap<K, V>,
+        start_info: Option<(NodeId, usize)>,
+        skip_first: bool,
+        end_info: Option<(K, bool)>, // (end_key, is_inclusive)
+    ) -> Self {
+        let (iterator, first_key) = if let Some((leaf_id, index)) = start_info {
+            // Create iterator with appropriate end bound
+            let end_bound = match end_info {
+                Some((ref key, true)) => Bound::Included(key),
+                Some((ref key, false)) => Bound::Excluded(key),
+                None => Bound::Unbounded,
+            };
+            
+            let iter = ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+            
+            // If we need to skip first, we need to know what key to skip
+            let first_key = if skip_first {
+                tree.get_leaf(leaf_id)
+                    .and_then(|leaf| leaf.keys.get(index))
+                    .cloned()
+            } else {
+                None
+            };
+            
+            (Some(iter), first_key)
+        } else {
+            (None, None)
+        };
+
+        Self { 
+            iterator,
+            skip_first,
+            first_key,
+        }
     }
 }
 
@@ -2342,6 +2490,21 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iterator.as_mut()?.next()
+        loop {
+            let item = self.iterator.as_mut()?.next()?;
+            
+            // Handle excluded start bound on first iteration
+            if self.skip_first {
+                self.skip_first = false;
+                if let Some(ref first_key) = self.first_key {
+                    if item.0 == first_key {
+                        // Skip this item and continue to next
+                        continue;
+                    }
+                }
+            }
+            
+            return Some(item);
+        }
     }
 }

@@ -18,37 +18,76 @@ bplustree3 = "0.1.0"
 ## Quick Start
 
 ```rust
-use bplustree3::BPlusTree;
+use bplustree3::BPlusTreeMap;
 
 fn main() {
-    let mut tree = BPlusTree::new(4);
+    let mut tree = BPlusTreeMap::new(16).unwrap();
 
     // Insert some data
     tree.insert(1, "one");
     tree.insert(3, "three");
     tree.insert(2, "two");
 
-    // Range query
-    let range = tree.range(Some(&1), Some(&2));
-    println!("{:?}", range); // [(&1, &"one"), (&2, &"two")]
+    // Basic operations
+    assert_eq!(tree.get(&2), Some(&"two"));
+    assert_eq!(tree.len(), 3);
+
+    // Range queries with Rust's range syntax!
+    let range1: Vec<_> = tree.range(1..=2).collect();
+    println!("{:?}", range1); // [(&1, &"one"), (&2, &"two")]
+
+    let range2: Vec<_> = tree.range(2..).collect();
+    println!("{:?}", range2); // [(&2, &"two"), (&3, &"three")]
 
     // Sequential access
-    for (key, value) in tree.slice() {
+    for (key, value) in tree.items() {
         println!("{}: {}", key, value);
     }
 }
 ```
 
-## Current Status
+## Features
 
-🚧 **Work in Progress** - This implementation currently provides:
+✅ **Complete Implementation** - This B+ tree provides:
 
-- ✅ Basic insertion with automatic node splitting
-- ✅ Key lookup (`get`)
-- ✅ Range queries
-- ✅ Sequential iteration (`slice`)
-- ❌ Key deletion (not yet implemented)
-- ❌ Full B+ tree with internal nodes (currently uses linked leaf nodes)
+- ✅ Full CRUD operations (insert, get, delete)
+- ✅ Arena-based memory management for efficient node allocation
+- ✅ Automatic tree balancing with node splitting and merging
+- ✅ **Rust Range Syntax Support** - Use familiar `3..7`, `3..=7`, `5..`, `..10` syntax!
+- ✅ Optimized range queries with O(log n + k) complexity
+- ✅ Multiple iterator types (items, keys, values, ranges)
+- ✅ Comprehensive test suite including adversarial testing
+- ✅ BTreeMap-compatible API for easy migration
+
+## Range Syntax Support
+
+One of the standout features is full support for Rust's range syntax:
+
+```rust
+use bplustree3::BPlusTreeMap;
+
+let mut tree = BPlusTreeMap::new(16).unwrap();
+for i in 0..10 {
+    tree.insert(i, format!("value{}", i));
+}
+
+// All standard Rust range types work:
+let a: Vec<_> = tree.range(3..7).collect();        // Exclusive end
+let b: Vec<_> = tree.range(3..=7).collect();       // Inclusive end  
+let c: Vec<_> = tree.range(5..).collect();         // Open end
+let d: Vec<_> = tree.range(..5).collect();         // From start
+let e: Vec<_> = tree.range(..=5).collect();        // From start, inclusive
+let f: Vec<_> = tree.range(..).collect();          // Full range
+
+// Even custom ranges with excluded start bounds work!
+use std::ops::{Bound, RangeBounds};
+struct ExcludeStart { start: i32, end: i32 }
+impl RangeBounds<i32> for ExcludeStart {
+    fn start_bound(&self) -> Bound<&i32> { Bound::Excluded(&self.start) }
+    fn end_bound(&self) -> Bound<&i32> { Bound::Included(&self.end) }
+}
+let g: Vec<_> = tree.range(ExcludeStart { start: 3, end: 7 }).collect();
+```
 
 ## API
 
