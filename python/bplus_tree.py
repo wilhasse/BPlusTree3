@@ -493,6 +493,108 @@ class BPlusTreeMap:
                 left = mid + 1
         return left
 
+    def clear(self) -> None:
+        """Remove all items from the tree (dict-like API)."""
+        # Reset to initial state with a single empty leaf
+        original = LeafNode(self.capacity)
+        self.leaves = original
+        self.root = original
+        self._rightmost_leaf_cache = None
+
+
+    def pop(self, key: Any, *args) -> Any:
+        """Remove and return value for key with optional default (dict-like API).
+        
+        Args:
+            key: The key to remove.
+            *args: Optional default value if key is not found.
+            
+        Returns:
+            The value that was associated with key, or default if key not found.
+            
+        Raises:
+            KeyError: If key is not found and no default is provided.
+        """
+        if len(args) > 1:
+            raise TypeError(f"pop expected at most 2 arguments, got {len(args) + 1}")
+            
+        try:
+            value = self[key]
+            del self[key]
+            return value
+        except KeyError:
+            if args:
+                return args[0]
+            raise
+
+    def popitem(self) -> Tuple[Any, Any]:
+        """Remove and return an arbitrary (key, value) pair (dict-like API).
+        
+        Returns:
+            A (key, value) tuple.
+            
+        Raises:
+            KeyError: If the tree is empty.
+        """
+        if len(self) == 0:
+            raise KeyError("popitem(): tree is empty")
+            
+        # Get the first key-value pair from the leftmost leaf
+        first_leaf = self.leaves
+        if len(first_leaf.keys) == 0:
+            raise KeyError("popitem(): tree is empty")
+            
+        key = first_leaf.keys[0]
+        value = first_leaf.values[0]
+        del self[key]
+        return (key, value)
+
+    def setdefault(self, key: Any, default: Any = None) -> Any:
+        """Get value for key, setting and returning default if not present (dict-like API).
+        
+        Args:
+            key: The key to look up.
+            default: Default value to set and return if key is not found.
+            
+        Returns:
+            The existing value for key, or default if key was not present.
+        """
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+            return default
+
+    def update(self, other) -> None:
+        """Update tree with key-value pairs from other mapping or iterable (dict-like API).
+        
+        Args:
+            other: A mapping (dict-like) or iterable of (key, value) pairs.
+        """
+        if hasattr(other, 'items'):
+            # other is a mapping (dict-like)
+            for key, value in other.items():
+                self[key] = value
+        elif hasattr(other, 'keys'):
+            # other has keys method but no items (like dict.keys())
+            for key in other.keys():
+                self[key] = other[key]
+        else:
+            # other is an iterable of (key, value) pairs
+            for key, value in other:
+                self[key] = value
+
+    def copy(self) -> "BPlusTreeMap":
+        """Create a shallow copy of the tree (dict-like API).
+        
+        Returns:
+            A new BPlusTreeMap with the same key-value pairs.
+        """
+        new_tree = BPlusTreeMap(capacity=self.capacity)
+        for key, value in self.items():
+            new_tree[key] = value
+        return new_tree
+
     """Testing only"""
 
     def leaf_count(self) -> int:

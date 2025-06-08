@@ -36,18 +36,20 @@ This document outlines the roadmap to bring the Python B+ Tree implementation fr
 
 See [C_EXTENSION_SEGFAULT_FIX.md](./C_EXTENSION_SEGFAULT_FIX.md) for details.
 
-**1.2 Complete Dictionary API**
+**1.2 Complete Dictionary API** ✅ **COMPLETED**
 ```python
-# Add missing methods to BPlusTreeMap:
-- [ ] clear() -> None
-- [ ] pop(key, default=None) -> Any  
-- [ ] popitem() -> Tuple[Any, Any]
-- [ ] setdefault(key, default=None) -> Any
-- [ ] update(other: Mapping) -> None
-- [ ] copy() -> BPlusTreeMap
-- [ ] __contains__(key) -> bool (verify implementation)
-- [ ] __eq__(other) -> bool (verify implementation)
+# Added missing methods to BPlusTreeMap:
+- [x] clear() -> None - Resets tree to initial empty state
+- [x] pop(key, *args) -> Any - Remove and return value with optional default
+- [x] popitem() -> Tuple[Any, Any] - Remove and return arbitrary (key, value) pair
+- [x] setdefault(key, default=None) -> Any - Get or set default value
+- [x] update(other) -> None - Update from mapping or iterable of pairs
+- [x] copy() -> BPlusTreeMap - Create shallow copy
+- [x] __contains__(key) -> bool - Already implemented
+- [x] __eq__(other) -> bool - Already implemented
 ```
+
+All methods implemented in both pure Python and C extension wrapper with comprehensive test coverage.
 
 **1.3 Basic Documentation & Examples**
 - [ ] **Create examples/** directory with:
