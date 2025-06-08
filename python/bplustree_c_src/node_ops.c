@@ -146,16 +146,23 @@ void node_destroy(BPlusNode *node) {
 
 /* Clear a single slot: decref or destroy payload and null out key/value or child pointer */
 static void node_clear_slot(BPlusNode *node, int i) {
+    if (i < 0 || i >= node->capacity) {
+        return;  /* Invalid index */
+    }
+    
     if (node->type == NODE_LEAF) {
         Py_XDECREF(node_get_key(node, i));
         Py_XDECREF(node_get_value(node, i));
         node_set_key(node, i, NULL);
         node_set_value(node, i, NULL);
     } else {
+        /* For branch nodes, we only clear during deletion operations
+         * where it's safe to destroy the child subtree */
         BPlusNode *child = node_get_child(node, i);
         if (child) {
             node_destroy(child);
         }
+        Py_XDECREF(node_get_key(node, i));
         node_set_key(node, i, NULL);
         node_set_child(node, i, NULL);
     }
@@ -228,10 +235,8 @@ int node_insert_leaf(BPlusNode *node, PyObject *key, PyObject *value,
             node_set_value(node, i, temp_values[i]);
         }
 
-        /* Clear old slots beyond midpoint */
+        /* Clear old slots beyond midpoint - DO NOT DECREF as items were moved to temp arrays */
         for (int i = mid; i < node->capacity; i++) {
-            Py_XDECREF(node_get_key(node, i));
-            Py_XDECREF(node_get_value(node, i));
             node_set_key(node, i, NULL);
             node_set_value(node, i, NULL);
         }
