@@ -313,7 +313,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
     }
 
-
     fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
         match node {
             NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
@@ -590,21 +589,25 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let (left_can_donate, right_can_donate) = match self.get_branch(branch_id) {
             Some(branch) => {
                 let left_can_donate = if has_left_sibling && child_index > 0 {
-                    branch.children.get(child_index - 1)
+                    branch
+                        .children
+                        .get(child_index - 1)
                         .map(|sibling| self.can_node_donate(sibling))
                         .unwrap_or(false)
                 } else {
                     false
                 };
-                
+
                 let right_can_donate = if has_right_sibling {
-                    branch.children.get(child_index + 1)
+                    branch
+                        .children
+                        .get(child_index + 1)
                         .map(|sibling| self.can_node_donate(sibling))
                         .unwrap_or(false)
                 } else {
                     false
                 };
-                
+
                 (left_can_donate, right_can_donate)
             }
             None => return false,
@@ -640,58 +643,70 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         has_right_sibling: bool,
     ) -> bool {
         // Get parent branch once and cache sibling donation and merge capabilities
-        let (left_can_donate, right_can_donate, left_can_merge, right_can_merge) = match self.get_branch(branch_id) {
-            Some(branch) => {
-                let left_can_donate = if has_left_sibling {
-                    self.get_branch_sibling(branch_id, child_index, true)
-                        .map(|sibling| self.can_node_donate(&sibling))
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-                
-                let right_can_donate = if has_right_sibling {
-                    self.get_branch_sibling(branch_id, child_index, false)
-                        .map(|sibling| self.can_node_donate(&sibling))
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-                
-                let left_can_merge = if has_left_sibling {
-                    if let (NodeRef::Branch(left_id, _), NodeRef::Branch(child_id, _)) = (
-                        &branch.children[child_index - 1],
-                        &branch.children[child_index],
-                    ) {
-                        self.get_branch(*left_id).zip(self.get_branch(*child_id))
-                            .map(|(left, child)| left.keys.len() + 1 + child.keys.len() <= self.capacity)
+        let (left_can_donate, right_can_donate, left_can_merge, right_can_merge) =
+            match self.get_branch(branch_id) {
+                Some(branch) => {
+                    let left_can_donate = if has_left_sibling {
+                        self.get_branch_sibling(branch_id, child_index, true)
+                            .map(|sibling| self.can_node_donate(&sibling))
                             .unwrap_or(false)
                     } else {
                         false
-                    }
-                } else {
-                    false
-                };
-                
-                let right_can_merge = if has_right_sibling {
-                    if let (NodeRef::Branch(child_id, _), NodeRef::Branch(right_id, _)) = (
-                        &branch.children[child_index],
-                        &branch.children[child_index + 1],
-                    ) {
-                        self.get_branch(*child_id).zip(self.get_branch(*right_id))
-                            .map(|(child, right)| child.keys.len() + 1 + right.keys.len() <= self.capacity)
+                    };
+
+                    let right_can_donate = if has_right_sibling {
+                        self.get_branch_sibling(branch_id, child_index, false)
+                            .map(|sibling| self.can_node_donate(&sibling))
                             .unwrap_or(false)
                     } else {
                         false
-                    }
-                } else {
-                    false
-                };
-                
-                (left_can_donate, right_can_donate, left_can_merge, right_can_merge)
-            }
-            None => return false,
-        };
+                    };
+
+                    let left_can_merge = if has_left_sibling {
+                        if let (NodeRef::Branch(left_id, _), NodeRef::Branch(child_id, _)) = (
+                            &branch.children[child_index - 1],
+                            &branch.children[child_index],
+                        ) {
+                            self.get_branch(*left_id)
+                                .zip(self.get_branch(*child_id))
+                                .map(|(left, child)| {
+                                    left.keys.len() + 1 + child.keys.len() <= self.capacity
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    let right_can_merge = if has_right_sibling {
+                        if let (NodeRef::Branch(child_id, _), NodeRef::Branch(right_id, _)) = (
+                            &branch.children[child_index],
+                            &branch.children[child_index + 1],
+                        ) {
+                            self.get_branch(*child_id)
+                                .zip(self.get_branch(*right_id))
+                                .map(|(child, right)| {
+                                    child.keys.len() + 1 + right.keys.len() <= self.capacity
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    (
+                        left_can_donate,
+                        right_can_donate,
+                        left_can_merge,
+                        right_can_merge,
+                    )
+                }
+                None => return false,
+            };
 
         // Try borrowing from left sibling first
         if left_can_donate {
@@ -723,7 +738,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
             Some(parent) => {
-                match (&parent.children[child_index - 1], &parent.children[child_index]) {
+                match (
+                    &parent.children[child_index - 1],
+                    &parent.children[child_index],
+                ) {
                     (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
                         (*left, *child, parent.keys[child_index - 1].clone())
                     }
@@ -768,7 +786,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Get the branch IDs and collect all needed info from parent in one access
         let (child_id, right_id, separator_key) = match self.get_branch(parent_id) {
             Some(parent) => {
-                match (&parent.children[child_index], &parent.children[child_index + 1]) {
+                match (
+                    &parent.children[child_index],
+                    &parent.children[child_index + 1],
+                ) {
                     (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
                         (*child, *right, parent.keys[child_index].clone())
                     }
@@ -813,7 +834,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
             Some(parent) => {
-                match (&parent.children[child_index - 1], &parent.children[child_index]) {
+                match (
+                    &parent.children[child_index - 1],
+                    &parent.children[child_index],
+                ) {
                     (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
                         (*left, *child, parent.keys[child_index - 1].clone())
                     }
@@ -851,7 +875,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Get the branch IDs and collect all needed info from parent in one access
         let (child_id, right_id, separator_key) = match self.get_branch(parent_id) {
             Some(parent) => {
-                match (&parent.children[child_index], &parent.children[child_index + 1]) {
+                match (
+                    &parent.children[child_index],
+                    &parent.children[child_index + 1],
+                ) {
                     (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
                         (*child, *right, parent.keys[child_index].clone())
                     }
@@ -1138,8 +1165,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_count_recursive(&self.root)
     }
 
-
-
     /// Recursively count leaf nodes with proper arena access.
     fn leaf_count_recursive(&self, node: &NodeRef<K, V>) -> usize {
         match node {
@@ -1196,33 +1221,33 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Returns an iterator over key-value pairs in a range using Rust's range syntax.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use bplustree3::BPlusTreeMap;
-    /// 
+    ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
     /// for i in 0..10 {
     ///     tree.insert(i, format!("value{}", i));
     /// }
-    /// 
+    ///
     /// // Different range syntaxes
     /// let range1: Vec<_> = tree.range(3..7).map(|(k, v)| (*k, v.clone())).collect();
-    /// assert_eq!(range1, vec![(3, "value3".to_string()), (4, "value4".to_string()), 
+    /// assert_eq!(range1, vec![(3, "value3".to_string()), (4, "value4".to_string()),
     ///                         (5, "value5".to_string()), (6, "value6".to_string())]);
-    /// 
+    ///
     /// let range2: Vec<_> = tree.range(3..=7).map(|(k, v)| (*k, v.clone())).collect();
-    /// assert_eq!(range2, vec![(3, "value3".to_string()), (4, "value4".to_string()), 
-    ///                         (5, "value5".to_string()), (6, "value6".to_string()), 
+    /// assert_eq!(range2, vec![(3, "value3".to_string()), (4, "value4".to_string()),
+    ///                         (5, "value5".to_string()), (6, "value6".to_string()),
     ///                         (7, "value7".to_string())]);
-    /// 
+    ///
     /// let range3: Vec<_> = tree.range(5..).map(|(k, v)| *k).collect();
     /// assert_eq!(range3, vec![5, 6, 7, 8, 9]);
-    /// 
+    ///
     /// let range4: Vec<_> = tree.range(..5).map(|(k, v)| *k).collect();
     /// assert_eq!(range4, vec![0, 1, 2, 3, 4]);
-    /// 
+    ///
     /// let range5: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
     /// assert_eq!(range5, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     /// ```
@@ -1255,14 +1280,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 }
             }
         };
-        
+
         // Handle end bound by creating a cloned end key to avoid lifetime issues
         let end_info = match range.end_bound() {
             Bound::Included(key) => Some((key.clone(), true)),
             Bound::Excluded(key) => Some((key.clone(), false)),
             Bound::Unbounded => None,
         };
-        
+
         RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
     }
 
@@ -1283,17 +1308,19 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Find the leaf node and index where a range should start
     fn find_range_start(&self, start_key: &K) -> Option<(NodeId, usize)> {
         let mut current = &self.root;
-        
+
         // Navigate down to leaf level
         loop {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
                     if let Some(leaf) = self.get_leaf(*leaf_id) {
                         // Find the first key >= start_key in this leaf
-                        let index = leaf.keys.iter()
+                        let index = leaf
+                            .keys
+                            .iter()
                             .position(|k| k >= start_key)
                             .unwrap_or(leaf.keys.len());
-                        
+
                         if index < leaf.keys.len() {
                             return Some((*leaf_id, index));
                         } else {
@@ -1315,7 +1342,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                     if let Some(branch) = self.get_branch(*branch_id) {
                         // Find the child that could contain start_key
                         let child_index = branch.find_child_index(start_key);
-                        
+
                         if child_index < branch.children.len() {
                             current = &branch.children[child_index];
                         } else {
@@ -1332,7 +1359,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Get the ID of the first (leftmost) leaf in the tree
     fn get_first_leaf_id(&self) -> Option<NodeId> {
         let mut current = &self.root;
-        
+
         loop {
             match current {
                 NodeRef::Leaf(leaf_id, _) => return Some(*leaf_id),
@@ -2266,7 +2293,7 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         tree: &'a BPlusTreeMap<K, V>,
         start_leaf_id: NodeId,
         start_index: usize,
-        end_key: Option<&'a K>
+        end_key: Option<&'a K>,
     ) -> Self {
         Self {
             tree,
@@ -2278,20 +2305,20 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
             finished: false,
         }
     }
-    
+
     /// Start from specific position with full bound control using owned keys
     fn new_from_position_with_bounds(
         tree: &'a BPlusTreeMap<K, V>,
         start_leaf_id: NodeId,
         start_index: usize,
-        end_bound: Bound<&K>
+        end_bound: Bound<&K>,
     ) -> Self {
         let (end_bound_key, end_inclusive) = match end_bound {
             Bound::Included(key) => (Some(key.clone()), true),
             Bound::Excluded(key) => (Some(key.clone()), false),
             Bound::Unbounded => (None, false),
         };
-        
+
         Self {
             tree,
             current_leaf_id: Some(start_leaf_id),
@@ -2319,7 +2346,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                     if self.current_leaf_index < leaf.keys.len() {
                         let key = &leaf.keys[self.current_leaf_index];
                         let value = &leaf.values[self.current_leaf_index];
-                        
+
                         // Check if we've reached the end bound
                         if let Some(ref end) = self.end_key {
                             if key >= end {
@@ -2339,7 +2366,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                                 }
                             }
                         }
-                        
+
                         self.current_leaf_index += 1;
                         return Some((key, value));
                     } else {
@@ -2421,26 +2448,30 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
         let iterator = if let Some(start) = start_key {
             // Find the starting position using tree navigation
             if let Some((leaf_id, index)) = tree.find_range_start(start) {
-                Some(ItemIterator::new_from_position(tree, leaf_id, index, end_key))
+                Some(ItemIterator::new_from_position(
+                    tree, leaf_id, index, end_key,
+                ))
             } else {
                 None // No items in range
             }
         } else {
             // Start from beginning
             if let Some(first_leaf) = tree.get_first_leaf_id() {
-                Some(ItemIterator::new_from_position(tree, first_leaf, 0, end_key))
+                Some(ItemIterator::new_from_position(
+                    tree, first_leaf, 0, end_key,
+                ))
             } else {
                 None // Empty tree
             }
         };
 
-        Self { 
+        Self {
             iterator,
             skip_first: false,
             first_key: None,
         }
     }
-    
+
     fn new_with_skip_owned(
         tree: &'a BPlusTreeMap<K, V>,
         start_info: Option<(NodeId, usize)>,
@@ -2454,9 +2485,9 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
                 Some((ref key, false)) => Bound::Excluded(key),
                 None => Bound::Unbounded,
             };
-            
+
             let iter = ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
-            
+
             // If we need to skip first, we need to know what key to skip
             let first_key = if skip_first {
                 tree.get_leaf(leaf_id)
@@ -2465,13 +2496,13 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
             } else {
                 None
             };
-            
+
             (Some(iter), first_key)
         } else {
             (None, None)
         };
 
-        Self { 
+        Self {
             iterator,
             skip_first,
             first_key,
@@ -2485,7 +2516,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let item = self.iterator.as_mut()?.next()?;
-            
+
             // Handle excluded start bound on first iteration
             if self.skip_first {
                 self.skip_first = false;
@@ -2496,7 +2527,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
                     }
                 }
             }
-            
+
             return Some(item);
         }
     }
