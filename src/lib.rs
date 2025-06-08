@@ -6,6 +6,13 @@
 use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 
+// Import our new modules
+mod arena;
+mod macros;
+
+pub use arena::{Arena, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
+pub use macros::*;
+
 // Constants
 const MIN_CAPACITY: usize = 4;
 
@@ -76,17 +83,11 @@ pub struct BPlusTreeMap<K, V> {
     /// The root node of the tree.
     root: NodeRef<K, V>,
 
-    // Arena-based allocation for leaf nodes
+    // Enhanced arena-based allocation using generic Arena<T>
     /// Arena storage for leaf nodes.
-    leaf_arena: Vec<Option<LeafNode<K, V>>>,
-    /// Free leaf node IDs available for reuse.
-    free_leaf_ids: Vec<NodeId>,
-
-    // Arena-based allocation for branch nodes
+    leaf_arena: Arena<LeafNode<K, V>>,
     /// Arena storage for branch nodes.
-    branch_arena: Vec<Option<BranchNode<K, V>>>,
-    /// Free branch node IDs available for reuse.
-    free_branch_ids: Vec<NodeId>,
+    branch_arena: Arena<BranchNode<K, V>>,
 }
 
 /// Node reference that can be either a leaf or branch node
@@ -168,20 +169,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         // Initialize arena with the first leaf at id=0
-        let mut leaf_arena = Vec::new();
-        leaf_arena.push(Some(LeafNode::new(capacity))); // First leaf at id=0
+        let mut leaf_arena = Arena::new();
+        let root_id = leaf_arena.allocate(LeafNode::new(capacity));
 
         // Initialize branch arena (starts empty)
-        let branch_arena = Vec::new();
+        let branch_arena = Arena::new();
 
         Ok(Self {
             capacity,
-            root: NodeRef::Leaf(0, PhantomData), // Root points to the arena leaf at id=0
-            // Initialize arena storage
+            root: NodeRef::Leaf(root_id, PhantomData),
             leaf_arena,
-            free_leaf_ids: Vec::new(),
             branch_arena,
-            free_branch_ids: Vec::new(),
         })
     }
 
@@ -1140,15 +1138,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_count_recursive(&self.root)
     }
 
-    /// Get the number of free leaf IDs in the arena (for testing/debugging).
-    pub fn free_leaf_count(&self) -> usize {
-        self.free_leaf_ids.len()
-    }
 
-    /// Get the number of free branch IDs in the arena (for testing/debugging).
-    pub fn free_branch_count(&self) -> usize {
-        self.free_branch_ids.len()
-    }
 
     /// Recursively count leaf nodes with proper arena access.
     fn leaf_count_recursive(&self, node: &NodeRef<K, V>) -> usize {
@@ -1169,14 +1159,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Clear all items from the tree.
     pub fn clear(&mut self) {
-        // Clear the existing arena leaf at id=0
-        self.get_leaf_mut(0).map(|leaf| {
-            leaf.keys.clear();
-            leaf.values.clear();
-            leaf.next = NULL_NODE;
-        });
-        // Reset root to point to the cleared arena leaf
-        self.root = NodeRef::Leaf(0, PhantomData);
+        // Clear all arenas and create a new root leaf
+        self.leaf_arena.clear();
+        self.branch_arena.clear();
+
+        // Create a new root leaf
+        let root_leaf = LeafNode::new(self.capacity);
+        let root_id = self.leaf_arena.allocate(root_leaf);
+        self.root = NodeRef::Leaf(root_id, PhantomData);
     }
 
     /// Returns an iterator over all key-value pairs in sorted order.
@@ -1362,45 +1352,42 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
-    // ARENA-BASED ALLOCATION FOR LEAF NODES
+    // ENHANCED ARENA-BASED ALLOCATION FOR LEAF NODES
     // ============================================================================
-
-    /// Get the next available leaf ID (either from free list or arena length).
-    fn next_leaf_id(&mut self) -> NodeId {
-        self.free_leaf_ids
-            .pop()
-            .unwrap_or(self.leaf_arena.len() as NodeId)
-    }
 
     /// Allocate a new leaf node in the arena and return its ID.
     pub fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
-        let id = self.next_leaf_id();
-
-        // Extend arena if needed
-        if id as usize >= self.leaf_arena.len() {
-            self.leaf_arena.resize(id as usize + 1, None);
-        }
-
-        self.leaf_arena[id as usize] = Some(leaf);
-        id
+        self.leaf_arena.allocate(leaf)
     }
 
     /// Deallocate a leaf node from the arena.
     pub fn deallocate_leaf(&mut self, id: NodeId) -> Option<LeafNode<K, V>> {
-        self.leaf_arena.get_mut(id as usize)?.take().map(|leaf| {
-            self.free_leaf_ids.push(id);
-            leaf
-        })
+        self.leaf_arena.deallocate(id)
     }
 
     /// Get a reference to a leaf node in the arena.
     pub fn get_leaf(&self, id: NodeId) -> Option<&LeafNode<K, V>> {
-        self.leaf_arena.get(id as usize)?.as_ref()
+        self.leaf_arena.get(id)
     }
 
     /// Get a mutable reference to a leaf node in the arena.
     pub fn get_leaf_mut(&mut self, id: NodeId) -> Option<&mut LeafNode<K, V>> {
-        self.leaf_arena.get_mut(id as usize)?.as_mut()
+        self.leaf_arena.get_mut(id)
+    }
+
+    /// Get the number of free leaf nodes in the arena.
+    pub fn free_leaf_count(&self) -> usize {
+        self.leaf_arena.free_count()
+    }
+
+    /// Get the number of allocated leaf nodes in the arena.
+    pub fn allocated_leaf_count(&self) -> usize {
+        self.leaf_arena.allocated_count()
+    }
+
+    /// Get the leaf arena utilization ratio.
+    pub fn leaf_utilization(&self) -> f64 {
+        self.leaf_arena.utilization()
     }
 
     /// Set the next pointer of a leaf node in the arena.
@@ -1446,48 +1433,42 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     // ============================================================================
-    // ARENA-BASED ALLOCATION FOR BRANCH NODES
+    // ENHANCED ARENA-BASED ALLOCATION FOR BRANCH NODES
     // ============================================================================
-
-    /// Get the next available branch ID (either from free list or arena length).
-    fn next_branch_id(&mut self) -> NodeId {
-        self.free_branch_ids
-            .pop()
-            .unwrap_or(self.branch_arena.len() as NodeId)
-    }
 
     /// Allocate a new branch node in the arena and return its ID.
     pub fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
-        let id = self.next_branch_id();
-
-        // Extend arena if needed
-        if id as usize >= self.branch_arena.len() {
-            self.branch_arena.resize(id as usize + 1, None);
-        }
-
-        self.branch_arena[id as usize] = Some(branch);
-        id
+        self.branch_arena.allocate(branch)
     }
 
     /// Deallocate a branch node from the arena.
     pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
-        self.branch_arena
-            .get_mut(id as usize)?
-            .take()
-            .map(|branch| {
-                self.free_branch_ids.push(id);
-                branch
-            })
+        self.branch_arena.deallocate(id)
     }
 
     /// Get a reference to a branch node in the arena.
     pub fn get_branch(&self, id: NodeId) -> Option<&BranchNode<K, V>> {
-        self.branch_arena.get(id as usize)?.as_ref()
+        self.branch_arena.get(id)
     }
 
     /// Get a mutable reference to a branch node in the arena.
     pub fn get_branch_mut(&mut self, id: NodeId) -> Option<&mut BranchNode<K, V>> {
-        self.branch_arena.get_mut(id as usize)?.as_mut()
+        self.branch_arena.get_mut(id)
+    }
+
+    /// Get the number of free branch nodes in the arena.
+    pub fn free_branch_count(&self) -> usize {
+        self.branch_arena.free_count()
+    }
+
+    /// Get the number of allocated branch nodes in the arena.
+    pub fn allocated_branch_count(&self) -> usize {
+        self.branch_arena.allocated_count()
+    }
+
+    /// Get the branch arena utilization ratio.
+    pub fn branch_utilization(&self) -> f64 {
+        self.branch_arena.utilization()
     }
 
     // ============================================================================
@@ -2266,12 +2247,8 @@ pub struct ItemIterator<'a, K, V> {
 
 impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
-        // Start with the first leaf in the arena (leftmost leaf)
-        let leftmost_id = if tree.leaf_arena.is_empty() || tree.leaf_arena[0].is_none() {
-            None
-        } else {
-            Some(0)
-        };
+        // Start with the first (leftmost) leaf in the tree
+        let leftmost_id = tree.get_first_leaf_id();
 
         Self {
             tree,

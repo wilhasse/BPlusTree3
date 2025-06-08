@@ -1,113 +1,41 @@
-use bplustree3::BPlusTreeMap;
+use bplustree3::{BPlusTreeMap, verify_attack_result, assert_tree_valid};
+
+mod test_utils;
 
 /// These tests target the arena allocation system, trying to expose
 /// memory corruption, ID overflow, and free list management bugs.
 
 #[test]
 fn test_arena_id_exhaustion_attack() {
+    use test_utils::*;
+
     // Attack: Try to exhaust the arena ID space by repeatedly allocating and deallocating
-    
-    let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
-    
+    let mut tree = create_attack_tree(4);
+
     // Phase 1: Create and destroy many nodes to stress the free list
-    for cycle in 0..1000 {
-        // Fill tree to create many nodes
-        for i in 0..100 {
-            tree.insert(cycle * 1000 + i, format!("v{}-{}", cycle, i));
-        }
-        
-        // Check that we haven't corrupted anything yet
-        if let Err(e) = tree.check_invariants_detailed() {
-            panic!("ATTACK SUCCESSFUL at cycle {}: Arena corrupted! {}", cycle, e);
-        }
-        
-        // Delete most items to free nodes
-        for i in 0..95 {
-            tree.remove(&(cycle * 1000 + i));
-        }
-        
-        // This should reuse freed node IDs
-        println!("Cycle {}: Free leaves={}, Free branches={}", 
-                 cycle, tree.free_leaf_count(), tree.free_branch_count());
-    }
-    
+    stress_test_cycle(&mut tree, 1000, arena_exhaustion_attack);
+
     // Phase 2: Try to create a pattern that fragments the arena
     tree.clear();
-    
-    // Insert in a pattern that creates and frees nodes in a specific order
-    for i in 0..500 {
-        tree.insert(i * 10, format!("fragmented-{}", i));
-    }
-    
-    // Delete every other item
-    for i in (0..500).step_by(2) {
-        tree.remove(&(i * 10));
-    }
-    
-    // Now insert items that will reuse the freed slots
-    for i in 0..250 {
-        tree.insert(i * 10 + 5, format!("reused-{}", i * 1000));
-    }
-    
+    fragmentation_attack(&mut tree, 0);
+
     // Verify the tree is still consistent
-    let items: Vec<_> = tree.items().collect();
-    if items.len() != 500 {
-        panic!("ATTACK SUCCESSFUL: Lost items! Expected 500, got {}", items.len());
-    }
-    
-    // Check that items are correctly ordered
-    for i in 1..items.len() {
-        if items[i-1].0 >= items[i].0 {
-            panic!("ATTACK SUCCESSFUL: Items out of order after arena fragmentation!");
-        }
-    }
+    verify_attack_result!(tree, "arena fragmentation", full = 500);
 }
 
 #[test]
 fn test_concurrent_arena_access_simulation() {
+    use test_utils::*;
+
     // Attack: Simulate concurrent access patterns that might expose arena bugs
     // (Note: This isn't true concurrency, but simulates interleaved operations)
-    
-    let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
-    
+    let mut tree = create_attack_tree(4);
+
     // Create multiple "threads" of operations
-    let thread1_ops = vec![
-        (true, 1), (true, 3), (true, 5), (false, 3), (true, 7), (false, 1)
-    ];
-    let thread2_ops = vec![
-        (true, 2), (true, 4), (false, 2), (true, 6), (true, 8), (false, 4)
-    ];
-    
-    // Interleave operations
-    for i in 0..thread1_ops.len() {
-        // Thread 1 operation
-        let (is_insert, key) = thread1_ops[i];
-        if is_insert {
-            tree.insert(key * 10, format!("t1-{}", key));
-        } else {
-            tree.remove(&(key * 10));
-        }
-        
-        // Check invariants after each operation
-        if let Err(e) = tree.check_invariants_detailed() {
-            panic!("ATTACK SUCCESSFUL after thread1 op {}: {}", i, e);
-        }
-        
-        // Thread 2 operation
-        let (is_insert, key) = thread2_ops[i];
-        if is_insert {
-            tree.insert(key * 10 + 1, format!("t2-{}", key));
-        } else {
-            tree.remove(&(key * 10 + 1));
-        }
-        
-        // Check invariants after each operation
-        if let Err(e) = tree.check_invariants_detailed() {
-            panic!("ATTACK SUCCESSFUL after thread2 op {}: {}", i, e);
-        }
-    }
+    let (thread1_ops, thread2_ops) = setup_concurrent_simulation();
+
+    // Interleave operations with automatic invariant checking
+    execute_interleaved_ops(&mut tree, &thread1_ops, &thread2_ops);
 }
 
 #[test]
