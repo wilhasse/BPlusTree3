@@ -1,22 +1,15 @@
-[package]
-name = "bplustree3"
+[workspace]
+members = ["rust"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
-edition = "2024"
+authors = ["Kent Beck <kent@kentbeck.com>"]
+license = "MIT"
+repository = "https://github.com/KentBeck/BPlusTree3"
+edition = "2021"
 
-[lib]
-doctest = false
-
-[features]
-default = []
-testing = []
-
-[dependencies]
-paste = "1.0"
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+[workspace.dependencies]
 rand = "0.8"
-
-[[bench]]
-name = "comparison"
-harness = false
+criterion = { version = "0.5", features = ["html_reports"] }
+paste = "1.0"

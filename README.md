@@ -1,436 +1,138 @@
 # BPlusTree3
 
-A B+ tree implementation in Rust, designed as an alternative to `BTreeMap` for specific use cases requiring efficient range queries and sequential access patterns.
+High-performance B+ tree implementations for **Rust** and **Python**, designed for efficient range queries and sequential access patterns.
 
-## Overview
+## 🚀 **Dual-Language Implementation**
 
-B+ trees are a variant of B-trees optimized for systems that read and write large blocks of data. Unlike standard B-trees, B+ trees store all values in leaf nodes and maintain a linked list structure between leaves, making them particularly efficient for range queries and sequential scans.
+This project provides **complete, optimized B+ tree implementations** in both languages:
 
-## Installation
+- **🦀 [Rust Implementation](./rust/)** - Zero-cost abstractions, arena-based memory management
+- **🐍 [Python Implementation](./python/)** - Competitive with SortedDict, optimized for specific use cases
 
-Add this to your `Cargo.toml`:
+## 📊 **Performance Highlights** 
 
-```toml
-[dependencies]
-bplustree3 = "0.1.0"
-```
+### **Rust Implementation**
+- **Up to 41% faster deletions** with optimized rebalancing
+- **19-30% improvement** in mixed workloads
+- **Full Rust range syntax support** (`3..7`, `3..=7`, `5..`, etc.)
 
-## Quick Start
+### **Python Implementation**  
+- **Up to 2.5x faster** than SortedDict for partial range scans
+- **1.4x faster** for medium range queries
+- **Excellent scaling** for large dataset iteration
 
-```rust
-use bplustree3::BPlusTreeMap;
+## 🎯 **Choose Your Implementation**
 
-fn main() {
-    let mut tree = BPlusTreeMap::new(16).unwrap();
+| Use Case | Rust | Python |
+|----------|------|--------|
+| **Systems programming** | ✅ Primary choice | ❌ |
+| **High-performance applications** | ✅ Zero-cost abstractions | ⚠️ Good for specific patterns |
+| **Database engines** | ✅ Full control | ⚠️ Limited |
+| **Data analytics** | ✅ Fast | ✅ Great for range queries |
+| **Rapid prototyping** | ⚠️ Learning curve | ✅ Easy integration |
+| **Existing Python codebase** | ❌ | ✅ Drop-in replacement |
 
-    // Insert some data
-    tree.insert(1, "one");
-    tree.insert(3, "three");
-    tree.insert(2, "two");
+## 🚀 **Quick Start**
 
-    // Basic operations
-    assert_eq!(tree.get(&2), Some(&"two"));
-    assert_eq!(tree.len(), 3);
-
-    // Range queries with Rust's range syntax!
-    let range1: Vec<_> = tree.range(1..=2).collect();
-    println!("{:?}", range1); // [(&1, &"one"), (&2, &"two")]
-
-    let range2: Vec<_> = tree.range(2..).collect();
-    println!("{:?}", range2); // [(&2, &"two"), (&3, &"three")]
-
-    // Sequential access
-    for (key, value) in tree.items() {
-        println!("{}: {}", key, value);
-    }
-}
-```
-
-## Features
-
-✅ **Complete Implementation** - This B+ tree provides:
-
-- ✅ Full CRUD operations (insert, get, delete)
-- ✅ Arena-based memory management for efficient node allocation
-- ✅ Automatic tree balancing with node splitting and merging
-- ✅ **Rust Range Syntax Support** - Use familiar `3..7`, `3..=7`, `5..`, `..10` syntax!
-- ✅ Optimized range queries with O(log n + k) complexity
-- ✅ Multiple iterator types (items, keys, values, ranges)
-- ✅ Comprehensive test suite including adversarial testing
-- ✅ BTreeMap-compatible API for easy migration
-
-## Range Syntax Support
-
-One of the standout features is full support for Rust's range syntax:
-
+### Rust
 ```rust
 use bplustree3::BPlusTreeMap;
 
 let mut tree = BPlusTreeMap::new(16).unwrap();
-for i in 0..10 {
-    tree.insert(i, format!("value{}", i));
+tree.insert(1, "one");
+tree.insert(2, "two");
+
+// Range queries with Rust syntax!
+for (key, value) in tree.range(1..=2) {
+    println!("{}: {}", key, value);
 }
-
-// All standard Rust range types work:
-let a: Vec<_> = tree.range(3..7).collect();        // Exclusive end
-let b: Vec<_> = tree.range(3..=7).collect();       // Inclusive end  
-let c: Vec<_> = tree.range(5..).collect();         // Open end
-let d: Vec<_> = tree.range(..5).collect();         // From start
-let e: Vec<_> = tree.range(..=5).collect();        // From start, inclusive
-let f: Vec<_> = tree.range(..).collect();          // Full range
-
-// Even custom ranges with excluded start bounds work!
-use std::ops::{Bound, RangeBounds};
-struct ExcludeStart { start: i32, end: i32 }
-impl RangeBounds<i32> for ExcludeStart {
-    fn start_bound(&self) -> Bound<&i32> { Bound::Excluded(&self.start) }
-    fn end_bound(&self) -> Bound<&i32> { Bound::Included(&self.end) }
-}
-let g: Vec<_> = tree.range(ExcludeStart { start: 3, end: 7 }).collect();
 ```
 
-## API
+### Python  
+```python
+from bplustree import BPlusTree
 
-### Creating a B+ Tree
+tree = BPlusTree(capacity=128)
+tree[1] = "one"
+tree[2] = "two"
 
-```rust
-use bplustree3::BPlusTree;
-
-// Create a tree with branching factor of 4
-let mut tree = BPlusTree::new(4);
+# Range queries
+for key, value in tree.range(1, 2):
+    print(f"{key}: {value}")
 ```
 
-### Basic Operations
+## 📖 **Documentation**
 
-```rust
-// Insert key-value pairs
-tree.insert(10, "ten");
-tree.insert(20, "twenty");
-tree.insert(5, "five");
+- **📚 [Technical Documentation](./rust/docs/)** - Architecture, algorithms, benchmarks
+- **🦀 [Rust Documentation](./rust/README.md)** - Rust-specific usage and examples
+- **🐍 [Python Documentation](./python/README.md)** - Python-specific usage and examples
 
-// Get values by key
-assert_eq!(tree.get(&10), Some(&"ten"));
-assert_eq!(tree.get(&99), None);
+## ⚡ **Performance Analysis**
 
-// Update existing keys (returns old value)
-let old_value = tree.insert(10, "TEN");
-assert_eq!(old_value, Some("ten"));
+Comprehensive benchmarking shows **significant advantages** in specific scenarios:
 
-// Check tree properties
-assert_eq!(tree.len(), 3);
-assert!(!tree.is_empty());
-```
+### **Key Strengths**
+- **Range queries**: O(log n + k) complexity with excellent cache locality
+- **Sequential scans**: Linked leaf nodes enable efficient iteration  
+- **Deletion-heavy workloads**: Optimized rebalancing algorithms
+- **Large datasets**: Performance improves with scale
 
-### Range Queries
+### **Benchmark Results**
+- **Rust**: 19-41% faster deletions, excellent overall performance
+- **Python**: 2.5x faster partial scans, competitive with highly optimized libraries
 
-```rust
-// Get all entries in a range
-let entries = tree.range(Some(&5), Some(&15));
-// Returns: [(&5, &"five"), (&10, &"TEN")]
+See [performance documentation](./rust/docs/) for detailed analysis and charts.
 
-// Get all entries from a minimum key
-let entries = tree.range(Some(&10), None);
-// Returns: [(&10, &"TEN"), (&20, &"twenty")]
+## 🏗️ **Architecture**
 
-// Get all entries up to a maximum key
-let entries = tree.range(None, Some(&15));
-// Returns: [(&5, &"five"), (&10, &"TEN")]
-```
+Both implementations share core design principles:
 
-### Sequential Access
+- **Arena-based memory management** for efficiency
+- **Linked leaf nodes** for fast sequential access
+- **Hybrid navigation** combining tree traversal + linked list iteration
+- **Optimized rebalancing** with reduced duplicate lookups
+- **Comprehensive testing** including adversarial test patterns
 
-```rust
-// Get all entries in sorted order
-let all_entries = tree.slice();
-// Returns: [(&5, &"five"), (&10, &"TEN"), (&20, &"twenty")]
-```
+## 🛠️ **Development**
 
-## When to Use BPlusTree vs BTreeMap
-
-### Use BPlusTree when:
-
-1. **Frequent Range Queries**: You regularly need to retrieve all keys within a range
-
-   ```rust
-   // Efficient in B+ trees due to leaf node linking
-   let recent_orders = tree.range(Some(&start_date), Some(&end_date));
-   ```
-
-2. **Sequential Scans**: You often iterate through large portions of your data
-
-   ```rust
-   // B+ trees excel at sequential access patterns
-   for (key, value) in tree.slice() {
-       process_in_order(key, value);
-   }
-   ```
-
-3. **Database-like Workloads**: Your access patterns resemble database queries with range scans
-
-4. **Large Datasets**: Working with datasets where cache efficiency matters for range operations
-
-### Use BTreeMap when:
-
-1. **Random Access**: Primarily doing point lookups and updates
-2. **Frequent Deletions**: Need robust deletion support (not yet implemented in BPlusTree)
-3. **Memory Efficiency**: Working with smaller datasets where BTreeMap's overhead is acceptable
-4. **Mature API**: Need a battle-tested implementation with full standard library integration
-
-## Performance Characteristics
-
-### Theoretical Complexity
-
-| Operation       | BPlusTree    | BTreeMap           | Notes                         |
-| --------------- | ------------ | ------------------ | ----------------------------- |
-| Insert          | O(log n)     | O(log n)           | Similar performance           |
-| Get             | O(log n)     | O(log n)           | Similar performance           |
-| Range Query     | O(log n + k) | O(log n + k log n) | B+ tree advantage for large k |
-| Sequential Scan | O(k)         | O(k log n)         | Significant B+ tree advantage |
-| Memory Usage    | Higher       | Lower              | B+ trees store more pointers  |
-
-Where `n` is the number of elements and `k` is the number of elements in the result set.
-
-### Real-World Performance vs SortedDict
-
-Our Python implementation has been extensively benchmarked against the highly optimized `SortedDict` from `sortedcontainers`. While SortedDict dominates general-purpose scenarios, **B+ Tree excels in specific use cases**:
-
-#### 🏆 **B+ Tree Performance Wins**
-
-| Scenario                    | B+ Tree Advantage      | Use Cases                                                  |
-| --------------------------- | ---------------------- | ---------------------------------------------------------- |
-| **Partial Range Scans**     | **Up to 2.5x faster**  | Database LIMIT queries, pagination, "top N" results        |
-| **Large Dataset Iteration** | **1.1x - 1.4x faster** | Data export, bulk processing, full table scans             |
-| **Medium Range Queries**    | **1.4x faster**        | Time-series analysis, geographic queries, batch processing |
-
-#### 📊 **Detailed Benchmark Results**
-
-**Partial Range Scans (Early Termination):**
-
-```
-Limit  10 items: B+ Tree 1.18x faster
-Limit  50 items: B+ Tree 2.50x faster  ⭐ Best performance
-Limit 100 items: B+ Tree 1.52x faster
-Limit 500 items: B+ Tree 1.15x faster
-```
-
-**Large Dataset Iteration:**
-
-```
-200K items: B+ Tree 1.29x faster
-300K items: B+ Tree 1.12x faster
-500K items: B+ Tree 1.39x faster  ⭐ Scales well
-```
-
-**Optimal Configuration:**
-
-- **Node Capacity: 128** provides best performance (3.3x faster than default capacity 4)
-- Performance continues improving with larger capacities
-- Higher capacity = fewer tree levels, better cache utilization
-
-#### 🎯 **When to Choose B+ Tree**
-
-**Excellent for:**
-
-- Database-like workloads with range queries
-- Analytics dashboards ("top 100 users")
-- Search systems with pagination
-- Time-series data processing
-- Data export and ETL operations
-- Any scenario with "LIMIT" or early termination patterns
-
-**Use SortedDict when:**
-
-- Random access dominates (37x faster individual lookups)
-- Small datasets (< 100K items)
-- Memory efficiency is critical
-- General-purpose sorted container needs
-
-_Benchmarks run on Python implementation with capacity=128 vs SortedDict. See `/src/python/COMPETITIVE_ADVANTAGES.md` for complete analysis._
-
-## Configuration
-
-The branching factor determines how many entries each node can hold before splitting:
-
-```rust
-// Small branching factor (2-4): More splits, deeper tree, good for testing
-let tree = BPlusTree::new(3);
-
-// Medium branching factor (8-16): Balanced performance
-let tree = BPlusTree::new(12);
-
-// Large branching factor (32-64): Fewer splits, better cache utilization
-let tree = BPlusTree::new(48);
-```
-
-## Testing
-
-### Important: Feature Flag Required
-
-**This project uses conditional compilation for test-only functions.** You must use the `testing` feature flag when running tests:
-
+### Rust Development
 ```bash
-# Run all tests (REQUIRED: use --features testing)
+cd rust/
 cargo test --features testing
-
-# Run specific test files
-cargo test --features testing --test bplus_tree
-cargo test --features testing --test remove_operations
-
-# Run library tests only
-cargo test --features testing --lib
+cargo bench
 ```
 
-### Why the Feature Flag is Required
-
-Test utility functions like `check_invariants()`, `validate()`, `slice()`, `leaf_sizes()`, and `print_node_chain()` are conditionally compiled using `#[cfg(any(test, feature = "testing"))]`. This means:
-
-- ✅ **Production builds**: Exclude test functions, reducing binary size
-- ✅ **Test builds**: Include test functions when `--features testing` is used
-- ❌ **IDE warnings**: Expected behavior - IDE shows "method not found" for test functions in normal mode
-
-### Regular Tests
-
-Run the standard test suite:
-
-### Fuzz Testing
-
-The project includes comprehensive fuzz tests that are excluded from normal test runs for performance. These tests compare BPlusTree behavior against Rust's standard `BTreeMap` to ensure correctness.
-
-#### Running Fuzz Tests
-
+### Python Development  
 ```bash
-# Run all fuzz tests (REQUIRED: use --features testing)
-cargo test --features testing --test fuzz_tests -- --ignored
-
-# Run a specific fuzz test with output
-cargo test --features testing fuzz_test_bplus_tree -- --ignored --nocapture
-
-# Run fuzz test with random insertion patterns
-cargo test --features testing fuzz_test_with_random_keys -- --ignored --nocapture
-
-# Run fuzz test focusing on updates
-cargo test --features testing fuzz_test_with_updates -- --ignored --nocapture
+cd python/
+pip install -e .
+python -m pytest tests/
 ```
 
-#### Timed Fuzz Testing
-
-For extended testing, use the timed fuzz test:
-
+### Cross-Language Benchmarking
 ```bash
-# Default 10-second test
-cargo test --features testing fuzz_test_timed -- --ignored --nocapture
-
-# Custom duration examples
-FUZZ_TIME=30s cargo test --features testing fuzz_test_timed -- --ignored --nocapture
-FUZZ_TIME=5m cargo test --features testing fuzz_test_timed -- --ignored --nocapture
-FUZZ_TIME=1h cargo test --features testing fuzz_test_timed -- --ignored --nocapture
+python scripts/analyze_benchmarks.py
 ```
 
-The fuzz tests will:
+## 🤝 **Contributing**
 
-- Test multiple branching factors (2-10)
-- Insert thousands of key-value pairs
-- Verify all operations match `BTreeMap` behavior
-- Test both sequential and random insertion patterns
-- Validate range queries and iteration order
-- Report detailed progress and any mismatches
+This project follows **Test-Driven Development** and **Tidy First** principles:
 
-## Examples
+1. **Write tests first** - All features start with failing tests
+2. **Small, focused commits** - Separate structural and behavioral changes  
+3. **Comprehensive validation** - Both implementations tested against reference implementations
+4. **Performance awareness** - All changes benchmarked for performance impact
 
-### Time Series Data
+## 📄 **License**
 
-```rust
-use bplustree3::BPlusTree;
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-let mut time_series = BPlusTree::new(16);
+## 🔗 **Links**
 
-// Insert timestamped data
-time_series.insert(1640995200, "2022-01-01 data");
-time_series.insert(1641081600, "2022-01-02 data");
-time_series.insert(1641168000, "2022-01-03 data");
+- **[GitHub Repository](https://github.com/KentBeck/BPlusTree3)**
+- **[Rust Crate](https://crates.io/crates/bplustree3)** _(coming soon)_
+- **[Python Package](https://pypi.org/project/bplustree3/)** _(coming soon)_
 
-// Efficient range query for a time period
-let start_time = 1640995200;
-let end_time = 1641081600;
-let period_data = time_series.range(Some(&start_time), Some(&end_time));
-```
+---
 
-### Log Processing
-
-```rust
-let mut log_index = BPlusTree::new(32);
-
-// Index log entries by timestamp
-for entry in log_entries {
-    log_index.insert(entry.timestamp, entry.message);
-}
-
-// Efficiently scan logs in chronological order
-for (timestamp, message) in log_index.slice() {
-    process_log_entry(timestamp, message);
-}
-```
-
-## Implementation Details
-
-### Current Architecture
-
-The current implementation uses a simplified B+ tree structure:
-
-- **Leaf Nodes Only**: All data is stored in leaf nodes connected via a linked list
-- **Automatic Splitting**: Nodes split when they exceed the branching factor
-- **Sequential Access**: Linked leaf nodes enable efficient range queries
-- **No Internal Nodes**: Future versions will add internal nodes for true B+ tree structure
-
-### Key Components
-
-- `BPlusTree<K, V>`: Main tree structure with configurable branching factor
-- `LeafNode<K, V>`: Individual nodes storing key-value pairs
-- `LeafFinder<K>`: Utility for locating the correct leaf node for operations
-- `Entry<K, V>`: Key-value pair storage structure
-
-### Future Roadmap
-
-- [ ] **Internal Nodes**: Add proper B+ tree internal node structure
-- [ ] **Deletion**: Implement key removal with node merging
-- [ ] **Persistence**: Add serialization/deserialization support
-- [ ] **Iterators**: Implement standard Rust iterator traits
-- [ ] **Concurrent Access**: Add thread-safe variants
-- [ ] **Memory Optimization**: Reduce memory overhead
-- [ ] **Bulk Loading**: Efficient bulk insertion methods
-
-## Development Philosophy
-
-This project follows Kent Beck's Test-Driven Development methodology:
-
-1. **Red-Green-Refactor**: Write failing tests, make them pass, then refactor
-2. **Tidy First**: Separate structural changes from behavioral changes
-3. **Small Steps**: Implement minimal functionality to make tests pass
-4. **Comprehensive Testing**: Every feature is validated against `BTreeMap`
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Follow TDD practices - write tests first
-2. Run the full test suite including fuzz tests
-3. Keep commits small and focused
-4. Separate structural and behavioral changes
-5. Update documentation for new features
-
-### Running the Full Test Suite
-
-```bash
-# Quick development tests (REQUIRED: use --features testing)
-cargo test --features testing
-
-# Comprehensive validation (takes longer)
-cargo test --features testing --test fuzz_tests -- --ignored
-
-# Extended stress testing
-FUZZ_TIME=10m cargo test --features testing fuzz_test_timed -- --ignored --nocapture
-```
-
-## License
-
-[Add your license here]
+> Built with ❤️ following Kent Beck's **Test-Driven Development** methodology.

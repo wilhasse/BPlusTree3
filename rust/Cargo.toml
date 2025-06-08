@@ -1,0 +1,26 @@
+[package]
+name = "bplustree3"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "A high-performance B+ tree implementation in Rust with dict-like API"
+license.workspace = true
+repository.workspace = true
+keywords = ["btree", "data-structures", "database", "indexing", "performance"]
+categories = ["data-structures", "algorithms"]
+readme = "README.md"
+
+[features]
+default = []
+testing = []
+
+[dependencies]
+paste.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+rand.workspace = true
+
+[[bench]]
+name = "comparison"
+harness = false

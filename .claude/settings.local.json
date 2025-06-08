@@ -114,7 +114,9 @@
       "Bash(/Users/kentb/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/arm64-darwin/rg -n -A 20 \"if let Some\\\\(branch\\\\) = self\\\\.get_branch_mut\\\\(id\\\\)\" src/lib.rs)",
       "Bash(rustc:*)",
       "Bash(./test_optimized_range)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(cp:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   },
