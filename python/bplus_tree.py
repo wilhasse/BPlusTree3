@@ -493,6 +493,22 @@ class BPlusTreeMap:
                 left = mid + 1
         return left
 
+    def range(self, start_key: Any = None, end_key: Any = None) -> Iterator[Tuple[Any, Any]]:
+        """Return an iterator over (key, value) pairs in the specified range.
+        
+        Args:
+            start_key: Start of range (inclusive). Use None for beginning.
+            end_key: End of range (exclusive). Use None for end.
+            
+        Returns:
+            Iterator over (key, value) tuples in the range.
+            
+        Example:
+            for key, value in tree.range(5, 10):  # Keys 5-9
+                print(f"{key}: {value}")
+        """
+        return self.items(start_key, end_key)
+
     def clear(self) -> None:
         """Remove all items from the tree (dict-like API)."""
         # Reset to initial state with a single empty leaf

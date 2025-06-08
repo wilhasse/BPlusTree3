@@ -4,17 +4,42 @@ A high-performance B+ tree implementation for Python with competitive performanc
 
 ## 🚀 Quick Start
 
+### Installation
+
+**Option 1: Install from source (current)**
+```bash
+git clone https://github.com/KentBeck/BPlusTree3.git
+cd BPlusTree3/python
+pip install -e .
+```
+
+**Option 2: Install from PyPI (coming soon)**
 ```bash
 pip install bplustree3
+```
+
+### Requirements
+- Python 3.8 or higher
+- C compiler (for C extension, optional)
+
+### Implementation Selection
+The library automatically selects the best available implementation:
+1. **C Extension** (preferred): 2-4x faster, used automatically if available
+2. **Pure Python**: Fallback implementation, no compilation required
+
+Check which implementation is being used:
+```python
+from bplus_tree import get_implementation
+print(get_implementation())  # "C extension" or "Pure Python"
 ```
 
 ## 📖 Basic Usage
 
 ```python
-from bplustree import BPlusTree
+from bplus_tree import BPlusTreeMap
 
 # Create a B+ tree
-tree = BPlusTree(capacity=128)  # Higher capacity = better performance
+tree = BPlusTreeMap(capacity=128)  # Higher capacity = better performance
 
 # Insert data
 tree[1] = "one"
@@ -159,12 +184,20 @@ for key, value in tree.range(None, end_key):    # From beginning to end_key
 - **Optimized rebalancing** algorithms
 - **Hybrid navigation** for range queries
 
+## 📚 Documentation & Examples
+
+- **[API Reference](./docs/API_REFERENCE.md)** - Complete API documentation
+- **[Examples](./examples/)** - Comprehensive usage examples:
+  - [Basic Usage](./examples/basic_usage.py) - Fundamental operations
+  - [Range Queries](./examples/range_queries.py) - Range query patterns  
+  - [Performance Demo](./examples/performance_demo.py) - Benchmarks vs alternatives
+  - [Migration Guide](./examples/migration_guide.py) - Migrating from dict/SortedDict
+
 ## 🔗 Links
 
 - [Main Project](../) - Dual Rust/Python implementation
 - [Rust Implementation](../rust/) - Core Rust library
-- [Documentation](../rust/docs/) - Technical details and benchmarks
-- [Examples](./examples/) - More usage examples
+- [Technical Documentation](../rust/docs/) - Architecture and benchmarks
 
 ## 📄 License
 
