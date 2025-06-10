@@ -61,10 +61,7 @@ jobs:
           BPLUSTREE_C_FAST_MATH=1
         
         # Linux-specific settings
-        CIBW_BEFORE_BUILD_LINUX: >
-          yum install -y gcc ||
-          apt-get update && apt-get install -y gcc ||
-          apk add gcc musl-dev
+        CIBW_BEFORE_BUILD_LINUX: "yum install -y gcc || (apt-get update && apt-get install -y gcc) || apk add gcc musl-dev"
         
         # macOS-specific settings  
         CIBW_ENVIRONMENT_MACOS: >
