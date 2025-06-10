@@ -1,6 +1,5 @@
 /// Enhanced generic arena allocator that eliminates all arena duplication
 /// This replaces ~160 lines of duplicated arena code with a single generic implementation
-
 use std::fmt::Debug;
 
 pub type NodeId = u32;
@@ -34,12 +33,12 @@ impl<T> Arena<T> {
     /// Allocate a new item in the arena and return its ID
     pub fn allocate(&mut self, item: T) -> NodeId {
         let id = self.next_id();
-        
+
         // Extend storage if needed
         if id as usize >= self.storage.len() {
             self.storage.resize_with(id as usize + 1, || None);
         }
-        
+
         self.storage[id as usize] = Some(item);
         id
     }
@@ -49,7 +48,7 @@ impl<T> Arena<T> {
         if id == NULL_NODE {
             return None;
         }
-        
+
         self.storage.get_mut(id as usize)?.take().map(|item| {
             self.free_ids.push(id);
             item
@@ -77,7 +76,9 @@ impl<T> Arena<T> {
         if id == NULL_NODE {
             return false;
         }
-        self.storage.get(id as usize).map_or(false, |item| item.is_some())
+        self.storage
+            .get(id as usize)
+            .map_or(false, |item| item.is_some())
     }
 
     /// Get the next available ID (from free list or storage length)
@@ -177,9 +178,7 @@ impl<T> Arena<T> {
         self.storage
             .iter()
             .enumerate()
-            .filter_map(|(id, item)| {
-                item.as_ref().map(|item| (id as NodeId, item))
-            })
+            .filter_map(|(id, item)| item.as_ref().map(|item| (id as NodeId, item)))
     }
 
     /// Iterate over all allocated items mutably with their IDs
@@ -187,9 +186,7 @@ impl<T> Arena<T> {
         self.storage
             .iter_mut()
             .enumerate()
-            .filter_map(|(id, item)| {
-                item.as_mut().map(|item| (id as NodeId, item))
-            })
+            .filter_map(|(id, item)| item.as_mut().map(|item| (id as NodeId, item)))
     }
 
     /// Iterate over all allocated items (without IDs)
@@ -267,23 +264,23 @@ mod tests {
     #[test]
     fn test_arena_basic_operations() {
         let mut arena: Arena<String> = Arena::new();
-        
+
         // Test allocation
         let id1 = arena.allocate("first".to_string());
         let id2 = arena.allocate("second".to_string());
-        
+
         assert_eq!(arena.allocated_count(), 2);
         assert_eq!(arena.total_capacity(), 2);
         assert_eq!(arena.get(id1), Some(&"first".to_string()));
         assert_eq!(arena.get(id2), Some(&"second".to_string()));
-        
+
         // Test deallocation
         let item = arena.deallocate(id1);
         assert_eq!(item, Some("first".to_string()));
         assert_eq!(arena.allocated_count(), 1);
         assert_eq!(arena.free_count(), 1);
         assert_eq!(arena.get(id1), None);
-        
+
         // Test ID reuse
         let id3 = arena.allocate("third".to_string());
         assert_eq!(id3, id1); // Should reuse the deallocated ID
@@ -293,21 +290,21 @@ mod tests {
     #[test]
     fn test_arena_statistics() {
         let mut arena: Arena<i32> = Arena::new();
-        
+
         // Empty arena
         assert_eq!(arena.utilization(), 0.0);
         assert_eq!(arena.fragmentation(), 0.0);
         assert!(arena.is_empty());
-        
+
         // Add some items
-        let id1 = arena.allocate(1);
+        let _id1 = arena.allocate(1);
         let id2 = arena.allocate(2);
-        let id3 = arena.allocate(3);
-        
+        let _id3 = arena.allocate(3);
+
         assert_eq!(arena.utilization(), 1.0); // 3/3 = 100%
         assert_eq!(arena.fragmentation(), 0.0); // No free slots
         assert!(!arena.is_empty());
-        
+
         // Deallocate one item
         arena.deallocate(id2);
         assert_eq!(arena.allocated_count(), 2);
@@ -319,20 +316,20 @@ mod tests {
     #[test]
     fn test_arena_iteration() {
         let mut arena: Arena<String> = Arena::new();
-        
+
         let id1 = arena.allocate("first".to_string());
         let id2 = arena.allocate("second".to_string());
         let id3 = arena.allocate("third".to_string());
-        
+
         // Deallocate middle item
         arena.deallocate(id2);
-        
+
         // Test iteration over allocated items
         let items: Vec<_> = arena.values().collect();
         assert_eq!(items.len(), 2);
         assert!(items.contains(&&"first".to_string()));
         assert!(items.contains(&&"third".to_string()));
-        
+
         // Test iteration with IDs
         let items_with_ids: Vec<_> = arena.iter().collect();
         assert_eq!(items_with_ids.len(), 2);
@@ -343,17 +340,17 @@ mod tests {
     #[test]
     fn test_arena_validation() {
         let mut arena: Arena<i32> = Arena::new();
-        
+
         // Valid arena should pass validation
         assert!(arena.validate().is_ok());
-        
+
         let id1 = arena.allocate(42);
-        let id2 = arena.allocate(84);
+        let _id2 = arena.allocate(84);
         assert!(arena.validate().is_ok());
-        
+
         arena.deallocate(id1);
         assert!(arena.validate().is_ok());
-        
+
         // Test debug info
         let debug_info = arena.debug_info();
         assert_eq!(debug_info.allocated_count, 1);
@@ -363,20 +360,20 @@ mod tests {
     #[test]
     fn test_arena_compaction() {
         let mut arena: Arena<i32> = Arena::new();
-        
+
         // Allocate several items
         let _id1 = arena.allocate(1);
         let _id2 = arena.allocate(2);
         let _id3 = arena.allocate(3);
         let _id4 = arena.allocate(4);
         let _id5 = arena.allocate(5);
-        
+
         // Deallocate the last few items
         arena.deallocate(_id4);
         arena.deallocate(_id5);
-        
+
         assert_eq!(arena.total_capacity(), 5);
-        
+
         // Compact should reduce capacity
         arena.compact();
         assert_eq!(arena.total_capacity(), 3);

@@ -11,7 +11,6 @@ mod arena;
 mod macros;
 
 pub use arena::{Arena, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
-pub use macros::*;
 
 // Constants
 const MIN_CAPACITY: usize = 4;
