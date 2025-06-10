@@ -15,6 +15,7 @@ try:
 except ImportError:
     from .bplus_tree import BPlusTreeMap
 else:
+
     class BPlusTreeMap(_c_ext.BPlusTree):
         """Wrapper around the C extension to provide a consistent API."""
 
@@ -46,7 +47,9 @@ else:
         def pop(self, key, *args):
             """Remove and return value for key with optional default."""
             if len(args) > 1:
-                raise TypeError(f"pop expected at most 2 arguments, got {len(args) + 1}")
+                raise TypeError(
+                    f"pop expected at most 2 arguments, got {len(args) + 1}"
+                )
             try:
                 value = self[key]
                 del self[key]
@@ -77,11 +80,11 @@ else:
 
         def update(self, other):
             """Update tree with key-value pairs from other mapping or iterable."""
-            if hasattr(other, 'items'):
+            if hasattr(other, "items"):
                 # other is a mapping (dict-like)
                 for key, value in other.items():
                     self[key] = value
-            elif hasattr(other, 'keys'):
+            elif hasattr(other, "keys"):
                 # other has keys method but no items (like dict.keys())
                 for key in other.keys():
                     self[key] = other[key]
@@ -119,6 +122,7 @@ from .bplus_tree import Node, LeafNode, BranchNode
 
 __version__ = "0.1.0"
 __all__ = ["BPlusTreeMap", "Node", "LeafNode", "BranchNode"]
+
 
 def get_implementation():
     """Return which implementation is being used."""

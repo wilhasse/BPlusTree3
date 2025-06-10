@@ -493,16 +493,18 @@ class BPlusTreeMap:
                 left = mid + 1
         return left
 
-    def range(self, start_key: Any = None, end_key: Any = None) -> Iterator[Tuple[Any, Any]]:
+    def range(
+        self, start_key: Any = None, end_key: Any = None
+    ) -> Iterator[Tuple[Any, Any]]:
         """Return an iterator over (key, value) pairs in the specified range.
-        
+
         Args:
             start_key: Start of range (inclusive). Use None for beginning.
             end_key: End of range (exclusive). Use None for end.
-            
+
         Returns:
             Iterator over (key, value) tuples in the range.
-            
+
         Example:
             for key, value in tree.range(5, 10):  # Keys 5-9
                 print(f"{key}: {value}")
@@ -517,23 +519,22 @@ class BPlusTreeMap:
         self.root = original
         self._rightmost_leaf_cache = None
 
-
     def pop(self, key: Any, *args) -> Any:
         """Remove and return value for key with optional default (dict-like API).
-        
+
         Args:
             key: The key to remove.
             *args: Optional default value if key is not found.
-            
+
         Returns:
             The value that was associated with key, or default if key not found.
-            
+
         Raises:
             KeyError: If key is not found and no default is provided.
         """
         if len(args) > 1:
             raise TypeError(f"pop expected at most 2 arguments, got {len(args) + 1}")
-            
+
         try:
             value = self[key]
             del self[key]
@@ -545,21 +546,21 @@ class BPlusTreeMap:
 
     def popitem(self) -> Tuple[Any, Any]:
         """Remove and return an arbitrary (key, value) pair (dict-like API).
-        
+
         Returns:
             A (key, value) tuple.
-            
+
         Raises:
             KeyError: If the tree is empty.
         """
         if len(self) == 0:
             raise KeyError("popitem(): tree is empty")
-            
+
         # Get the first key-value pair from the leftmost leaf
         first_leaf = self.leaves
         if len(first_leaf.keys) == 0:
             raise KeyError("popitem(): tree is empty")
-            
+
         key = first_leaf.keys[0]
         value = first_leaf.values[0]
         del self[key]
@@ -567,11 +568,11 @@ class BPlusTreeMap:
 
     def setdefault(self, key: Any, default: Any = None) -> Any:
         """Get value for key, setting and returning default if not present (dict-like API).
-        
+
         Args:
             key: The key to look up.
             default: Default value to set and return if key is not found.
-            
+
         Returns:
             The existing value for key, or default if key was not present.
         """
@@ -583,15 +584,15 @@ class BPlusTreeMap:
 
     def update(self, other) -> None:
         """Update tree with key-value pairs from other mapping or iterable (dict-like API).
-        
+
         Args:
             other: A mapping (dict-like) or iterable of (key, value) pairs.
         """
-        if hasattr(other, 'items'):
+        if hasattr(other, "items"):
             # other is a mapping (dict-like)
             for key, value in other.items():
                 self[key] = value
-        elif hasattr(other, 'keys'):
+        elif hasattr(other, "keys"):
             # other has keys method but no items (like dict.keys())
             for key in other.keys():
                 self[key] = other[key]
@@ -602,7 +603,7 @@ class BPlusTreeMap:
 
     def copy(self) -> "BPlusTreeMap":
         """Create a shallow copy of the tree (dict-like API).
-        
+
         Returns:
             A new BPlusTreeMap with the same key-value pairs.
         """

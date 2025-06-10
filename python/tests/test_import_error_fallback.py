@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+
 def test_extension_import_error_triggers_python_fallback(tmp_path, monkeypatch):
     # Copy the package to a temporary directory to avoid tampering with original files
     pkg_src = Path(__file__).parent.parent

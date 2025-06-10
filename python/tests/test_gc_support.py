@@ -1,6 +1,7 @@
 import gc
 from bplustree_c import BPlusTree
 
+
 def test_gc_collects_self_referencing_tree():
     """The BPlusTree should be trackable by GC and cycles should be collected."""
     gc.collect()

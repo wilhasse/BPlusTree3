@@ -15,6 +15,7 @@ try:
 except ImportError:
     from .bplus_tree import BPlusTreeMap
 else:
+
     class BPlusTreeMap(_c_ext.BPlusTree):
         """Wrapper around the C extension to provide a consistent API."""
 
@@ -58,6 +59,7 @@ from .bplus_tree import Node, LeafNode, BranchNode
 
 __version__ = "0.1.0"
 __all__ = ["BPlusTreeMap", "Node", "LeafNode", "BranchNode"]
+
 
 def get_implementation():
     """Return which implementation is being used."""

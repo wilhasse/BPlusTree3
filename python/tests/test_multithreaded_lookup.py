@@ -19,6 +19,7 @@ import time
 import random
 import gc
 
+
 def test_multithreaded_lookup():
     """Multithreaded lookup performance: measure throughput of concurrent lookups."""
     # Prepare dataset
@@ -55,4 +56,6 @@ def test_multithreaded_lookup():
     total_ops = thread_count * iterations * len(lookup_keys)
     ns_per_op = total_time * 1e9 / total_ops
     ops_per_sec = total_ops / total_time
-    print(f"Threads: {thread_count}, Multithreaded lookup: {ns_per_op:.1f} ns/op ({ops_per_sec:.0f} ops/sec)")
+    print(
+        f"Threads: {thread_count}, Multithreaded lookup: {ns_per_op:.1f} ns/op ({ops_per_sec:.0f} ops/sec)"
+    )

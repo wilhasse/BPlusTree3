@@ -13,17 +13,22 @@ To use:
     pytest src/python/tests/test_gprof_harness.py::test_generate_gprof
 """
 
+
 def test_generate_gprof(tmp_path):
     import subprocess, sys, os
 
     # Rebuild extension with profiling flags
     env = os.environ.copy()
-    env.update({'CFLAGS': env.get('CFLAGS', '') + ' -pg -O3 -march=native',
-                'LDFLAGS': env.get('LDFLAGS', '') + ' -pg'})
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-e', '.'], env=env)
+    env.update(
+        {
+            "CFLAGS": env.get("CFLAGS", "") + " -pg -O3 -march=native",
+            "LDFLAGS": env.get("LDFLAGS", "") + " -pg",
+        }
+    )
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "."], env=env)
 
     # Run a simple workload to generate gmon.out
-    script = tmp_path / 'run_profile.py'
+    script = tmp_path / "run_profile.py"
     script.write_text(
         "from bplustree import BPlusTree\n"
         "import random\n"
@@ -32,4 +37,4 @@ def test_generate_gprof(tmp_path):
         "for _ in range(100000): _ = tree[random.randint(0, 9999)]\n"
     )
     subprocess.check_call([sys.executable, str(script)], env=env)
-    assert os.path.exists('gmon.out'), "gmon.out file was not generated"
+    assert os.path.exists("gmon.out"), "gmon.out file was not generated"
