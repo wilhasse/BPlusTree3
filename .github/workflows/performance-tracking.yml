@@ -1,0 +1,274 @@
+name: Performance Tracking
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly performance tracking
+    - cron: '0 2 * * 0'  # Sunday at 2 AM UTC
+
+jobs:
+  performance-benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for performance tracking
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+        pip install sortedcontainers  # For comparison benchmarks
+        pip install memory-profiler   # For memory profiling
+        # Install optional line profiler if available
+        pip install line-profiler || true
+        
+        # Install the package
+        cd python
+        pip install -e .
+    
+    - name: Run performance benchmarks
+      run: |
+        cd python/benchmarks
+        python comprehensive_benchmark.py
+    
+    - name: Track performance
+      run: |
+        cd python/benchmarks
+        python track_performance.py --track --sizes 1000 10000
+        python track_performance.py --export-ci
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results-py${{ matrix.python-version }}
+        path: |
+          python/benchmarks/benchmark_results.json
+          python/benchmarks/ci_performance.json
+          python/benchmarks/performance_history.json
+        retention-days: 90
+    
+    - name: Check for performance regressions
+      if: github.event_name == 'pull_request'
+      run: |
+        cd python/benchmarks
+        # Run regression check and fail if significant regressions detected
+        python -c "
+        import json
+        import sys
+        
+        # Load CI performance data
+        with open('ci_performance.json', 'r') as f:
+            data = json.load(f)
+        
+        # Define regression thresholds (in ms)
+        thresholds = {
+            'insert.random.10000': 1000,     # 1 second for 10k insertions
+            'lookup.10000': 300,             # 300ms for 10k lookups
+            'range.10000.size100': 100       # 100ms for range queries
+        }
+        
+        regressions = []
+        for metric, threshold in thresholds.items():
+            if metric in data['metrics']:
+                value = data['metrics'][metric]['value']
+                if value > threshold:
+                    regressions.append(f'{metric}: {value:.1f}ms > {threshold}ms')
+        
+        if regressions:
+            print('PERFORMANCE REGRESSIONS DETECTED:')
+            for reg in regressions:
+                print(f'  - {reg}')
+            print('')
+            print('Performance has regressed beyond acceptable thresholds.')
+            print('Please optimize the code or update thresholds if justified.')
+            sys.exit(1)
+        else:
+            print('All performance benchmarks within acceptable limits.')
+        "
+
+  performance-comparison:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install sortedcontainers
+        cd python
+        pip install -e .
+    
+    - name: Checkout base branch
+      run: |
+        git fetch origin ${{ github.base_ref }}
+        git checkout FETCH_HEAD
+        cd python/benchmarks
+        python track_performance.py --track --sizes 1000 10000
+        cp performance_history.json baseline_performance.json
+    
+    - name: Checkout PR branch
+      run: |
+        git checkout ${{ github.sha }}
+        cd python/benchmarks
+        python track_performance.py --track --sizes 1000 10000
+    
+    - name: Compare performance
+      run: |
+        cd python/benchmarks
+        python -c "
+        import json
+        
+        # Load baseline and current performance
+        with open('baseline_performance.json', 'r') as f:
+            baseline = json.load(f)[-1]  # Latest entry
+        
+        with open('performance_history.json', 'r') as f:
+            current = json.load(f)[-1]   # Latest entry
+        
+        print('Performance Comparison:')
+        print('=' * 60)
+        
+        for metric in current['metrics']:
+            if metric in baseline['metrics']:
+                baseline_time = baseline['metrics'][metric]['mean_time']
+                current_time = current['metrics'][metric]['mean_time']
+                
+                if baseline_time > 0:
+                    change = (current_time - baseline_time) / baseline_time * 100
+                    
+                    status = '🔴' if change > 5 else '🟢' if change < -5 else '⚪'
+                    print(f'{status} {metric}: {change:+.1f}%')
+                    print(f'   Baseline: {baseline_time:.6f}s, Current: {current_time:.6f}s')
+        "
+    
+    - name: Comment performance results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read performance comparison output
+          let performanceOutput = '## Performance Comparison\\n\\n';
+          performanceOutput += 'This PR\\'s performance compared to the base branch:\\n\\n';
+          performanceOutput += '- 🟢 = >5% improvement\\n';
+          performanceOutput += '- ⚪ = ±5% (no significant change)\\n';
+          performanceOutput += '- 🔴 = >5% regression\\n\\n';
+          
+          try {
+            const baseline = JSON.parse(fs.readFileSync('python/benchmarks/baseline_performance.json'));
+            const current = JSON.parse(fs.readFileSync('python/benchmarks/performance_history.json'));
+            
+            const baselineMetrics = baseline[baseline.length - 1].metrics;
+            const currentMetrics = current[current.length - 1].metrics;
+            
+            performanceOutput += '| Metric | Change | Baseline | Current |\\n';
+            performanceOutput += '|--------|--------|----------|---------|\\n';
+            
+            for (const metric in currentMetrics) {
+              if (metric in baselineMetrics) {
+                const baselineTime = baselineMetrics[metric].mean_time;
+                const currentTime = currentMetrics[metric].mean_time;
+                
+                if (baselineTime > 0) {
+                  const change = (currentTime - baselineTime) / baselineTime * 100;
+                  const status = change > 5 ? '🔴' : change < -5 ? '🟢' : '⚪';
+                  
+                  performanceOutput += `| ${metric} | ${status} ${change.toFixed(1)}% | ${baselineTime.toFixed(6)}s | ${currentTime.toFixed(6)}s |\\n`;
+                }
+              }
+            }
+          } catch (error) {
+            performanceOutput += 'Error reading performance data: ' + error.message;
+          }
+          
+          // Post comment
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: performanceOutput
+          });
+
+  performance-report:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install sortedcontainers memory-profiler
+        cd python
+        pip install -e .
+    
+    - name: Generate comprehensive performance report
+      run: |
+        cd python/benchmarks
+        # Run comprehensive benchmarks
+        python comprehensive_benchmark.py
+        
+        # Run profiling
+        python performance_profiler.py > profiling_report.txt 2>&1 || true
+        
+        # Track performance
+        python track_performance.py --track
+        python track_performance.py --trends > trends_report.txt
+    
+    - name: Upload comprehensive report
+      uses: actions/upload-artifact@v4
+      with:
+        name: comprehensive-performance-report
+        path: |
+          python/benchmarks/benchmark_results.json
+          python/benchmarks/performance_history.json
+          python/benchmarks/profiling_report.txt
+          python/benchmarks/trends_report.txt
+        retention-days: 365  # Keep yearly reports longer
+    
+    # Optionally: Send performance report to external monitoring service
+    # - name: Send to monitoring service
+    #   run: |
+    #     # Example: Send to DataDog, New Relic, or custom monitoring
+    #     curl -X POST "https://api.monitoring-service.com/metrics" \
+    #       -H "Authorization: Bearer ${{ secrets.MONITORING_TOKEN }}" \
+    #       -d @python/benchmarks/ci_performance.json
