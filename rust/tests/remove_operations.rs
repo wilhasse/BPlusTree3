@@ -1,5 +1,8 @@
 use bplustree3::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 #[test]
 fn test_underfull_child_rebalancing_path() {
     // This test specifically drives the path where a child becomes underfull
@@ -7,7 +10,7 @@ fn test_underfull_child_rebalancing_path() {
 
     // Use capacity 4 so min_keys for leaf = max(1, (4+1)/2) = 3
     // and min_keys for branch = max(1, (4+1)/2-1) = 2
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_simple_tree(4);
 
     // Insert enough keys to create a multi-level tree structure
     // We need to create a scenario where:
@@ -81,7 +84,7 @@ fn test_underfull_leaf_detection() {
     // This test specifically verifies that we can detect underfull conditions
     // and demonstrates the current behavior where underfull nodes are left as-is
 
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_simple_tree(4);
 
     // For capacity 4:
     // - Leaf min_keys = max(1, (4+1)/2) = 3
@@ -136,7 +139,7 @@ fn test_underfull_without_root_collapse() {
     // Create a scenario where we have underfull nodes but the root doesn't collapse
     // This will specifically target the TODO path in rebalance_child
 
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_simple_tree(4);
 
     // Insert enough keys to create a stable multi-level structure
     // that won't collapse when we remove a few keys
@@ -306,7 +309,7 @@ fn test_strict_invariant_checking_should_fail() {
 
 #[test]
 fn test_bplus_tree_remove_existing_key() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_simple_tree(4);
 
     // Insert some test data
     tree.insert(10, 100);
@@ -328,7 +331,7 @@ fn test_bplus_tree_remove_existing_key() {
 
 #[test]
 fn test_bplus_tree_remove_with_underflow() {
-    let mut tree = BPlusTreeMap::new(4).unwrap(); // Small branching factor, min_keys = 1
+    let mut tree = create_simple_tree(4); // Small branching factor, min_keys = 1
 
     // Insert enough keys to create multiple nodes
     tree.insert(10, 100);
@@ -367,7 +370,7 @@ fn test_bplus_tree_remove_with_underflow() {
 
 #[test]
 fn test_bplus_tree_remove_last_key_from_tree() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_simple_tree(4);
 
     // Insert a single key
     tree.insert(42, 420);
