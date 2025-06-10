@@ -1,35 +1,44 @@
-# BPlusTree Python API Reference
+# API Reference
 
-## Overview
+Complete reference for the BPlusTreeMap class and module functions.
 
-The `BPlusTreeMap` class provides a dictionary-like interface to a B+ tree data structure, offering efficient ordered storage with fast range queries and iteration.
+## Module Functions
 
-## Class: BPlusTreeMap
+### `get_implementation()`
+
+Returns which implementation is currently being used.
+
+**Returns:**
+- `str`: Either `"C extension"` or `"Pure Python"`
+
+**Example:**
+```python
+from bplus_tree import get_implementation
+print(get_implementation())  # "C extension"
+```
+
+## BPlusTreeMap Class
 
 ### Constructor
 
-#### `BPlusTreeMap(capacity=128)`
+#### `BPlusTreeMap(capacity=8)`
 
-Create a new B+ tree instance.
+Create a new B+ Tree mapping.
 
 **Parameters:**
-- `capacity` (int, optional): Maximum number of keys per node. Default is 128.
-  - Higher values (64-128): Better for large datasets, fewer tree levels
-  - Lower values (4-16): Better for small datasets, testing
-
-**Raises:**
-- `InvalidCapacityError`: If capacity < 4
+- `capacity` (int, optional): Maximum number of items per node. Default is 8.
+  - Larger values: Better performance for large datasets, more memory usage
+  - Smaller values: Lower memory usage, more tree levels
 
 **Example:**
 ```python
 from bplus_tree import BPlusTreeMap
 
-# Default capacity (recommended for most use cases)
+# Default capacity
 tree = BPlusTreeMap()
 
-# Custom capacity for performance tuning
+# Custom capacity for large datasets
 large_tree = BPlusTreeMap(capacity=64)
-small_tree = BPlusTreeMap(capacity=8)
 ```
 
 ---
