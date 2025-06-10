@@ -34,3 +34,15 @@ fuzz_failure_*.py
 # Build artifacts
 *.o
 src/python/build/
+
+# Python packaging and distribution
+python/build/
+python/dist/
+python/*.egg-info/
+python/wheelhouse/
+*.whl
+*.tar.gz
+
+# Temporary analysis files
+plot_commits_vs_duration.py
+commits_vs_duration_analysis.png
