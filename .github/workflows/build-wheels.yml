@@ -63,8 +63,8 @@ jobs:
         CIBW_ENVIRONMENT: >
           BPLUSTREE_C_FAST_MATH=1
         
-        # Linux-specific settings
-        CIBW_BEFORE_BUILD_LINUX: "/bin/yum install -y gcc || (apt-get update && apt-get install -y gcc) || apk add gcc musl-dev"
+        # Linux-specific settings - gcc should already be available in manylinux
+        CIBW_BEFORE_BUILD_LINUX: "which gcc || echo 'gcc not found but proceeding'"
         
         # macOS-specific settings  
         CIBW_ENVIRONMENT_MACOS: >
