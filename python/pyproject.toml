@@ -1,13 +1,16 @@
 [build-system]
-requires = ["setuptools>=64", "wheel", "Cython>=0.29.30"]
+requires = ["setuptools>=64", "wheel>=0.37", "Cython>=0.29.30"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "bplustree3"
-version = "0.1.0"
+dynamic = ["version"]
 description = "High-performance B+ Tree implementation for Python with dict-like API"
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
 authors = [
+    {name = "Kent Beck", email = "kent@kentbeck.com"}
+]
+maintainers = [
     {name = "Kent Beck", email = "kent@kentbeck.com"}
 ]
 license = {text = "MIT"}
@@ -17,6 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Database :: Database Engines/Servers",
     "Topic :: Software Development :: Libraries :: Data Structures",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -47,12 +51,33 @@ dependencies = []
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-benchmark>=4.0",
     "black>=23.0",
+    "isort>=5.10",
     "mypy>=1.0",
     "ruff>=0.1.0",
+    "pre-commit>=3.0",
+    "twine>=4.0",
+    "build>=0.8"
+]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-benchmark>=4.0",
+    "pytest-xdist>=3.0"
 ]
 benchmark = [
     "sortedcontainers>=2.4.0",
+    "memory-profiler>=0.60",
+    "line-profiler>=4.0"
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.18"
+]
+all = [
+    "bplustree3[dev,test,benchmark,docs]"
 ]
 
 [project.urls]
@@ -65,16 +90,41 @@ Changelog = "https://github.com/KentBeck/BPlusTree3/blob/main/python/CHANGELOG.m
 [tool.setuptools]
 py-modules = ["bplus_tree"]
 include-package-data = true
+zip-safe = false
+
+[tool.setuptools.dynamic]
+version = {attr = "__init__.__version__"}
 
 [tool.setuptools.package-data]
-"*" = ["*.h", "*.c"]
+"*" = ["*.h", "*.c", "py.typed"]
 
 [tool.pytest.ini_options]
+minversion = "7.0"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=bplustree",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as benchmarks",
+    "integration: marks tests as integration tests",
+    "performance: marks tests as performance tests"
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning"
+]
 
 [tool.black]
 line-length = 88
@@ -111,6 +161,41 @@ ignore = [
     "E501",  # line too long
     "B008",  # do not perform function calls in argument defaults
 ]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["bplustree"]
+
+[tool.coverage.run]
+branch = true
+source = ["bplustree", "."]
+omit = [
+    "*/tests/*",
+    "*/benchmarks/*",
+    "setup.py",
+    "*/examples/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.mypy]
 python_version = "3.8"

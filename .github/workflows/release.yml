@@ -1,0 +1,432 @@
+name: Release Automation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  check_changes:
+    name: Check for changes requiring release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+      changelog: ${{ steps.check.outputs.changelog }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Check for version changes
+      id: check
+      run: |
+        # Check if this is a manual release
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "Manual release triggered for version ${{ github.event.inputs.version }}"
+          exit 0
+        fi
+        
+        # For push events, check if version changed
+        current_version=$(grep -E '^__version__ = ' python/__init__.py | cut -d'"' -f2)
+        echo "Current version: $current_version"
+        
+        # Get previous version from git
+        previous_version=$(git show HEAD~1:python/__init__.py | grep -E '^__version__ = ' | cut -d'"' -f2 || echo "0.0.0")
+        echo "Previous version: $previous_version"
+        
+        if [[ "$current_version" != "$previous_version" ]]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "version=$current_version" >> $GITHUB_OUTPUT
+          
+          # Extract changelog for this version
+          changelog=$(awk "/^## \[$current_version\]/{flag=1; next} /^## \[/{flag=0} flag" python/CHANGELOG.md || echo "No changelog available")
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Version changed from $previous_version to $current_version - will create release"
+        else
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "No version change detected"
+        fi
+
+  validate_release:
+    name: Validate release readiness
+    needs: check_changes
+    if: needs.check_changes.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install package and dependencies
+      run: |
+        cd python
+        pip install -e .[dev,test]
+    
+    - name: Run tests
+      run: |
+        cd python
+        pytest tests/ -v --tb=short
+    
+    - name: Run linting
+      run: |
+        cd python
+        black --check .
+        ruff check .
+    
+    - name: Check package builds
+      run: |
+        cd python
+        pip install build
+        python -m build
+        
+        # Verify the built package
+        pip install dist/*.whl
+        python -c "import bplustree; print('Package imports successfully')"
+    
+    - name: Validate version format
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.-]+)?$ ]]; then
+          echo "Invalid version format: $version"
+          echo "Expected format: MAJOR.MINOR.PATCH[PRERELEASE]"
+          exit 1
+        fi
+        echo "Version format is valid: $version"
+    
+    - name: Check changelog exists
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        if ! grep -q "## \[$version\]" python/CHANGELOG.md; then
+          echo "No changelog entry found for version $version"
+          echo "Please add a changelog entry before releasing"
+          exit 1
+        fi
+        echo "Changelog entry found for version $version"
+
+  security_scan:
+    name: Security scan before release
+    needs: check_changes
+    if: needs.check_changes.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install security tools
+      run: |
+        pip install bandit safety
+    
+    - name: Run Bandit security scan
+      run: |
+        cd python
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . --severity-level medium
+    
+    - name: Check dependencies for vulnerabilities
+      run: |
+        cd python
+        pip install -e .
+        safety check --json || true
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: python/bandit-report.json
+        retention-days: 30
+
+  performance_check:
+    name: Performance regression check
+    needs: check_changes
+    if: needs.check_changes.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install package and benchmarking tools
+      run: |
+        cd python
+        pip install -e .[benchmark]
+    
+    - name: Run performance benchmarks
+      run: |
+        cd python/python/benchmarks
+        python track_performance.py --track --sizes 1000 10000
+        python track_performance.py --export-ci
+    
+    - name: Check for performance regressions
+      run: |
+        cd python/python/benchmarks
+        python -c "
+        import json
+        import sys
+        
+        # Load performance data
+        with open('ci_performance.json', 'r') as f:
+            data = json.load(f)
+        
+        # Define acceptable thresholds (in ms)
+        thresholds = {
+            'insert.random.10000': 2000,     # 2 seconds max for 10k insertions
+            'lookup.10000': 500,             # 500ms max for 10k lookups
+        }
+        
+        regressions = []
+        for metric_key in data['metrics']:
+            # Find matching threshold
+            for threshold_key, threshold in thresholds.items():
+                if threshold_key in metric_key:
+                    value = data['metrics'][metric_key]['value']
+                    if value > threshold:
+                        regressions.append(f'{metric_key}: {value:.1f}ms > {threshold}ms')
+        
+        if regressions:
+            print('PERFORMANCE REGRESSIONS DETECTED:')
+            for reg in regressions:
+                print(f'  - {reg}')
+            print('')
+            print('Performance has regressed. Please investigate before releasing.')
+            sys.exit(1)
+        else:
+            print('All performance benchmarks within acceptable limits.')
+        "
+
+  create_release:
+    name: Create GitHub Release
+    needs: [check_changes, validate_release, security_scan, performance_check]
+    if: |
+      always() && 
+      needs.check_changes.outputs.should_release == 'true' &&
+      needs.validate_release.result == 'success' &&
+      needs.security_scan.result == 'success' &&
+      needs.performance_check.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.result }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Create release notes
+      id: release_notes
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        
+        # Start with changelog content
+        changelog="${{ needs.check_changes.outputs.changelog }}"
+        
+        # Get commit messages since last tag
+        last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [[ -n "$last_tag" ]]; then
+          commits=$(git log --oneline ${last_tag}..HEAD --grep="feat\|fix\|docs\|perf" | head -20)
+        else
+          commits=$(git log --oneline --grep="feat\|fix\|docs\|perf" | head -20)
+        fi
+        
+        # Create release notes
+        cat > release_notes.md << EOF
+        # Release $version
+        
+        $changelog
+        
+        ## What's Changed
+        
+        $commits
+        
+        ## Installation
+        
+        \`\`\`bash
+        pip install bplustree3==$version
+        \`\`\`
+        
+        ## Documentation
+        
+        - [Quick Start Guide](https://github.com/KentBeck/BPlusTree3/blob/main/python/docs/quickstart.md)
+        - [API Reference](https://github.com/KentBeck/BPlusTree3/blob/main/python/docs/api_reference.md)
+        - [Performance Guide](https://github.com/KentBeck/BPlusTree3/blob/main/python/docs/performance_guide.md)
+        
+        ## Performance
+        
+        This release includes comprehensive performance testing and optimization.
+        See the [optimization guide](https://github.com/KentBeck/BPlusTree3/blob/main/python/docs/optimization_guide.md) for details.
+        EOF
+        
+        echo "Release notes created for version $version"
+    
+    - name: Create Git tag
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "v$version" -m "Release v$version"
+        git push origin "v$version"
+    
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ needs.check_changes.outputs.version }}
+        release_name: v${{ needs.check_changes.outputs.version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+
+  post_release:
+    name: Post-release tasks
+    needs: [check_changes, create_release]
+    if: needs.create_release.result == 'success'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Bump version for development
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        
+        # Parse version components
+        IFS='.' read -r major minor patch <<< "$version"
+        
+        # Increment patch for next development version
+        next_patch=$((patch + 1))
+        next_version="$major.$minor.$next_patch-dev"
+        
+        # Update version in __init__.py
+        sed -i.bak "s/__version__ = \"$version\"/__version__ = \"$next_version\"/" python/__init__.py
+        rm python/__init__.py.bak
+        
+        # Add changelog section for next version
+        sed -i.bak "1i\\
+        ## [$next_version] - Unreleased\\
+        \\
+        ### Added\\
+        \\
+        ### Changed\\
+        \\
+        ### Fixed\\
+        \\
+        " python/CHANGELOG.md
+        rm python/CHANGELOG.md.bak
+        
+        echo "Bumped version to $next_version for development"
+    
+    - name: Create development version PR
+      if: github.event_name != 'workflow_dispatch'
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        next_version=$(grep -E '^__version__ = ' python/__init__.py | cut -d'"' -f2)
+        
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        branch_name="chore/bump-version-$next_version"
+        git checkout -b "$branch_name"
+        git add python/__init__.py python/CHANGELOG.md
+        git commit -m "chore: bump version to $next_version for development
+        
+        - Updated version after releasing v$version
+        - Added changelog section for next version
+        
+        🤖 Generated with [Claude Code](https://claude.ai/code)
+        
+        Co-Authored-By: Claude <noreply@anthropic.com>"
+        
+        git push origin "$branch_name"
+        
+        # Create PR using GitHub CLI if available
+        if command -v gh &> /dev/null; then
+          gh pr create \
+            --title "chore: bump version to $next_version for development" \
+            --body "Automated version bump after releasing v$version
+            
+            - Updated \`__init__.py\` with next development version
+            - Added changelog section for upcoming features
+            
+            This PR should be merged to continue development." \
+            --base main \
+            --head "$branch_name"
+        fi
+    
+    - name: Notify on success
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        echo "🎉 Successfully released v$version!"
+        echo "📦 PyPI: https://pypi.org/project/bplustree3/$version/"
+        echo "📋 Release: https://github.com/KentBeck/BPlusTree3/releases/tag/v$version"
+
+  notify_failure:
+    name: Notify on failure
+    needs: [check_changes, validate_release, security_scan, performance_check, create_release]
+    if: |
+      always() && 
+      needs.check_changes.outputs.should_release == 'true' &&
+      (needs.validate_release.result == 'failure' || 
+       needs.security_scan.result == 'failure' || 
+       needs.performance_check.result == 'failure' ||
+       needs.create_release.result == 'failure')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Report failure
+      run: |
+        version="${{ needs.check_changes.outputs.version }}"
+        echo "❌ Release v$version failed!"
+        echo ""
+        echo "Failed stages:"
+        if [[ "${{ needs.validate_release.result }}" == "failure" ]]; then
+          echo "  - Validation: Tests, linting, or package build failed"
+        fi
+        if [[ "${{ needs.security_scan.result }}" == "failure" ]]; then
+          echo "  - Security: Security vulnerabilities detected"
+        fi
+        if [[ "${{ needs.performance_check.result }}" == "failure" ]]; then
+          echo "  - Performance: Performance regressions detected"
+        fi
+        if [[ "${{ needs.create_release.result }}" == "failure" ]]; then
+          echo "  - Release creation: Failed to create GitHub release"
+        fi
+        echo ""
+        echo "Please check the logs and fix issues before retrying the release."
+        exit 1
