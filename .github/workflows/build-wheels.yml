@@ -63,8 +63,7 @@ jobs:
         CIBW_ENVIRONMENT: >
           BPLUSTREE_C_FAST_MATH=1
         
-        # Linux-specific settings - gcc should already be available in manylinux
-        CIBW_BEFORE_BUILD_LINUX: "which gcc || echo 'gcc not found but proceeding'"
+        # Linux-specific settings - manylinux containers have build tools pre-installed
         
         # macOS-specific settings  
         CIBW_ENVIRONMENT_MACOS: >
