@@ -19,9 +19,7 @@ fn test_underfull_child_rebalancing_path() {
     // 3. Removing one key makes it underfull but not empty
 
     // Insert keys to force tree growth and create the right structure
-    for i in 0..20 {
-        tree.insert(i, i * 10);
-    }
+    populate_sequential_int_x10(&mut tree, 20);
 
     // Verify we have a multi-level tree
     assert!(!tree.is_leaf_root(), "Tree should have branch nodes");
@@ -143,9 +141,7 @@ fn test_underfull_without_root_collapse() {
 
     // Insert enough keys to create a stable multi-level structure
     // that won't collapse when we remove a few keys
-    for i in 0..30 {
-        tree.insert(i, i * 10);
-    }
+    populate_sequential_int_x10(&mut tree, 30);
 
     println!("Initial large tree:");
     tree.print_node_chain();

@@ -148,6 +148,13 @@ pub fn populate_sequential_int(tree: &mut BPlusTreeMap<i32, i32>, count: usize) 
     }
 }
 
+/// Populate tree with sequential integer data where value = key * 10
+pub fn populate_sequential_int_x10(tree: &mut BPlusTreeMap<i32, i32>, count: usize) {
+    for i in 0..count {
+        tree.insert(i as i32, (i as i32) * 10);
+    }
+}
+
 /// Create a tree with specific structure for branch testing
 pub fn create_branch_test_tree(capacity: usize) -> BPlusTreeMap<i32, String> {
     let mut tree = create_attack_tree(capacity);
