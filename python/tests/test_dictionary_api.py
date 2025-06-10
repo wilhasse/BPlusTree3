@@ -8,13 +8,14 @@ with Python's dict interface.
 import pytest
 from typing import Any, Dict
 
-# Import both implementations for testing
+# Import the BPlusTreeMap from the package (will use C extension if available)
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bplus_tree import BPlusTreeMap
+import bplustree
+BPlusTreeMap = bplustree.BPlusTreeMap
 
 
 class TestDictionaryAPI:
