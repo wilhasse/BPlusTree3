@@ -517,6 +517,68 @@ class BPlusTreeMap:
 
         return count_nodes(self.root)
 
+    def clear(self) -> None:
+        """Remove all items from the tree."""
+        self.root = LeafNode(self.capacity)
+        self.leaves = self.root
+        self._rightmost_leaf = self.root
+
+    def pop(self, key: Any, *args) -> Any:
+        """Remove and return value for key with optional default."""
+        if len(args) > 1:
+            raise TypeError(
+                f"pop expected at most 2 arguments, got {len(args) + 1}"
+            )
+        try:
+            value = self[key]
+            del self[key]
+            return value
+        except KeyError:
+            if args:
+                return args[0]
+            raise
+
+    def popitem(self) -> Tuple[Any, Any]:
+        """Remove and return an arbitrary (key, value) pair."""
+        if not self.leaves.keys:
+            raise KeyError("popitem(): tree is empty")
+        
+        # Get the first key-value pair from the leftmost leaf
+        key = self.leaves.keys[0]
+        value = self.leaves.values[0]
+        del self[key]
+        return (key, value)
+
+    def setdefault(self, key: Any, default: Any = None) -> Any:
+        """Get value for key, setting and returning default if not present."""
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+            return default
+
+    def update(self, other) -> None:
+        """Update tree with key-value pairs from other mapping or iterable."""
+        if hasattr(other, "items"):
+            # other is a mapping (dict-like)
+            for key, value in other.items():
+                self[key] = value
+        elif hasattr(other, "keys"):
+            # other has keys method but no items (like dict.keys())
+            for key in other.keys():
+                self[key] = other[key]
+        else:
+            # other is an iterable of (key, value) pairs
+            for key, value in other:
+                self[key] = value
+
+    def copy(self) -> "BPlusTreeMap":
+        """Create a shallow copy of the tree."""
+        new_tree = BPlusTreeMap(capacity=self.capacity)
+        for key, value in self.items():
+            new_tree[key] = value
+        return new_tree
+
 
 class Node(ABC):
     """Abstract base class for B+ tree nodes.
