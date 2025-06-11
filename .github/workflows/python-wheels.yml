@@ -1,15 +1,6 @@
 name: Build Python Wheels
 
 on:
-  push:
-    branches: [ main ]
-    tags:
-      - 'python-v*'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'python/**'
-      - '.github/workflows/python-wheels.yml'
   workflow_dispatch:
 
 jobs:
