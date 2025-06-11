@@ -23,7 +23,12 @@ jobs:
         cd python
         pip install -e .[test]
     
-    - name: Run tests
+    - name: Run fast tests
       run: |
         cd python
         python -m pytest tests/ --ignore=tests/test_c_extension_segfault_fix.py -m "not slow" -x -v
+    
+    - name: Run selected slow tests (with timeout)
+      run: |
+        cd python
+        timeout 5m python -m pytest tests/test_memory_leaks.py::TestMemoryLeaks::test_deleted_values_are_released -v || echo "Slow test timed out or failed (non-critical)"

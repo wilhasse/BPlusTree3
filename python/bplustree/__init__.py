@@ -20,6 +20,7 @@ else:
         """Wrapper around the C extension to provide a consistent API."""
 
         def __init__(self, capacity=None):
+            """Initialize BPlusTreeMap with optional capacity."""
             if capacity is None:
                 super().__init__()
             else:
@@ -105,7 +106,7 @@ else:
 
         @property
         def capacity(self):
-            """Return node capacity (from C default)."""
+            """Return the node capacity."""
             return 8
 
         @property
