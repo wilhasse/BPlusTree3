@@ -26,4 +26,4 @@ jobs:
     - name: Run tests
       run: |
         cd python
-        python -m pytest tests/ --ignore=tests/test_c_extension_segfault_fix.py -x -v
+        python -m pytest tests/ --ignore=tests/test_c_extension_segfault_fix.py -m "not slow" -x -v

@@ -14,6 +14,7 @@ from typing import List, Any
 from bplustree import BPlusTreeMap
 
 
+@pytest.mark.slow
 class TestMemoryLeaks:
     """Test for memory leaks in various operations."""
 

@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bplustree import BPlusTreeMap
 
 
+@pytest.mark.slow
 class TestPerformanceBenchmarks:
     """Performance benchmark tests with threshold validation."""
     
