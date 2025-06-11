@@ -11,7 +11,7 @@ import weakref
 import sys
 from typing import List, Any
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 class TestMemoryLeaks:

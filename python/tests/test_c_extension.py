@@ -19,7 +19,7 @@ except ImportError as e:
     print(f"C extension not available: {e}")
     HAS_C_EXTENSION = False
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 try:
     from sortedcontainers import SortedDict

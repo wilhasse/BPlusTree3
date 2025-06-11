@@ -11,7 +11,7 @@ import string
 import time
 from typing import List, Tuple, Any
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 class TestLargeDatasets:

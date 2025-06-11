@@ -12,7 +12,7 @@ import random
 from typing import Dict, List, Tuple, Any
 from contextlib import contextmanager
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 @contextmanager
