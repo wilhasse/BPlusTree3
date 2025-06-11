@@ -8,14 +8,13 @@ import random
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
+
 try:
     import bplustree_c
-
     HAS_C_EXTENSION = True
-except ImportError:
-    print("C extension not available")
-    HAS_C_EXTENSION = False
-    exit(1)
+except ImportError as e:
+    pytest.skip(f"C extension not available: {e}", allow_module_level=True)
 
 
 def test_empty_tree():
