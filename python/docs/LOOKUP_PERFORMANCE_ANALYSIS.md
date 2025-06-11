@@ -9,17 +9,20 @@ This document summarizes the findings from profiling B+ tree lookup performance 
 ### **Function Call Overhead is the Primary Bottleneck**
 
 **Profiler Data (5,000 lookups):**
+
 - **B+ Tree**: 125,002 total function calls (~25 calls per lookup)
 - **SortedDict**: 2 total function calls (~0.0004 calls per lookup)
 - **Overhead Factor**: ~62,500x more function calls
 
 ### **Timing Breakdown per Lookup**
+
 - **Tree traversal**: 0.46μs (navigating 2 levels)
 - **Leaf lookup**: 0.36μs (binary search in leaf node)
 - **Total time**: 0.79μs
 - **Function call overhead**: Significant portion of total time
 
 ### **Tree Structure Analysis**
+
 - **Tree depth**: 2 levels (with capacity=256, 50K items)
 - **Nodes per level**: 1 root → 2 branches → 268 leaves
 - **Average keys per leaf**: ~187 items
@@ -35,7 +38,7 @@ CFLAGS='-pg -O3 -march=native' LDFLAGS='-pg' python setup.py build_ext --inplace
 
 # Run a lookup workload: 1M lookups on a 100K-item tree
 python - << 'EOF'
-from bplus_tree import BPlusTree
+from bplustree import BPlusTree
 import random
 
 tree = BPlusTree(branching_factor=128)
@@ -72,7 +75,8 @@ This shows that even without Python function call overhead, **~58%** of time is 
 
 ### SortedDict Comparison
 
-> **Use SortedDict when:**  
+> **Use SortedDict when:**
+>
 > - ✅ Random access dominates (37× faster lookups)
 >
 > In particular, even our C extension variant (capacity=128) at ~271 ns/lookup remains ~9× slower than SortedDict’s ~30 ns/lookup.
@@ -80,6 +84,7 @@ This shows that even without Python function call overhead, **~58%** of time is 
 ## 🎯 Specific Performance Bottlenecks
 
 ### **Hot Path Function Calls (per lookup):**
+
 1. `__getitem__` → `get` (entry point)
 2. `get_child()` × 2 (tree traversal, depth=2)
 3. `find_child_index()` × 2 (child selection)
@@ -91,6 +96,7 @@ This shows that even without Python function call overhead, **~58%** of time is 
 **Total: ~25 Python function calls per lookup**
 
 ### **SortedDict's Advantage**
+
 - **C implementation**: Minimal Python function call overhead
 - **Optimized data structure**: Likely red-black tree or similar in C
 - **Direct memory access**: No Python interpreter overhead for core operations
@@ -100,11 +106,13 @@ This shows that even without Python function call overhead, **~58%** of time is 
 ### **Why B+ Trees are Slower**
 
 1. **Python Function Call Overhead**
+
    - Each function call has interpreter overhead
    - Stack frame creation/destruction
    - Attribute lookups and method resolution
 
 2. **Deep Call Stack**
+
    - Tree traversal requires multiple levels of function calls
    - Each level adds overhead even for simple operations
 
@@ -125,12 +133,14 @@ This shows that even without Python function call overhead, **~58%** of time is 
 ### **High Impact (Based on Profiler Data)**
 
 1. **Inline Critical Operations**
+
    ```python
    # Instead of: node.get_child(key)
    # Inline: child_index = bisect_right(node.keys, key); node = node.children[child_index]
    ```
 
 2. **Reduce Function Call Depth**
+
    - Combine traversal and lookup in single method
    - Eliminate intermediate method calls
 
@@ -141,6 +151,7 @@ This shows that even without Python function call overhead, **~58%** of time is 
 ### **Medium Impact**
 
 4. **Cython/C Extension**
+
    - Implement hot path in C like SortedDict
    - Eliminate Python function call overhead
 
@@ -178,4 +189,4 @@ This shows that even without Python function call overhead, **~58%** of time is 
 
 ---
 
-*Generated from profiler analysis of 50K item B+ tree with capacity=256*
+_Generated from profiler analysis of 50K item B+ tree with capacity=256_

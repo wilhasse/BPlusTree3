@@ -9,26 +9,30 @@ The copy/paste detector analysis reveals **significant code duplication** in the
 ### 🔴 **High Priority Duplications**
 
 #### 1. Arena Management (68 occurrences)
+
 - **Pattern**: Nearly identical allocation/deallocation methods for leaf and branch nodes
 - **Impact**: ~150 lines of duplicated code
 - **Files**: `src/lib.rs` lines 1225-1350
 - **Reduction Potential**: 67% (150 → 50 lines)
 
-#### 2. Test Setup Boilerplate (17 occurrences)  
+#### 2. Test Setup Boilerplate (17 occurrences)
+
 - **Pattern**: Repetitive tree creation and invariant checking TODOs
 - **Impact**: ~115 lines of setup code
-- **Files**: `tests/bplus_tree.rs` throughout
+- **Files**: `tests/bplustree.rs` throughout
 - **Reduction Potential**: 40% (115 → 70 lines)
 
 ### 🟡 **Medium Priority Duplications**
 
 #### 3. Node Property Checking (4 methods)
+
 - **Pattern**: Similar match expressions for node type checking
 - **Impact**: ~50 lines of similar logic
 - **Files**: `src/lib.rs` lines 265-290
 - **Reduction Potential**: 70% (50 → 15 lines)
 
 #### 4. Borrowing Operations (8 methods)
+
 - **Pattern**: Similar donate/accept patterns for leaf and branch nodes
 - **Impact**: ~120 lines of parallel logic
 - **Files**: `src/lib.rs` lines 1840-2097
@@ -37,6 +41,7 @@ The copy/paste detector analysis reveals **significant code duplication** in the
 ## 🔍 Detailed Analysis
 
 ### Arena Duplication Example
+
 ```rust
 // DUPLICATED PATTERN (found 10 times):
 fn allocate_leaf(&mut self, leaf: LeafNode<K, V>) -> NodeId {
@@ -60,6 +65,7 @@ fn allocate_branch(&mut self, branch: BranchNode<K, V>) -> NodeId {
 ```
 
 ### Test Setup Duplication Example
+
 ```rust
 // REPEATED 17 TIMES:
 let mut tree = BPlusTreeMap::new(4).unwrap();
@@ -72,6 +78,7 @@ tree.insert(3, "three".to_string());
 ## 🚀 Proposed Solutions
 
 ### 1. Generic Arena<T> Implementation
+
 **Impact**: Eliminates 67% of arena duplication
 
 ```rust
@@ -90,6 +97,7 @@ impl<T> Arena<T> {
 ```
 
 ### 2. Test Utility Module
+
 **Impact**: Reduces test setup duplication by 40%
 
 ```rust
@@ -101,6 +109,7 @@ pub mod test_utils {
 ```
 
 ### 3. Node Trait for Common Operations
+
 **Impact**: Eliminates 70% of property checking duplication
 
 ```rust
@@ -119,15 +128,17 @@ fn is_node_underfull<T: Node>(&self, node: &T) -> bool {
 ## 📈 Impact Analysis
 
 ### Code Reduction Summary
-| Category | Current Lines | After Refactor | Reduction |
-|----------|---------------|----------------|-----------|
-| Arena Operations | 150 | 50 | **67%** |
-| Test Setup | 115 | 70 | **39%** |
-| Node Properties | 50 | 15 | **70%** |
-| Borrowing Logic | 120 | 48 | **60%** |
-| **TOTAL** | **435** | **183** | **58%** |
+
+| Category         | Current Lines | After Refactor | Reduction |
+| ---------------- | ------------- | -------------- | --------- |
+| Arena Operations | 150           | 50             | **67%**   |
+| Test Setup       | 115           | 70             | **39%**   |
+| Node Properties  | 50            | 15             | **70%**   |
+| Borrowing Logic  | 120           | 48             | **60%**   |
+| **TOTAL**        | **435**       | **183**        | **58%**   |
 
 ### Benefits Beyond Line Count
+
 1. **Single Source of Truth**: Fix bugs once, fix everywhere
 2. **Type Safety**: Generic implementations prevent type-specific bugs
 3. **Extensibility**: Easy to add new node types or arena types
@@ -137,20 +148,24 @@ fn is_node_underfull<T: Node>(&self, node: &T) -> bool {
 ## 🎯 Implementation Roadmap
 
 ### Phase 1: Quick Wins (1-2 days)
+
 - [ ] **Test Utilities Module**: Immediate productivity improvement
 - [ ] **Arena Macro**: Quick duplication elimination using macros
 
 ### Phase 2: Core Abstractions (3-5 days)
+
 - [ ] **Generic Arena<T>**: Replace duplicated arena code
 - [ ] **Node Trait**: Unify node property operations
 
 ### Phase 3: Advanced Patterns (2-3 days)
+
 - [ ] **Borrowing Trait**: Abstract rebalancing operations
 - [ ] **Performance Validation**: Ensure no regressions
 
 ## 🔧 Proof of Concept
 
 Created `arena_abstraction_example.rs` demonstrating:
+
 - ✅ Generic Arena<T> eliminating all arena duplication
 - ✅ Node trait unifying property checks
 - ✅ Comprehensive test coverage
@@ -160,14 +175,17 @@ Created `arena_abstraction_example.rs` demonstrating:
 ## 📋 Risk Assessment
 
 ### Low Risk Improvements
+
 - **Test utilities**: No impact on core functionality
 - **Arena macro**: Generates identical code, just DRY
 
-### Medium Risk Improvements  
+### Medium Risk Improvements
+
 - **Generic Arena<T>**: Well-defined interface, comprehensive testing needed
 - **Node trait**: Requires careful design but clear benefits
 
 ### Mitigation Strategies
+
 - **Incremental implementation**: One abstraction at a time
 - **Comprehensive testing**: Maintain 100% test coverage
 - **Performance benchmarking**: Validate no regressions
@@ -179,7 +197,7 @@ The B+ Tree codebase contains **significant duplication** that can be eliminated
 
 - **Reduce codebase size by 58%** in duplicated areas
 - **Improve maintainability** through single source of truth
-- **Enhance type safety** with generic implementations  
+- **Enhance type safety** with generic implementations
 - **Enable future extensibility** with trait-based design
 - **Maintain performance** with zero-cost abstractions
 

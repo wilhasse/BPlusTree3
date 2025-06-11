@@ -29,7 +29,7 @@ error: Microsoft Visual C++ 14.0 is required. Get it with "Microsoft Visual C++ 
    ```python
    import os
    os.environ['BPLUSTREE_PURE_PYTHON'] = '1'
-   import bplus_tree
+   import bplustree
    ```
 
 #### Problem: "clang: error: unknown argument: '-mno-fused-madd'" (macOS)
@@ -86,7 +86,7 @@ gcc: command not found
 
 ### Import Errors
 
-#### Problem: "ModuleNotFoundError: No module named 'bplus_tree'"
+#### Problem: "ModuleNotFoundError: No module named 'bplustree'"
 
 **Diagnosis:**
 
@@ -122,7 +122,7 @@ print(sys.path)  # Check if installation directory is in path
 **Symptoms:**
 
 ```python
-from bplus_tree import BPlusTreeMap  # ImportError
+from bplustree import BPlusTreeMap  # ImportError
 ```
 
 **Solutions:**
@@ -131,12 +131,12 @@ from bplus_tree import BPlusTreeMap  # ImportError
 
    ```python
    # Correct imports
-   from bplus_tree import BPlusTreeMap
-   import bplus_tree
+   from bplustree import BPlusTreeMap
+   import bplustree
 
    # Check what's available
-   import bplus_tree
-   print(dir(bplus_tree))
+   import bplustree
+   print(dir(bplustree))
    ```
 
 2. **Clear Python Cache:**
@@ -154,7 +154,7 @@ from bplus_tree import BPlusTreeMap  # ImportError
 **Diagnosis:**
 
 ```python
-from bplus_tree import get_implementation
+from bplustree import get_implementation
 print(f"Using: {get_implementation()}")
 
 # Check capacity
@@ -540,7 +540,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Verify installation
-RUN python -c "from bplus_tree import BPlusTreeMap, get_implementation; print(get_implementation())"
+RUN python -c "from bplustree import BPlusTreeMap, get_implementation; print(get_implementation())"
 ```
 
 ### Jupyter Notebooks
@@ -556,7 +556,7 @@ RUN python -c "from bplus_tree import BPlusTreeMap, get_implementation; print(ge
    os.environ['BPLUSTREE_PURE_PYTHON'] = '1'
 
    # Restart kernel and reimport
-   from bplus_tree import BPlusTreeMap
+   from bplustree import BPlusTreeMap
    ```
 
 2. **Increase Memory Limits:**
@@ -575,9 +575,9 @@ import sys
 print("Python executable:", sys.executable)
 print("Python path:", sys.path)
 
-import bplus_tree
-print("Module location:", bplus_tree.__file__)
-print("Implementation:", bplus_tree.get_implementation())
+import bplustree
+print("Module location:", bplustree.__file__)
+print("Implementation:", bplustree.get_implementation())
 ```
 
 **Solutions:**
@@ -683,7 +683,7 @@ def collect_debug_info():
 
     print("\n=== BPlusTree Information ===")
     try:
-        from bplus_tree import get_implementation, BPlusTreeMap
+        from bplustree import get_implementation, BPlusTreeMap
         print(f"Implementation: {get_implementation()}")
 
         tree = BPlusTreeMap()
@@ -717,7 +717,7 @@ Include this information when reporting issues:
 2. **Minimal Reproduction Case:**
 
    ```python
-   from bplus_tree import BPlusTreeMap
+   from bplustree import BPlusTreeMap
 
    tree = BPlusTreeMap()
    # ... minimal code that reproduces the issue

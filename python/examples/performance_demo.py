@@ -16,7 +16,7 @@ from collections import OrderedDict
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 try:
     from sortedcontainers import SortedDict
@@ -56,8 +56,8 @@ def benchmark_range_queries():
         data = create_test_data(data_size)
 
         # B+ Tree
-        bplus_tree = BPlusTreeMap(capacity=64)
-        bplus_tree.update(data)
+        bplustree = BPlusTreeMap(capacity=64)
+        bplustree.update(data)
 
         # Regular dict
         regular_dict = dict(data)
@@ -74,7 +74,7 @@ def benchmark_range_queries():
 
             # B+ Tree range query
             def bplus_range():
-                return list(bplus_tree.range(start_key, end_key))
+                return list(bplustree.range(start_key, end_key))
 
             bplus_time, bplus_result = benchmark_function(bplus_range)
             print(
@@ -132,8 +132,8 @@ def benchmark_iteration():
         data = create_test_data(size)
 
         # Setup data structures
-        bplus_tree = BPlusTreeMap(capacity=64)
-        bplus_tree.update(data)
+        bplustree = BPlusTreeMap(capacity=64)
+        bplustree.update(data)
 
         regular_dict = dict(data)
 
@@ -142,7 +142,7 @@ def benchmark_iteration():
 
         # B+ Tree iteration
         def bplus_iterate():
-            return sum(1 for _ in bplus_tree.items())
+            return sum(1 for _ in bplustree.items())
 
         bplus_time, _ = benchmark_function(bplus_iterate)
         print(f"  B+ Tree:     {bplus_time*1000:.3f} ms")
@@ -228,15 +228,15 @@ def benchmark_memory_usage():
     data = create_test_data(size)
 
     # B+ Tree
-    bplus_tree = BPlusTreeMap(capacity=64)
-    bplus_tree.update(data)
+    bplustree = BPlusTreeMap(capacity=64)
+    bplustree.update(data)
 
     # Dict
     regular_dict = dict(data)
 
     print(f"For {size:,} items:")
     print(
-        f"  B+ Tree: ~{sys.getsizeof(bplus_tree) + sum(sys.getsizeof(x) for x in [bplus_tree.keys(), bplus_tree.values()]):,} bytes"
+        f"  B+ Tree: ~{sys.getsizeof(bplustree) + sum(sys.getsizeof(x) for x in [bplustree.keys(), bplustree.values()]):,} bytes"
     )
     print(f"  Dict:    ~{sys.getsizeof(regular_dict):,} bytes")
     print("\nNote: Memory usage depends on Python implementation and object overhead.")
@@ -250,8 +250,8 @@ def demonstrate_early_termination():
     size = 50000
     data = create_test_data(size)
 
-    bplus_tree = BPlusTreeMap(capacity=128)
-    bplus_tree.update(data)
+    bplustree = BPlusTreeMap(capacity=128)
+    bplustree.update(data)
 
     regular_dict = dict(data)
 
@@ -261,7 +261,7 @@ def demonstrate_early_termination():
     # B+ Tree approach
     def bplus_early_termination():
         result = []
-        for key, value in bplus_tree.range(40000, None):
+        for key, value in bplustree.range(40000, None):
             result.append((key, value))
             if len(result) >= 10:
                 break

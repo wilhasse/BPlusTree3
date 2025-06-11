@@ -13,7 +13,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 def demo_dict_migration():
@@ -88,7 +88,7 @@ def demo_sorteddict_migration():
 
     print("\nAFTER (using BPlusTree):")
     print("```python")
-    print("from bplus_tree import BPlusTreeMap")
+    print("from bplustree import BPlusTreeMap")
     print("data = BPlusTreeMap(capacity=64)  # Optional: tune for performance")
     print("# ... same operations ...")
     print("```")

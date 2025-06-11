@@ -28,7 +28,7 @@ Lines:         1348    Missed: 201    Cover: 85.09%
 
 ### Test Categories and Counts
 
-1. **Core Functionality Tests** (73 tests in `tests/bplus_tree.rs`)
+1. **Core Functionality Tests** (73 tests in `tests/bplustree.rs`)
 
    - Basic operations (insert, get, remove, update)
    - Tree structure validation

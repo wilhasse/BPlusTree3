@@ -11,6 +11,7 @@ After analyzing the Rust codebase, I've identified several patterns of code dupl
 **Pattern**: Nearly identical arena operations for leaf and branch nodes
 
 **Duplicated Code**:
+
 ```rust
 // Leaf Arena Operations (lines 1225-1270)
 fn next_leaf_id(&mut self) -> NodeId {
@@ -62,6 +63,7 @@ fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
 **Pattern**: Repeated node property checks with similar logic
 
 **Duplicated Code**:
+
 ```rust
 // Lines 265-290 - Node property helpers
 fn is_node_underfull(&self, node_ref: &NodeRef<K, V>) -> bool {
@@ -86,6 +88,7 @@ fn can_node_donate(&self, node_ref: &NodeRef<K, V>) -> bool {
 **Pattern**: Similar borrowing logic for leaf and branch nodes
 
 **Duplicated Code**:
+
 ```rust
 // LeafNode borrowing (lines 1840-1862)
 pub fn donate_to_left(&mut self) -> Option<(K, V)> {
@@ -119,6 +122,7 @@ pub fn donate_to_right(&mut self) -> Option<(K, NodeRef<K, V>)> {
 **Pattern**: Repetitive test setup code
 
 **Duplicated Code**:
+
 ```rust
 // Repeated in 15+ tests
 let mut tree = BPlusTreeMap::new(4).unwrap();
@@ -225,7 +229,7 @@ fn is_node_underfull<T: Node<K, V>>(&self, node: &T) -> bool {
 /// Common borrowing operations for rebalancing
 pub trait Borrowable<K, V> {
     type Item;
-    
+
     fn donate_to_left(&mut self) -> Option<Self::Item>;
     fn donate_to_right(&mut self) -> Option<Self::Item>;
     fn accept_from_left(&mut self, item: Self::Item);
@@ -234,7 +238,7 @@ pub trait Borrowable<K, V> {
 
 impl<K: Ord + Clone, V: Clone> Borrowable<K, V> for LeafNode<K, V> {
     type Item = (K, V);
-    
+
     fn donate_to_left(&mut self) -> Option<Self::Item> {
         if self.can_donate() {
             Some((self.keys.remove(0), self.values.remove(0)))
@@ -277,6 +281,7 @@ pub mod test_utils {
 ## 📊 Impact Analysis
 
 ### Code Reduction Potential
+
 - **Arena operations**: ~150 lines → ~50 lines (67% reduction)
 - **Node property checks**: ~50 lines → ~15 lines (70% reduction)
 - **Borrowing operations**: ~120 lines → ~40 lines (67% reduction)
@@ -285,6 +290,7 @@ pub mod test_utils {
 **Total**: ~520 lines → ~155 lines (**70% reduction in duplicated code**)
 
 ### Benefits
+
 1. **Maintainability**: Single source of truth for common operations
 2. **Bug Reduction**: Fix once, fix everywhere
 3. **Performance**: Potential for better optimization in generic implementations
@@ -292,6 +298,7 @@ pub mod test_utils {
 5. **Testing**: More consistent and comprehensive test coverage
 
 ### Risks
+
 1. **Complexity**: Generic code can be harder to understand initially
 2. **Compile Time**: More generic code may increase compilation time
 3. **Performance**: Potential runtime overhead from trait dispatch (minimal with monomorphization)
@@ -299,19 +306,23 @@ pub mod test_utils {
 ## 🚀 Implementation Priority
 
 ### Phase 1: High Impact, Low Risk
+
 1. **Test Helper Utilities** (1-2 days)
    - Immediate productivity improvement
    - No risk to core functionality
    - Easy to implement and validate
 
 ### Phase 2: Core Infrastructure
+
 2. **Generic Arena<T>** (3-5 days)
    - High impact on code reduction
    - Well-defined interface
    - Comprehensive test coverage needed
 
 ### Phase 3: Advanced Abstractions
+
 3. **Node Trait** (2-3 days)
+
    - Moderate complexity
    - Requires careful design
    - Enables future extensibility
@@ -324,6 +335,7 @@ pub mod test_utils {
 ## 📋 Implementation Checklist
 
 ### Arena<T> Implementation
+
 - [ ] Design generic Arena<T> struct
 - [ ] Implement allocation/deallocation methods
 - [ ] Add comprehensive tests
@@ -333,6 +345,7 @@ pub mod test_utils {
 - [ ] Verify performance is maintained
 
 ### Node Trait Implementation
+
 - [ ] Define Node trait interface
 - [ ] Implement for LeafNode and BranchNode
 - [ ] Update node property checking methods
@@ -340,6 +353,7 @@ pub mod test_utils {
 - [ ] Verify all existing tests pass
 
 ### Test Utilities
+
 - [ ] Create test_utils module
 - [ ] Implement helper functions
 - [ ] Migrate existing tests to use helpers
@@ -348,6 +362,7 @@ pub mod test_utils {
 ## 🔧 Specific Duplication Examples Found
 
 ### Arena Method Duplication (Exact Matches)
+
 **Lines 1225-1270 vs 1310-1350**: Nearly identical patterns
 
 ```rust
@@ -365,19 +380,22 @@ fn next_branch_id(&mut self) -> NodeId {
 ```
 
 ### Test Setup Duplication (Found in 23 tests)
+
 **Pattern**: `BPlusTreeMap::new(4).unwrap()` + `TODO: Add invariant checking`
 
 ```bash
-$ grep -c "TODO.*invariant" tests/bplus_tree.rs
+$ grep -c "TODO.*invariant" tests/bplustree.rs
 23
 ```
 
 ### Node Property Checking (3 methods, same pattern)
+
 **Lines 265-290**: `is_node_underfull`, `can_node_donate`, similar match expressions
 
 ## 🎯 Immediate Quick Wins
 
 ### 1. Test Helper Implementation (2 hours)
+
 ```rust
 // tests/test_utils.rs
 pub fn setup_tree(capacity: usize) -> BPlusTreeMap<i32, String> {
@@ -401,6 +419,7 @@ assert_invariants(&tree);
 ```
 
 ### 2. Arena Macro (4 hours)
+
 ```rust
 macro_rules! impl_arena {
     ($arena_field:ident, $free_field:ident, $node_type:ty, $prefix:ident) => {
@@ -444,6 +463,7 @@ impl_arena!(branch_arena, free_branch_ids, BranchNode<K, V>, branch);
 ## 📊 Quantified Impact
 
 ### Lines of Code Analysis
+
 ```bash
 # Current duplication count
 $ grep -c "allocate_\|deallocate_\|get_.*_mut\|next_.*_id" src/lib.rs
@@ -458,9 +478,10 @@ Total = ~50 lines
 ```
 
 ### Test Code Reduction
+
 ```bash
 # Current test setup duplication
-$ grep -A 3 -B 1 "BPlusTreeMap::new(4)" tests/bplus_tree.rs | wc -l
+$ grep -A 3 -B 1 "BPlusTreeMap::new(4)" tests/bplustree.rs | wc -l
 115 lines of repetitive setup
 
 # After test utilities

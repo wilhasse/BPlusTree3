@@ -35,14 +35,14 @@ The library automatically selects the best available implementation:
 Check which implementation is being used:
 
 ```python
-from bplus_tree import get_implementation
+from bplustree import get_implementation
 print(get_implementation())  # "C extension" or "Pure Python"
 ```
 
 ## 📖 Basic Usage
 
 ```python
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 # Create a B+ tree
 tree = BPlusTreeMap(capacity=128)  # Higher capacity = better performance
@@ -143,7 +143,7 @@ python -m pytest tests/
 python tests/test_performance_vs_sorteddict.py
 
 # Run specific tests
-python -m pytest tests/test_bplus_tree.py -v
+python -m pytest tests/test_bplustree.py -v
 ```
 
 ## 📖 API Reference

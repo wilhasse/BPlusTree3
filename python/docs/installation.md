@@ -93,13 +93,13 @@ If you want to use only the pure Python implementation:
 ```python
 import os
 os.environ['BPLUSTREE_PURE_PYTHON'] = '1'
-import bplus_tree
+import bplustree
 ```
 
 ### Verify Installation
 
 ```python
-from bplus_tree import BPlusTreeMap, get_implementation
+from bplustree import BPlusTreeMap, get_implementation
 
 # Check which implementation is being used
 print(get_implementation())  # "C extension" or "Pure Python"
@@ -185,7 +185,7 @@ If performance is slower than expected:
 1. **Verify C extension is loaded:**
 
    ```python
-   from bplus_tree import get_implementation
+   from bplustree import get_implementation
    assert get_implementation() == "C extension"
    ```
 
@@ -213,7 +213,7 @@ WORKDIR /app
 RUN pip install ./python
 
 # Verify installation
-RUN python -c "from bplus_tree import BPlusTreeMap; print('Installation successful')"
+RUN python -c "from bplustree import BPlusTreeMap; print('Installation successful')"
 ```
 
 ## Next Steps

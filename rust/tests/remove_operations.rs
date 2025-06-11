@@ -304,7 +304,7 @@ fn test_strict_invariant_checking_should_fail() {
 }
 
 #[test]
-fn test_bplus_tree_remove_existing_key() {
+fn test_bplustree_remove_existing_key() {
     let mut tree = create_simple_tree(4);
 
     // Insert some test data
@@ -326,7 +326,7 @@ fn test_bplus_tree_remove_existing_key() {
 }
 
 #[test]
-fn test_bplus_tree_remove_with_underflow() {
+fn test_bplustree_remove_with_underflow() {
     let mut tree = create_simple_tree(4); // Small branching factor, min_keys = 1
 
     // Insert enough keys to create multiple nodes
@@ -365,7 +365,7 @@ fn test_bplus_tree_remove_with_underflow() {
 }
 
 #[test]
-fn test_bplus_tree_remove_last_key_from_tree() {
+fn test_bplustree_remove_last_key_from_tree() {
     let mut tree = create_simple_tree(4);
 
     // Insert a single key
@@ -392,7 +392,7 @@ fn test_bplus_tree_remove_last_key_from_tree() {
 }
 
 #[test]
-fn test_bplus_tree_remove_all_keys_from_single_node() {
+fn test_bplustree_remove_all_keys_from_single_node() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert multiple keys in a single node
@@ -430,7 +430,7 @@ fn test_bplus_tree_remove_all_keys_from_single_node() {
 }
 
 #[test]
-fn test_bplus_tree_remove_from_first_node_causing_empty() {
+fn test_bplustree_remove_from_first_node_causing_empty() {
     let mut tree = BPlusTreeMap::new(4).unwrap(); // Small branching factor
 
     // Create a scenario with multiple nodes where first node becomes empty
@@ -461,7 +461,7 @@ fn test_bplus_tree_remove_from_first_node_causing_empty() {
 }
 
 #[test]
-fn test_bplus_tree_remove_with_root_node_empty_validation() {
+fn test_bplustree_remove_with_root_node_empty_validation() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
 
     // Insert a single key and remove it

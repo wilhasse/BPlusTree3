@@ -7,7 +7,7 @@ Get up and running with BPlusTree in 5 minutes!
 ### Creating a B+ Tree
 
 ```python
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 # Create an empty tree
 tree = BPlusTreeMap()

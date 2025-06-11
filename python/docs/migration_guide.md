@@ -14,7 +14,7 @@ value = data.get('key', 'default')
 del data['key']
 
 # After: Using BPlusTreeMap
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 data = BPlusTreeMap()
 data['key'] = 'value'
 value = data.get('key', 'default')
@@ -24,11 +24,12 @@ del data['key']
 ### Key Differences
 
 1. **Ordered Iteration**
+
    ```python
    # dict: arbitrary order (Python 3.7+ maintains insertion order)
    d = {'c': 3, 'a': 1, 'b': 2}
    list(d.keys())  # ['c', 'a', 'b']
-   
+
    # BPlusTreeMap: always sorted by key
    tree = BPlusTreeMap()
    tree.update({'c': 3, 'a': 1, 'b': 2})
@@ -36,10 +37,11 @@ del data['key']
    ```
 
 2. **Performance Characteristics**
+
    ```python
    # dict: O(1) average case
    d[key] = value  # Very fast
-   
+
    # BPlusTreeMap: O(log n)
    tree[key] = value  # Slightly slower, but predictable
    ```
@@ -67,7 +69,7 @@ od['a'] = 1
 od.move_to_end('b')  # Not available in BPlusTreeMap
 
 # After
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 tree = BPlusTreeMap()
 tree['b'] = 2
 tree['a'] = 1
@@ -76,16 +78,17 @@ tree['a'] = 1
 
 ### Key Differences
 
-| Feature | OrderedDict | BPlusTreeMap |
-|---------|-------------|--------------|
-| Order | Insertion order | Key order |
-| move_to_end() | ✓ | ✗ |
-| popitem(last=False) | ✓ | ✗ (always smallest) |
-| Reversible | ✓ | ✗ |
+| Feature             | OrderedDict     | BPlusTreeMap        |
+| ------------------- | --------------- | ------------------- |
+| Order               | Insertion order | Key order           |
+| move_to_end()       | ✓               | ✗                   |
+| popitem(last=False) | ✓               | ✗ (always smallest) |
+| Reversible          | ✓               | ✗                   |
 
 ### When to Keep OrderedDict
 
 Keep OrderedDict if you need:
+
 - Insertion order preservation
 - move_to_end() for LRU caches
 - Reverse iteration
@@ -102,7 +105,7 @@ sd['key'] = 'value'
 items = list(sd.items())  # Sorted
 
 # After: Using BPlusTreeMap
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 tree = BPlusTreeMap()
 tree['key'] = 'value'
 items = list(tree.items())  # Also sorted
@@ -110,13 +113,13 @@ items = list(tree.items())  # Also sorted
 
 ### API Compatibility
 
-| Method | SortedDict | BPlusTreeMap | Notes |
-|--------|------------|--------------|-------|
-| Basic dict API | ✓ | ✓ | Fully compatible |
-| items(start, end) | ✗ | ✓ | Range queries |
-| irange() | ✓ | ✗ | Use items(start, end) |
-| bisect_left/right() | ✓ | ✗ | Not implemented |
-| iloc[] | ✓ | ✗ | No index access |
+| Method              | SortedDict | BPlusTreeMap | Notes                 |
+| ------------------- | ---------- | ------------ | --------------------- |
+| Basic dict API      | ✓          | ✓            | Fully compatible      |
+| items(start, end)   | ✗          | ✓            | Range queries         |
+| irange()            | ✓          | ✗            | Use items(start, end) |
+| bisect_left/right() | ✓          | ✗            | Not implemented       |
+| iloc[]              | ✓          | ✗            | No index access       |
 
 ### Migration Example
 
@@ -128,7 +131,7 @@ for key in sd.irange(10, 20):
     print(f"{key}: {sd[key]}")
 
 # BPlusTreeMap equivalent
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 tree = BPlusTreeMap()
 tree.update((i, i**2) for i in range(100))
 for key, value in tree.items(10, 21):  # Note: end is exclusive
@@ -137,19 +140,20 @@ for key, value in tree.items(10, 21):  # Note: end is exclusive
 
 ### Performance Comparison
 
-| Operation | SortedDict | BPlusTreeMap |
-|-----------|------------|--------------|
-| Insert | O(log n) | O(log n) |
-| Delete | O(log n) | O(log n) |
-| Lookup | O(log n) | O(log n) |
+| Operation   | SortedDict   | BPlusTreeMap |
+| ----------- | ------------ | ------------ |
+| Insert      | O(log n)     | O(log n)     |
+| Delete      | O(log n)     | O(log n)     |
+| Lookup      | O(log n)     | O(log n)     |
 | Range query | O(log n + k) | O(log n + k) |
-| Memory | Moderate | Higher |
+| Memory      | Moderate     | Higher       |
 
 ## Migrating from Database Queries
 
 B+ Trees can replace simple database queries for in-memory data:
 
 ### Before: SQLite
+
 ```python
 import sqlite3
 
@@ -167,8 +171,9 @@ results = c.fetchall()
 ```
 
 ### After: BPlusTreeMap
+
 ```python
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 # Using age as key for range queries
 users_by_age = BPlusTreeMap()
@@ -179,6 +184,7 @@ results = list(users_by_age.items(25, 36))  # end is exclusive
 ```
 
 ### Multiple Indexes
+
 ```python
 # Maintain multiple B+ Trees for different access patterns
 users_by_id = BPlusTreeMap()
@@ -199,6 +205,7 @@ age_range = list(users_by_age.items(25, 36))
 ## Common Migration Patterns
 
 ### 1. Time-Series Data
+
 ```python
 # Before: List with binary search
 import bisect
@@ -225,6 +232,7 @@ day_readings = list(readings.items(start, end))
 ```
 
 ### 2. Leaderboard/Ranking
+
 ```python
 # Before: Sorted list with manual management
 scores = []  # [(score, player), ...]
@@ -244,11 +252,12 @@ def add_score(player, score):
     leaderboard[-score] = player
 
 def get_top_n(n):
-    return [(player, -score) for score, player in 
+    return [(player, -score) for score, player in
             itertools.islice(leaderboard.items(), n)]
 ```
 
 ### 3. Cache with Range Expiration
+
 ```python
 # Before: Dict with periodic cleanup
 import time
@@ -264,7 +273,7 @@ def cleanup():
         del cache[k]
 
 # After: BPlusTreeMap indexed by expiration
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 cache_by_key = {}
 cache_by_expiry = BPlusTreeMap()
 
@@ -287,37 +296,37 @@ Always test thoroughly after migration:
 
 ```python
 import unittest
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 class TestMigration(unittest.TestCase):
     def test_basic_operations(self):
         # Test all operations your code uses
         tree = BPlusTreeMap()
-        
+
         # Test insertion
         tree['key'] = 'value'
         self.assertEqual(tree['key'], 'value')
-        
+
         # Test update
         tree['key'] = 'new_value'
         self.assertEqual(tree['key'], 'new_value')
-        
+
         # Test deletion
         del tree['key']
         self.assertNotIn('key', tree)
-        
+
     def test_ordering(self):
         tree = BPlusTreeMap()
         tree.update({3: 'c', 1: 'a', 2: 'b'})
-        
+
         # Verify sorted order
         keys = list(tree.keys())
         self.assertEqual(keys, [1, 2, 3])
-        
+
     def test_range_queries(self):
         tree = BPlusTreeMap()
         tree.update((i, i**2) for i in range(100))
-        
+
         # Test range query
         results = list(tree.items(10, 20))
         self.assertEqual(len(results), 10)
@@ -335,15 +344,15 @@ import random
 
 def benchmark_operations(implementation, size=10000):
     impl = implementation()
-    data = [(random.randint(0, size*10), f"value_{i}") 
+    data = [(random.randint(0, size*10), f"value_{i}")
             for i in range(size)]
-    
+
     # Insertion
     start = time.perf_counter()
     for k, v in data:
         impl[k] = v
     insert_time = time.perf_counter() - start
-    
+
     # Lookup
     keys = [k for k, _ in data]
     random.shuffle(keys)
@@ -351,12 +360,12 @@ def benchmark_operations(implementation, size=10000):
     for k in keys[:1000]:
         _ = impl.get(k)
     lookup_time = time.perf_counter() - start
-    
+
     # Iteration
     start = time.perf_counter()
     _ = list(impl.items())
     iter_time = time.perf_counter() - start
-    
+
     return insert_time, lookup_time, iter_time
 
 # Compare implementations
@@ -372,18 +381,20 @@ print(f"BPlusTreeMap: insert={btree_times[0]:.3f}, lookup={btree_times[1]:.3f}, 
 If migration causes issues:
 
 1. **Feature flag approach:**
+
    ```python
    USE_BTREE = os.environ.get('USE_BTREE', 'false').lower() == 'true'
-   
+
    if USE_BTREE:
-       from bplus_tree import BPlusTreeMap as DataStore
+       from bplustree import BPlusTreeMap as DataStore
    else:
        DataStore = dict
-   
+
    data = DataStore()
    ```
 
 2. **Gradual migration:**
+
    - Migrate one component at a time
    - Monitor performance and correctness
    - Keep old code for easy rollback
@@ -392,7 +403,7 @@ If migration causes issues:
    ```python
    class CompatibleBPlusTree(BPlusTreeMap):
        """Add missing methods for compatibility"""
-       
+
        def move_to_end(self, key):
            # Simulate OrderedDict.move_to_end
            value = self.pop(key)

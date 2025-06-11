@@ -4,7 +4,7 @@
 //!
 //! To run fuzz tests:
 //! - All fuzz tests: `cargo test --test fuzz_tests -- --ignored`
-//! - Specific test: `cargo test fuzz_test_bplus_tree -- --ignored --nocapture`
+//! - Specific test: `cargo test fuzz_test_bplustree -- --ignored --nocapture`
 //! - With custom timing: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture`
 
 use bplustree::BPlusTreeMap;
@@ -14,12 +14,12 @@ use std::time::{Duration, Instant};
 
 #[test]
 #[ignore]
-fn fuzz_test_bplus_tree() {
+fn fuzz_test_bplustree() {
     // Test with various branching factors (minimum 4 required)
     for branching_factor in 4..=10 {
         println!("\n=== Testing branching factor {} ===", branching_factor);
 
-        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
+        let mut bplustree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
 
@@ -27,14 +27,14 @@ fn fuzz_test_bplus_tree() {
         let mut key = 1;
         let mut iteration = 0;
 
-        while bplus_tree.leaf_count() < 20 && iteration < 1000 {
+        while bplustree.leaf_count() < 20 && iteration < 1000 {
             let value = key * 10;
 
             // Record the operation
             operations.push(format!("insert({}, {})", key, value));
 
             // Insert into both trees
-            let bplus_result = bplus_tree.insert(key, value);
+            let bplus_result = bplustree.insert(key, value);
             let btree_result = btree_map.insert(key, value);
 
             // Check that insert results match
@@ -51,7 +51,7 @@ fn fuzz_test_bplus_tree() {
 
             // Verify all previously inserted keys can still be found
             for check_key in 1..=key {
-                let bplus_value = bplus_tree.get(&check_key);
+                let bplus_value = bplustree.get(&check_key);
                 let btree_value = btree_map.get(&check_key);
 
                 if bplus_value != btree_value {
@@ -63,23 +63,23 @@ fn fuzz_test_bplus_tree() {
                     println!("BTreeMap returned: {:?}", btree_value);
                     println!(
                         "BPlusTree has {} nodes with sizes: {:?}",
-                        bplus_tree.leaf_count(),
-                        bplus_tree.leaf_sizes()
+                        bplustree.leaf_count(),
+                        bplustree.leaf_sizes()
                     );
                     println!("Operations so far:");
                     for op in &operations {
                         println!("  {}", op);
                     }
                     println!("Tree structure:");
-                    bplus_tree.print_node_chain();
+                    bplustree.print_node_chain();
                     panic!("Get result mismatch!");
                 }
             }
 
             // Verify tree length matches
-            if bplus_tree.len() != btree_map.len() {
+            if bplustree.len() != btree_map.len() {
                 println!("LENGTH MISMATCH after insert({}, {}):", key, value);
-                println!("BPlusTree len: {}", bplus_tree.len());
+                println!("BPlusTree len: {}", bplustree.len());
                 println!("BTreeMap len: {}", btree_map.len());
                 println!("Operations so far:");
                 for op in &operations {
@@ -89,7 +89,7 @@ fn fuzz_test_bplus_tree() {
             }
 
             // Verify slice/iteration order matches
-            let bplus_slice = bplus_tree.slice();
+            let bplus_slice = bplustree.slice();
             let btree_slice: Vec<_> = btree_map.iter().collect();
 
             if bplus_slice.len() != btree_slice.len() {
@@ -131,8 +131,8 @@ fn fuzz_test_bplus_tree() {
                 println!(
                     "  Inserted {} keys, {} nodes, sizes: {:?}",
                     key - 1,
-                    bplus_tree.leaf_count(),
-                    bplus_tree.leaf_sizes()
+                    bplustree.leaf_count(),
+                    bplustree.leaf_sizes()
                 );
             }
         }
@@ -141,7 +141,7 @@ fn fuzz_test_bplus_tree() {
             "Successfully tested branching factor {} with {} keys and {} leaf nodes",
             branching_factor,
             key - 1,
-            bplus_tree.leaf_count()
+            bplustree.leaf_count()
         );
     }
 }
@@ -156,7 +156,7 @@ fn fuzz_test_with_random_keys() {
             branching_factor
         );
 
-        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
+        let mut bplustree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
         let mut inserted_keys = HashSet::new();
@@ -171,7 +171,7 @@ fn fuzz_test_with_random_keys() {
         let pattern = [3, 7, 1, 9, 5, 2, 8, 4, 6, 0]; // Cycle through this pattern
         let mut key_index = 0;
 
-        while bplus_tree.leaf_count() < 15 && key_index < keys_to_insert.len() {
+        while bplustree.leaf_count() < 15 && key_index < keys_to_insert.len() {
             // Pick key using the pattern
             let pattern_index = key_index % pattern.len();
             let offset = pattern[pattern_index];
@@ -191,7 +191,7 @@ fn fuzz_test_with_random_keys() {
             operations.push(format!("insert({}, {})", key, value));
 
             // Insert into both trees
-            let bplus_result = bplus_tree.insert(key, value);
+            let bplus_result = bplustree.insert(key, value);
             let btree_result = btree_map.insert(key, value);
 
             // Check that insert results match
@@ -208,7 +208,7 @@ fn fuzz_test_with_random_keys() {
 
             // Verify all previously inserted keys can still be found
             for &check_key in &inserted_keys {
-                let bplus_value = bplus_tree.get(&check_key);
+                let bplus_value = bplustree.get(&check_key);
                 let btree_value = btree_map.get(&check_key);
 
                 if bplus_value != btree_value {
@@ -220,15 +220,15 @@ fn fuzz_test_with_random_keys() {
                     println!("BTreeMap returned: {:?}", btree_value);
                     println!(
                         "BPlusTree has {} nodes with sizes: {:?}",
-                        bplus_tree.leaf_count(),
-                        bplus_tree.leaf_sizes()
+                        bplustree.leaf_count(),
+                        bplustree.leaf_sizes()
                     );
                     println!("Operations so far:");
                     for op in &operations {
                         println!("  {}", op);
                     }
                     println!("Tree structure:");
-                    bplus_tree.print_node_chain();
+                    bplustree.print_node_chain();
                     panic!("Get result mismatch!");
                 }
             }
@@ -240,8 +240,8 @@ fn fuzz_test_with_random_keys() {
                 println!(
                     "  Inserted {} keys, {} nodes, sizes: {:?}",
                     inserted_keys.len(),
-                    bplus_tree.leaf_count(),
-                    bplus_tree.leaf_sizes()
+                    bplustree.leaf_count(),
+                    bplustree.leaf_sizes()
                 );
             }
         }
@@ -250,7 +250,7 @@ fn fuzz_test_with_random_keys() {
             "Successfully tested branching factor {} with {} random keys and {} leaf nodes",
             branching_factor,
             inserted_keys.len(),
-            bplus_tree.leaf_count()
+            bplustree.leaf_count()
         );
     }
 }
@@ -265,7 +265,7 @@ fn fuzz_test_with_updates() {
             branching_factor
         );
 
-        let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
+        let mut bplustree = BPlusTreeMap::new(branching_factor).unwrap();
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
 
@@ -273,7 +273,7 @@ fn fuzz_test_with_updates() {
         for key in 1..=50 {
             let value = key * 10;
             operations.push(format!("insert({}, {})", key, value));
-            bplus_tree.insert(key, value);
+            bplustree.insert(key, value);
             btree_map.insert(key, value);
         }
 
@@ -283,7 +283,7 @@ fn fuzz_test_with_updates() {
             let new_value = key * 100;
             operations.push(format!("update({}, {})", key, new_value));
 
-            let bplus_result = bplus_tree.insert(key, new_value);
+            let bplus_result = bplustree.insert(key, new_value);
             let btree_result = btree_map.insert(key, new_value);
 
             // Check that update results match (should return old value)
@@ -299,7 +299,7 @@ fn fuzz_test_with_updates() {
             }
 
             // Verify the new value is retrievable
-            let bplus_value = bplus_tree.get(&key);
+            let bplus_value = bplustree.get(&key);
             let btree_value = btree_map.get(&key);
 
             if bplus_value != btree_value {
@@ -350,13 +350,13 @@ fn fuzz_test_timed() {
                 break;
             }
 
-            let mut bplus_tree = BPlusTreeMap::new(branching_factor).unwrap();
+            let mut bplustree = BPlusTreeMap::new(branching_factor).unwrap();
             let mut btree_map = BTreeMap::new();
             let mut operations = Vec::new();
 
             // Run until we hit time limit or reach a reasonable number of nodes
             let mut key = 1;
-            while start_time.elapsed() < duration && bplus_tree.leaf_count() < 50 {
+            while start_time.elapsed() < duration && bplustree.leaf_count() < 50 {
                 let value = key * 10;
 
                 // Record the operation
@@ -364,7 +364,7 @@ fn fuzz_test_timed() {
                 total_operations += 1;
 
                 // Insert into both trees
-                let bplus_result = bplus_tree.insert(key, value);
+                let bplus_result = bplustree.insert(key, value);
                 let btree_result = btree_map.insert(key, value);
 
                 // Check that insert results match
@@ -385,7 +385,7 @@ fn fuzz_test_timed() {
                 // Periodically verify all keys can be found
                 if key % 10 == 0 {
                     for check_key in 1..=key {
-                        let bplus_value = bplus_tree.get(&check_key);
+                        let bplus_value = bplustree.get(&check_key);
                         let btree_value = btree_map.get(&check_key);
 
                         if bplus_value != btree_value {
@@ -397,8 +397,8 @@ fn fuzz_test_timed() {
                             println!("BTreeMap returned: {:?}", btree_value);
                             println!(
                                 "Tree has {} nodes with sizes: {:?}",
-                                bplus_tree.leaf_count(),
-                                bplus_tree.leaf_sizes()
+                                bplustree.leaf_count(),
+                                bplustree.leaf_sizes()
                             );
                             println!("Recent operations:");
                             for op in operations.iter().rev().take(20) {
@@ -411,7 +411,7 @@ fn fuzz_test_timed() {
 
                 key += 1;
                 total_keys_inserted += 1;
-                max_nodes_reached = max_nodes_reached.max(bplus_tree.leaf_count());
+                max_nodes_reached = max_nodes_reached.max(bplustree.leaf_count());
             }
         }
     }

@@ -1,7 +1,7 @@
 """Tests for B+ Tree iterator functionality"""
 
 import pytest
-from ..bplus_tree import BPlusTreeMap
+from ..bplustree import BPlusTreeMap
 
 
 class TestBPlusTreeIterator:

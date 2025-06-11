@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 def demo_basic_range_queries():

@@ -3,7 +3,7 @@
 Test proper deletion logic that maintains invariants throughout
 """
 
-from ..bplus_tree import BPlusTreeMap
+from ..bplustree import BPlusTreeMap
 from ._invariant_checker import BPlusTreeInvariantChecker
 
 

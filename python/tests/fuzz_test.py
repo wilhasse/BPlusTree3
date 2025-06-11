@@ -13,7 +13,7 @@ from typing import List, Tuple, Any, Dict
 
 # Handle both module and direct execution
 try:
-    from ..bplus_tree import BPlusTreeMap
+    from bplustree.bplustree import BPlusTreeMap
     from ._invariant_checker import BPlusTreeInvariantChecker
 except ImportError:
     import sys
@@ -400,7 +400,7 @@ class BPlusTreeFuzzTester:
             f.write(f"Prepopulate: {self.prepopulate}\n")
             f.write(f"Failed at operation: {failed_at}\n")
             f.write(f'"""\n\n')
-            f.write("from ..bplus_tree import BPlusTreeMap\n")
+            f.write("from ..bplustree import BPlusTreeMap\n")
             f.write("from collections import OrderedDict\n")
             f.write("from ._invariant_checker import BPlusTreeInvariantChecker\n")
             f.write("import random\n\n")

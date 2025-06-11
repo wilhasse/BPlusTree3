@@ -90,7 +90,7 @@
 						<line number="132" hits="0"/>
 					</lines>
 				</class>
-				<class name="bplus_tree.py" filename="bplus_tree.py" complexity="0" line-rate="0.6309" branch-rate="0.46">
+				<class name="bplustree.py" filename="bplustree.py" complexity="0" line-rate="0.6309" branch-rate="0.46">
 					<methods/>
 					<lines>
 						<line number="8" hits="1"/>

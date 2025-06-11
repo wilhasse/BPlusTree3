@@ -7,12 +7,14 @@
 BPlusTreeMap excels in these scenarios:
 
 1. **Ordered Operations**
+
    - Need to iterate items in sorted order
    - Frequent range queries
    - Finding min/max values
    - Time-series data with timestamp keys
 
 2. **Predictable Performance**
+
    - Consistent O(log n) operations
    - No hash collision issues
    - Stable memory layout
@@ -24,26 +26,26 @@ BPlusTreeMap excels in these scenarios:
 
 ### When to Use Alternatives
 
-| Use Case | Recommended | Why |
-|----------|-------------|-----|
-| Random access only | `dict` | O(1) average case |
-| Need ordering + O(1) access | `OrderedDict` | Maintains insertion order |
-| Small datasets (<100 items) | `dict` | Lower overhead |
-| Thread-safe operations | `queue.Queue` | Built-in thread safety |
-| Persistent storage | Database (SQLite) | ACID guarantees |
+| Use Case                    | Recommended       | Why                       |
+| --------------------------- | ----------------- | ------------------------- |
+| Random access only          | `dict`            | O(1) average case         |
+| Need ordering + O(1) access | `OrderedDict`     | Maintains insertion order |
+| Small datasets (<100 items) | `dict`            | Lower overhead            |
+| Thread-safe operations      | `queue.Queue`     | Built-in thread safety    |
+| Persistent storage          | Database (SQLite) | ACID guarantees           |
 
 ## Performance Characteristics
 
 ### Time Complexity
 
-| Operation | BPlusTreeMap | dict | Comment |
-|-----------|--------------|------|---------|
-| Insert | O(log n) | O(1)* | *amortized |
-| Lookup | O(log n) | O(1)* | *average case |
-| Delete | O(log n) | O(1)* | *average case |
-| Iteration (sorted) | O(n) | O(n log n) | B+ Tree wins |
-| Range query | O(log n + k) | O(n) | k = result size |
-| Min/Max | O(log n) | O(n) | B+ Tree wins |
+| Operation          | BPlusTreeMap | dict       | Comment         |
+| ------------------ | ------------ | ---------- | --------------- |
+| Insert             | O(log n)     | O(1)\*     | \*amortized     |
+| Lookup             | O(log n)     | O(1)\*     | \*average case  |
+| Delete             | O(log n)     | O(1)\*     | \*average case  |
+| Iteration (sorted) | O(n)         | O(n log n) | B+ Tree wins    |
+| Range query        | O(log n + k) | O(n)       | k = result size |
+| Min/Max            | O(log n)     | O(n)       | B+ Tree wins    |
 
 ### Space Complexity
 
@@ -51,6 +53,7 @@ BPlusTreeMap excels in these scenarios:
 - dict: O(n) with lower constant factor
 
 B+ Trees use more memory due to:
+
 - Node structure overhead
 - Partially filled nodes
 - Parent/child pointers
@@ -60,6 +63,7 @@ B+ Trees use more memory due to:
 ### 1. Capacity Tuning
 
 The `capacity` parameter controls node size. Larger nodes mean:
+
 - Fewer levels (shallower tree)
 - Better cache locality
 - More memory usage
@@ -70,17 +74,17 @@ import time
 
 def benchmark_capacity(size, capacity):
     tree = BPlusTreeMap(capacity=capacity)
-    
+
     start = time.perf_counter()
     for i in range(size):
         tree[i] = i
     insert_time = time.perf_counter() - start
-    
+
     start = time.perf_counter()
     for i in range(size):
         _ = tree[i]
     lookup_time = time.perf_counter() - start
-    
+
     return insert_time, lookup_time
 
 # Test different capacities
@@ -90,6 +94,7 @@ for cap in [8, 16, 32, 64, 128]:
 ```
 
 **Recommendations:**
+
 - Small datasets (<1,000): capacity=8 (default)
 - Medium datasets (1,000-100,000): capacity=32
 - Large datasets (>100,000): capacity=64-128
@@ -133,6 +138,7 @@ tree[custom_object] = value
 ```
 
 **Tips:**
+
 - Use integers when possible
 - Keep string keys short
 - Avoid complex objects as keys
@@ -184,18 +190,18 @@ Always benchmark with your actual data and access patterns:
 ```python
 import time
 import random
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 def benchmark_implementation(impl_class, data, operations):
     """Benchmark any dict-like implementation."""
     impl = impl_class()
-    
+
     # Insertion
     start = time.perf_counter()
     for k, v in data:
         impl[k] = v
     insert_time = time.perf_counter() - start
-    
+
     # Random lookups
     keys = [k for k, _ in data]
     random.shuffle(keys)
@@ -203,7 +209,7 @@ def benchmark_implementation(impl_class, data, operations):
     for k in keys[:operations]:
         _ = impl.get(k)
     lookup_time = time.perf_counter() - start
-    
+
     # Ordered iteration
     start = time.perf_counter()
     if hasattr(impl, 'items'):
@@ -211,7 +217,7 @@ def benchmark_implementation(impl_class, data, operations):
     else:
         _ = sorted(impl.items())
     iter_time = time.perf_counter() - start
-    
+
     return {
         'insert': insert_time,
         'lookup': lookup_time,
@@ -219,7 +225,7 @@ def benchmark_implementation(impl_class, data, operations):
     }
 
 # Compare implementations
-test_data = [(random.randint(0, 1000000), f"value_{i}") 
+test_data = [(random.randint(0, 1000000), f"value_{i}")
              for i in range(10000)]
 
 results = {
@@ -239,7 +245,7 @@ for name, times in results.items():
 
 ```python
 import sys
-from bplus_tree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 # Measure memory usage
 tree = BPlusTreeMap()
@@ -259,13 +265,14 @@ for i in range(0, 10000, 1000):
 ### Memory-Efficient Patterns
 
 1. **Reuse trees instead of creating new ones:**
+
    ```python
    # Inefficient
    def process_batch(items):
        tree = BPlusTreeMap()
        tree.update(items)
        return tree
-   
+
    # Efficient
    tree = BPlusTreeMap()
    def process_batch(items):
@@ -275,10 +282,11 @@ for i in range(0, 10000, 1000):
    ```
 
 2. **Use smaller capacity for small datasets:**
+
    ```python
    # Wasteful for small data
    small_tree = BPlusTreeMap(capacity=128)
-   
+
    # Better
    small_tree = BPlusTreeMap(capacity=4)
    ```
@@ -288,7 +296,7 @@ for i in range(0, 10000, 1000):
 The C extension provides significant performance improvements:
 
 ```python
-from bplus_tree import get_implementation
+from bplustree import get_implementation
 
 print(f"Using: {get_implementation()}")
 
@@ -299,8 +307,9 @@ os.environ['BPLUSTREE_PURE_PYTHON'] = '1'
 ```
 
 Typical speedups with C extension:
+
 - Insertion: 2-3x faster
-- Lookup: 2-4x faster  
+- Lookup: 2-4x faster
 - Iteration: 1.5-2x faster
 - Memory usage: Similar
 
@@ -342,6 +351,7 @@ static_map = {'yes': True, 'no': False, 'maybe': None}
 ## Real-World Performance Examples
 
 ### Time-Series Data
+
 ```python
 # Storing 1 million time-series points
 # B+ Tree: ~0.5s insert, ~0.001s range query
@@ -349,6 +359,7 @@ static_map = {'yes': True, 'no': False, 'maybe': None}
 ```
 
 ### Log Processing
+
 ```python
 # Processing 10GB of logs with timestamp ordering
 # B+ Tree: Maintains order during insert
@@ -356,6 +367,7 @@ static_map = {'yes': True, 'no': False, 'maybe': None}
 ```
 
 ### Cache with Expiration
+
 ```python
 # LRU cache with 100k entries
 # B+ Tree: O(log n) to find/remove oldest
@@ -373,14 +385,14 @@ from io import StringIO
 
 def profile_btree_operations():
     tree = BPlusTreeMap(capacity=32)
-    
+
     # Various operations to profile
     for i in range(10000):
         tree[i] = f"value_{i}"
-    
+
     for i in range(0, 10000, 100):
         _ = tree.get(i)
-    
+
     list(tree.items(1000, 2000))
 
 # Profile the operations
