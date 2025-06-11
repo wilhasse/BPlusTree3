@@ -1,5 +1,10 @@
 import gc
-from bplustree_c import BPlusTree
+import pytest
+
+try:
+    from bplustree_c import BPlusTree
+except ImportError as e:
+    pytest.skip(f"C extension not available: {e}", allow_module_level=True)
 
 
 def test_gc_collects_self_referencing_tree():
