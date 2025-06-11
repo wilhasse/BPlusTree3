@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel>=0.37", "Cython>=0.29.30"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bplustree3"
+name = "bplustree"
 dynamic = ["version"]
 description = "High-performance B+ Tree implementation for Python with dict-like API"
 readme = {file = "README.md", content-type = "text/markdown"}
@@ -88,12 +88,12 @@ Issues = "https://github.com/KentBeck/BPlusTree3/issues"
 Changelog = "https://github.com/KentBeck/BPlusTree3/blob/main/python/CHANGELOG.md"
 
 [tool.setuptools]
-packages = ["bplustree3"]
+packages = ["bplustree"]
 include-package-data = true
 zip-safe = false
 
 [tool.setuptools.dynamic]
-version = {attr = "bplustree3.__version__"}
+version = {attr = "bplustree.__version__"}
 
 [tool.setuptools.package-data]
 "*" = ["*.h", "*.c", "py.typed"]
@@ -166,11 +166,11 @@ ignore = [
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["bplustree3"]
+known_first_party = ["bplustree"]
 
 [tool.coverage.run]
 branch = true
-source = ["bplustree3", "."]
+source = ["bplustree", "."]
 omit = [
     "*/tests/*",
     "*/benchmarks/*",

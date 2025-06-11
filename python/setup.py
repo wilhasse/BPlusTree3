@@ -90,7 +90,7 @@ bplustree_c = Extension(
 # Setup configuration
 # Note: Most metadata now comes from pyproject.toml, but setup.py still needed for C extensions
 setup(
-    name="bplustree3",
+    name="bplustree",
     version=get_version(),
     description="High-performance B+ Tree implementation for Python with dict-like API",
     long_description=get_long_description(),

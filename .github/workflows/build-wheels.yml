@@ -48,7 +48,7 @@ jobs:
         CIBW_ARCHS_WINDOWS: AMD64
         
         # Test command to verify wheels work
-        CIBW_TEST_COMMAND: "python -c \"import bplustree3; tree = bplustree3.BPlusTreeMap(); tree[1] = 'test'; assert tree[1] == 'test'; print('Wheel test passed!')\""
+        CIBW_TEST_COMMAND: "python -c \"import bplustree; tree = bplustree.BPlusTreeMap(); tree[1] = 'test'; assert tree[1] == 'test'; print('Wheel test passed!')\""
         
         # Install test dependencies
         CIBW_TEST_REQUIRES: pytest
@@ -116,7 +116,7 @@ jobs:
       run: |
         cd python
         pip install dist/*.tar.gz
-        python -c "import bplustree3; print('SDist test passed!')"
+        python -c "import bplustree; print('SDist test passed!')"
     
     - name: Upload sdist
       uses: actions/upload-artifact@v4
@@ -152,16 +152,16 @@ jobs:
     
     - name: Install wheel
       run: |
-        pip install --find-links wheelhouse bplustree3
+        pip install --find-links wheelhouse bplustree
     
     - name: Test installation
       run: |
         python -c "
-        import bplustree3
-        print(f'Implementation: {bplustree3.get_implementation()}')
+        import bplustree
+        print(f'Implementation: {bplustree.get_implementation()}')
         
         # Test basic functionality
-        tree = bplustree3.BPlusTreeMap()
+        tree = bplustree.BPlusTreeMap()
         
         # Test insertions
         for i in range(100):
