@@ -120,11 +120,11 @@ else:
 
     _using_c_extension = True
 
-# Always import Python node classes for compatibility
-from .bplus_tree import Node, LeafNode, BranchNode
+# Node classes are internal implementation details, not exported
+from .bplus_tree import Node as _Node, LeafNode as _LeafNode, BranchNode as _BranchNode
 
 __version__ = "0.1.0"
-__all__ = ["BPlusTreeMap", "Node", "LeafNode", "BranchNode"]
+__all__ = ["BPlusTreeMap", "get_implementation"]
 
 
 def get_implementation():
