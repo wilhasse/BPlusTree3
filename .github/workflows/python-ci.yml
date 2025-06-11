@@ -28,14 +28,14 @@ jobs:
         cd python
         python -m pytest tests/ --ignore=tests/test_c_extension_segfault_fix.py -m "not slow" -x -v
     
-    - name: Run selected slow tests (with timeout)
+    - name: Run critical reliability tests
       run: |
         cd python
-        echo "Running memory leak test..."
-        timeout 3m python -m pytest tests/test_memory_leaks.py::TestMemoryLeaks::test_deleted_values_are_released -v || echo "Memory leak test timed out or failed (non-critical)"
+        echo "Running memory leak test (CRITICAL)..."
+        timeout 5m python -m pytest tests/test_memory_leaks.py::TestMemoryLeaks::test_insertion_deletion_cycle_no_leak -v --tb=short
         
-        echo "Running small performance benchmark..."
-        timeout 2m python -m pytest tests/test_performance_benchmarks.py::TestPerformanceBenchmarks::test_insertion_performance_small -v || echo "Performance test timed out or failed (non-critical)"
+        echo "Running performance regression test (CRITICAL)..."
+        timeout 3m python -m pytest tests/test_performance_benchmarks.py::TestPerformanceBenchmarks::test_insertion_performance_small -v --tb=short
         
-        echo "Running basic stress test..."
-        timeout 2m python -m pytest tests/test_bplus_tree.py::test_many_insertions_maintain_invariants -v || echo "Stress test timed out or failed (non-critical)"
+        echo "Running invariant stress test (CRITICAL)..."
+        timeout 3m python -m pytest tests/test_bplus_tree.py::test_many_insertions_maintain_invariants -v --tb=short

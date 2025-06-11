@@ -26,14 +26,14 @@ class TestMemoryLeaks:
         gc.collect()
         initial_objects = len(gc.get_objects())
 
-        # Perform multiple insertion/deletion cycles
-        for cycle in range(5):
-            # Insert items
-            for i in range(1000):
+        # Perform multiple insertion/deletion cycles (reduced for CI)
+        for cycle in range(3):
+            # Insert items (reduced count for CI)
+            for i in range(500):
                 tree[i] = f"value_{i}_{cycle}"
 
             # Delete all items
-            for i in range(1000):
+            for i in range(500):
                 del tree[i]
 
         # Force garbage collection
@@ -44,8 +44,8 @@ class TestMemoryLeaks:
         # Allow some variance for internal Python operations
         growth = final_objects - initial_objects
         assert (
-            growth < 100
-        ), f"Too many objects leaked: {growth} new objects after cycles"
+            growth < 50
+        ), f"MEMORY LEAK DETECTED: {growth} new objects after cycles (threshold: 50)"
 
     def test_deleted_values_are_released(self):
         """Test that deleted values are properly released."""

@@ -35,7 +35,7 @@ jobs:
         timeout 10m python -m pytest tests/test_performance_regression.py -v --tb=short || echo "Performance regression tests completed with issues"
     
     - name: Archive performance results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-results
         path: python/performance_results.txt
