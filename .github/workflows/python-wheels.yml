@@ -1,6 +1,8 @@
 name: Build Python Wheels
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -25,29 +27,17 @@ jobs:
       with:
         platforms: all
 
-    - name: Build wheels
-      uses: pypa/cibuildwheel@v2.16.2
-      with:
-        package-dir: ./python
-        output-dir: ./wheelhouse
-      env:
-        CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
-        CIBW_SKIP: "*-musllinux_* pp*"
-        CIBW_ARCHS_LINUX: "auto aarch64"
-        CIBW_ARCHS_MACOS: "x86_64 arm64 universal2"
-        CIBW_ARCHS_WINDOWS: "auto"
-        CIBW_TEST_REQUIRES: pytest
-        CIBW_TEST_COMMAND: "python -c \"import bplustree; tree = bplustree.BPlusTreeMap(); tree[1] = 'test'; tree.clear(); assert len(tree) == 0; print('Test passed!')\""
-        CIBW_BEFORE_BUILD_LINUX: "pip install cython"
-        CIBW_BEFORE_BUILD_MACOS: "pip install cython"
-        CIBW_BEFORE_BUILD_WINDOWS: "pip install cython"
-        CIBW_BUILD_VERBOSITY: 1
+    - name: Build pure Python wheel
+      run: |
+        cd python
+        python -m pip install --upgrade pip build
+        python -m build --wheel
 
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
         name: python-wheels-${{ matrix.os }}
-        path: ./wheelhouse/*.whl
+        path: python/dist/*.whl
 
   build_sdist:
     name: Build source distribution
@@ -96,12 +86,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: python-wheels-${{ matrix.os }}
-        path: ./wheelhouse
+        path: python/dist
 
     - name: Install wheel
       run: |
         python -m pip install --upgrade pip
-        pip install --find-links ./wheelhouse bplustree
+        pip install --find-links python/dist bplustree
         
     - name: Test installed package
       run: |

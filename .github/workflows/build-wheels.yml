@@ -1,6 +1,8 @@
 name: Build Wheels
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
 
@@ -28,54 +30,17 @@ jobs:
       with:
         platforms: arm64
     
-    - name: Build wheels
-      uses: pypa/cibuildwheel@v2.16.5
-      env:
-        # Build for CPython 3.8-3.12
-        CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
-        
-        # Skip PyPy and musllinux for now (C extension complexity)
-        CIBW_SKIP: "pp* *-musllinux*"
-        
-        # Configure architectures
-        CIBW_ARCHS_LINUX: x86_64 aarch64
-        CIBW_ARCHS_MACOS: x86_64 arm64
-        CIBW_ARCHS_WINDOWS: AMD64
-        
-        # Test command to verify wheels work
-        CIBW_TEST_COMMAND: "python -c \"import bplustree; tree = bplustree.BPlusTreeMap(); tree[1] = 'test'; assert tree[1] == 'test'; print('Wheel test passed!')\""
-        
-        # Install test dependencies
-        CIBW_TEST_REQUIRES: pytest
-        
-        # Skip testing ARM64 wheels on x86_64 machines
-        CIBW_TEST_SKIP: "*-macosx_arm64"
-        
-        # Build settings
-        CIBW_BUILD_VERBOSITY: 1
-        
-        # Environment variables for compilation
-        CIBW_ENVIRONMENT: >
-          BPLUSTREE_C_FAST_MATH=1
-        
-        # Linux-specific settings - manylinux containers have build tools pre-installed
-        
-        # macOS-specific settings  
-        CIBW_ENVIRONMENT_MACOS: >
-          MACOSX_DEPLOYMENT_TARGET=10.14
-          BPLUSTREE_C_FAST_MATH=1
-        
-        # Windows-specific settings
-        CIBW_BEFORE_BUILD_WINDOWS: >
-          pip install --upgrade setuptools wheel
-      with:
-        package-dir: python
+    - name: Build pure Python wheel
+      run: |
+        cd python
+        python -m pip install --upgrade pip build
+        python -m build --wheel
     
     - name: Upload wheels
       uses: actions/upload-artifact@v4
       with:
         name: wheels-${{ matrix.os }}-${{ strategy.job-index }}
-        path: ./wheelhouse/*.whl
+        path: python/dist/*.whl
         retention-days: 30
 
   build_sdist:
@@ -147,7 +112,7 @@ jobs:
     
     - name: Install wheel
       run: |
-        pip install --find-links wheelhouse bplustree
+        pip install --find-links python/dist bplustree
     
     - name: Test installation
       run: |
