@@ -3,7 +3,7 @@ Tests for B+ Tree implementation
 """
 
 import pytest
-from bplustree.bplustree import BPlusTreeMap, LeafNode, BranchNode
+from bplustree.bplus_tree import BPlusTreeMap, LeafNode, BranchNode
 from ._invariant_checker import BPlusTreeInvariantChecker
 
 

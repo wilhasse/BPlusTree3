@@ -4,7 +4,7 @@ Simple test for the single-child parent edge case
 """
 
 import pytest
-from ..bplustree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 
 
 def test_single_child_parent_handled():

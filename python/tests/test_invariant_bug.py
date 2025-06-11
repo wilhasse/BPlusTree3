@@ -3,7 +3,7 @@
 Test to expose the missing invariant check for minimum children
 """
 
-from bplustree.bplustree import BPlusTreeMap
+from bplustree.bplus_tree import BPlusTreeMap
 from ._invariant_checker import BPlusTreeInvariantChecker
 
 

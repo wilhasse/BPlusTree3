@@ -6,7 +6,7 @@ These tests target specific scenarios that could expose bugs.
 
 import pytest
 import random
-from ..bplustree import BPlusTreeMap
+from bplustree import BPlusTreeMap
 from ._invariant_checker import BPlusTreeInvariantChecker
 
 

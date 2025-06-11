@@ -1,0 +1,295 @@
+2025-05-20 Initial commit
+2025-05-20 test: verify new tree reports empty
+2025-05-21 Merge pull request #1 from KentBeck/codex/implement-stub-apis-for-bplustree
+2025-05-21 Add CLAUDE.md with TDD and Tidy First development guidelines
+2025-05-21 Add branching factor and basic insert functionality
+2025-05-21 Implement get method for BPlusTree
+2025-05-21 Split get method tests for better isolation
+2025-05-21 Refactor tree operations to delegate to LeafNode
+2025-05-21 Add array storage for LeafNode entries
+2025-05-21 Maintain sorted order in LeafNode items array
+2025-05-21 Add range and slice operations to retrieve sorted entries
+2025-05-21 Remove BTreeMap dependency in LeafNode implementation
+2025-05-21 Refactor insert with helper function and add comprehensive tests
+2025-05-21 Implement node splitting with linked list of leaves
+2025-05-21 Add test for multiple inserts with non-sequential keys
+2025-05-21 Add LeafFinder utility to optimize tree traversal
+2025-05-21 Simplify LeafFinder with safe, recursive implementation
+2025-05-21 Implement LeafFinder for arbitrary-length chains
+2025-05-21 Make find_leaf_mut iterative to match find_leaf
+2025-05-21 Simplify find_leaf_mut with elegant recursion
+2025-05-21 Add explanatory comment for recursive find_leaf_mut
+2025-05-21 Implement node splitting at any position in leaf chain
+2025-05-21 Simplify insertion logic by checking fullness before inserting
+2025-05-21 Inline insert method for simplicity
+2025-05-21 Add is_full method to LeafNode
+2025-05-21 Remove redundant root splitting code from insert
+2025-05-21 Invert insertion logic for clarity
+2025-05-22 Simplify splitting logic to only split the one full leaf
+2025-05-22 Inline splitting logic directly into insert method
+2025-05-22 Move node linking logic into split method
+2025-05-22 Fix insertion bug after splitting
+2025-05-22 comment
+2025-05-22 Add comprehensive fuzz tests for B+ tree
+2025-05-22 Add timed fuzz test with configurable duration
+2025-05-22 Refactor LeafNode insertion logic for better code organization
+2025-05-22 Don't re-search the whole list
+2025-05-22 Cleanup
+2025-05-22 Comment
+2025-05-23 Useless comments
+2025-05-23 comment
+2025-05-23 Structural: Move fuzz tests to dedicated file
+2025-05-23 Structural: Exclude fuzz tests from ordinary test runs
+2025-05-23 Add comprehensive README with API documentation and fuzz test instructions
+2025-05-23 Structural: Add prev field to LeafNode for future remove operations
+2025-05-23 Add remove infrastructure for LeafNode operations
+2025-05-23 Add rebalancing operations for LeafNode
+2025-05-23 Refactor: Split remove infrastructure test into focused unit tests
+2025-05-23 Implement basic BPlusTree::remove method
+2025-05-23 Implement underflow handling for remove operations
+2025-05-23 Remove unused methods to clean up warnings
+2025-05-23 Add comprehensive tree validation function and integrate into tests
+2025-05-26 Complete Step 6: Add comprehensive edge case tests for remove operations
+2025-05-26 Remove unused prev field from LeafNode
+2025-05-26 Move integration tests to tests/ directory following Rust conventions
+2025-05-26 Improve Reading Order: Move BPlusTree public API to top of lib.rs
+2025-05-26 docs: improve documentation for leaf_count and leaf_sizes methods
+2025-05-26 refactor: rename 'root' field to 'leaves' for clarity
+2025-05-26 docs: update plan for BranchNode implementation focusing on get & insert
+2025-05-26 docs: add comprehensive test case lists for insertion & removal
+2025-05-26 docs: update TDD approach to emphasize generalization after tests pass
+2025-05-26 feat: implement Node trait and BranchNode structure (Step 1)
+2025-05-26 ignore
+2025-05-26 feat: implement LeafFinder with BranchNode support
+2025-05-26 feat: implement BranchNode key navigation (Step 4)
+2025-05-26 Dead code dead
+2025-05-27 cleanup
+2025-05-27 feat: add Python B+ tree implementation with dict-like API
+2025-05-27 Leaves & root
+2025-05-27 feat: implement LeafFinder path tracking and fix insertion bug (Step 2)
+2025-05-27 feat: add ABC imports to Python BPlusTree implementation
+2025-05-27 refactor: simplify __contains__ method in BPlusTreeMap
+2025-05-27 feat: implement leaf node splitting in Python B+ tree
+2025-05-27 feat: implement root promotion from LeafNode to BranchNode
+2025-05-27 fix: correct key_count method to handle None next pointer
+2025-05-27 feat: generalize __setitem__ to handle both leaf and branch root cases
+2025-05-27 refactor: simplify code and add invariants checking for correctness
+2025-05-27 test: add invariant checks to all tree-level tests
+2025-05-27 refactor: swap if/else branches for better readability
+2025-05-27 refactor: remove unused _size field and simplify insertion logic
+2025-05-27 feat: implement parent node splitting for B+ tree
+2025-05-28 refactor: convert __setitem__ to recursive implementation
+2025-05-28 refactor: remove redundant insert_pos variable
+2025-05-28 refactor: rename result to split_result for clarity
+2025-05-28 refactor: remove unnecessary else after return
+2025-05-28 feat: implement basic deletion from leaf root
+2025-05-28 test: add test for removing multiple items from leaf root
+2025-05-28 test: add test for removing non-existent key
+2025-05-28 feat: implement recursive deletion for branch nodes
+2025-05-28 test: add test for multiple removals from tree with branches
+2025-05-28 feat: implement root collapse when branch has single child
+2025-05-28 feat: implement Phase 1 - Node Underflow Detection
+2025-05-28 feat: implement Phase 2 - Sibling Key Redistribution
+2025-05-28 feat: implement Phase 3 - Node Merging
+2025-05-28 feat: implement Phase 6 - Performance Optimizations
+2025-05-28 Optimize deletion to reduce nodes
+2025-05-28 feat: add comprehensive fuzz tester with operation tracking
+2025-05-28 fix: resolve tree structure corruption bugs found by fuzz testing
+2025-05-28 feat: add prepopulation option to fuzz tester for complex tree structures
+2025-05-28 fix: resolve critical deletion bugs causing key loss during tree restructuring
+2025-05-28 refactor: extract invariant checking logic to separate private module
+2025-05-28 feat: implement efficient iterators for B+ tree traversal
+2025-05-28 fix: improve consolidation logic and skip failing optimization tests
+2025-05-28 fix: prevent maximum occupancy violations during node merging
+2025-05-28 docs: add comprehensive performance analysis and competitive benchmarks
+2025-05-28 perf: implement binary search optimization using bisect module
+2025-05-28 feat: implement bulk loading optimization with 3x construction speedup
+2025-05-28 refactor: add node helper methods to simplify calling code
+2025-05-28 fix: update Python tests for minimum capacity of 4
+2025-05-28 Remove unused functions and fix B+ tree implementation
+2025-05-28 Completely remove optimization functions and their calls
+2025-05-28 Refactor invariant checking: remove _invariant_checker field from BPlusTreeMap
+2025-05-28 Performance analysis: B+ tree now competitive in range operations
+2025-05-28 performance tuning evaluation
+2025-05-28 comment
+2025-05-28 fix: update minimum B+ tree capacity from 4 to 16 to avoid recursion depth issues
+2025-05-28 refactor: add invariant checker support and clean up test files
+2025-05-28 chore: clean up temporary analysis scripts and improve .gitignore
+2025-05-28 Unused
+2025-05-28 refactor: reorganize Python package structure for better maintainability
+2025-05-28 refactor: improve Python code quality and documentation
+2025-05-28 refactor: move invariant checker to tests directory
+2025-05-28 style: apply consistent formatting to class definitions
+2025-05-28 docs: add fuzz testing documentation to README
+2025-05-29 Fix fuzz tests
+2025-05-29 feat: implement switchable node architecture for performance optimization
+2025-05-29 fix: resolve C extension memory corruption during node splits
+2025-05-29 better claude instructions
+2025-05-29 perf: optimize branching factor from 128 to 16 for 60% lookup improvement
+2025-05-29 docs: add comprehensive performance history with commit references
+2025-05-29 refactor: replace SIMD optimization with optimized comparison functions
+2025-05-29 perf: optimize default capacity from 16 to 8 for 24% performance improvement
+2025-05-29 Fix Rust tests: Update for Result-based constructor
+2025-05-30 chore: regenerate Cargo.lock with clean dependency tree
+2025-05-30 ancillary files
+2025-05-30 cleanup: remove unused Python B+ tree variants and experimental code
+2025-05-30 feat: expose C extension through package API with compatibility wrapper
+2025-05-30 Behavioral: add gprof profiling section to lookup performance analysis doc
+2025-05-31 docs: add C extension improvement plan
+2025-05-31 Fix B+ tree Python implementation issues
+2025-05-31 refactor: centralize tree traversal algorithm in BPlusTreeMap
+2025-05-31 Revert "refactor: centralize tree traversal algorithm in BPlusTreeMap"
+2025-05-31 Fix Rust function name and lifetime specifier
+2025-05-31 Refactor: extract get_child method on BranchNode
+2025-05-31 Fix: remove duplicate generic parameter in new_root function
+2025-05-31 Refactor: extract removal methods for LeafNode and BranchNode
+2025-05-31 Add get_child_mut method and refactor child access patterns
+2025-05-31 Fix syntax error in get_recursive function
+2025-05-31 C extension: remove memory pool stubs, update improvement plan, adjust performance_vs_sorteddict test
+2025-05-31 Add pytest hook to build C extension in-place and clean up build ignores
+2025-05-31 Phase 1: extract node_clear_slot helper, update improvement plan, ignore .o files
+2025-05-31 Refactor: introduce InsertResult enum and new_insert method
+2025-05-31 Phase 2.1.2 (Green): align node data to cache-line & use cache_aligned_alloc/free
+2025-05-31 Phase 2.1.2: update improvement plan to mark green step complete
+2025-05-31 C extension Phase 2.1.3: Remove dead allocator code paths and unify free logic
+2025-05-31 Refactor LeafNode::new_insert to eliminate redundant binary searches
+2025-05-31 docs: record Phase 2.1.3 dead allocator removal performance in history
+2025-06-01 Mark test-only functions with feature flag to exclude from production builds
+2025-06-01 Complete feature flag implementation for test-only functions
+2025-06-01 Reorganize BPlusTreeMap functions in logical order
+2025-06-01 Document conditional compilation and IDE behavior for test functions
+2025-06-01 Reorganize LeafNode and BranchNode functions in logical order
+2025-06-01 tests: add prefetch microbenchmark harness and mark Phase 3.2.1 complete in improvement plan
+2025-06-01 c extension: inject PREFETCH hints in tree_find_leaf (Phase 3.2.2)
+2025-06-01 c extension Phase 3.2.3: encapsulate prefetch calls behind node_prefetch_child helper and update improvement plan
+2025-06-01 c extension: opt-in for -ffast-math and -march=native, default -O3 baseline in setup.py (Phase 4.1.1)
+2025-06-01 tests: add compile-flag safety test and mark Phase 4.1.2 complete in improvement plan
+2025-06-01 c extension: clean up extra_compile_args formatting (Phase 4.1.3)
+2025-06-01 Enable strict invariant checking for all B+ tree operations
+2025-06-01 Implement basic borrowing and merging for leaf nodes
+2025-06-01 tests: add GC-support regression test (Phase 5.1.1 behavioral)
+2025-06-01 Fix splitting logic and min_keys calculation
+2025-06-01 Fix critical bug in branch rebalancing logic
+2025-06-01 Fix root branch node invariant checking
+2025-06-01 All tests now passing after fixing root branch invariant
+2025-06-01 C extension: Extract common GC traversal helper for node_traverse and node_clear_gc (5.1.3)
+2025-06-01 Add comprehensive performance optimization documentation
+2025-06-01 C extension: Add multithreaded lookup microbenchmark harness (5.2.1)
+2025-06-01 C extension: Enable GIL release for lookup loops (5.2.2)
+2025-06-01 C extension: Factor GIL-release blocks into ENTER_TREE_LOOP/EXIT_TREE_LOOP macros (5.2.3)
+2025-06-01 C extension: Clean up import-fallback logic and update module docstring (5.3.3)
+2025-06-01 Clean up arena code and get all Rust tests passing
+2025-06-01 docs: complete Phase 5.4 – enable docstyle checks and add C-extension docstrings
+2025-06-01 Disable doctests in Cargo.toml
+2025-06-01 Unused
+2025-06-01 Fix Python C extension segfault by removing unsafe GIL release, restoring leaf/branch split hygiene, and cleaning debug instrumentation
+2025-06-01 Add arena infrastructure for B+ tree memory management
+2025-06-02 Add arena-based allocation infrastructure for leaf nodes
+2025-06-02 feat: add ArenaLeaf variant to NodeRef (Stage 1)
+2025-06-02 feat: implement ArenaLeaf traversal operations (Stage 2)
+2025-06-02 feat: make root use ArenaLeaf (Stage 3)
+2025-06-02 feat: implement SplitWithArena mechanism (Stage 4 partial)
+2025-06-02 feat: implement arena-based branch nodes (BranchNode arena support)
+2025-06-02 fix: improve arena-based operations and reduce failing tests
+2025-06-02 cleanup: simplify deep tree handling to avoid invariant violations
+2025-06-02 fix: eliminate Box node creation in arena-based implementation
+2025-06-02 refactor: consolidate node allocation to arena-based methods
+2025-06-02 fix: eliminate Box allocations from insertion path
+2025-06-03 fix: implement proper branch node borrowing during deletion
+2025-06-03 refactor: migrate to arena-only NodeRef implementation
+2025-06-03 refactor: rename ArenaLeaf to Leaf and ArenaBranch to Branch
+2025-06-03 refactor: simplify InsertResult enum to remove redundant Split variants
+2025-06-03 refactor: simplify arena allocation to start from ID 0
+2025-06-03 refactor: eliminate next_id fields with helper methods
+2025-06-03 docs: add comprehensive performance analysis and benchmarking tools
+2025-06-03 refactor: eliminate NodeId wrapper in favor of direct usize
+2025-06-03 refactor: remove non-functional get/get_mut/remove methods from BranchNode
+2025-06-03 refactor: remove unused and broken methods from node types
+2025-06-03 fix: implement proper split-before-insert for leaf nodes
+2025-06-03 fix: maintain leaf linked list during split operations
+2025-06-03 style: clean up whitespace and formatting
+2025-06-03 fix: maintain leaf linked list during merge operations
+2025-06-03 refactor: remove unused LeafNode methods from pre-arena implementation
+2025-06-03 feat: implement efficient linked-list-based iterator
+2025-06-03 docs: add comprehensive capacity analysis and performance results
+2025-06-03 style: apply code formatting
+2025-06-03 fix: update fuzz tests to use minimum capacity of 4
+2025-06-03 docs: add comprehensive code coverage analysis report
+2025-06-04 refactoring plans
+2025-06-04 Phase 1: Add with_branch/with_branch_mut/with_leaf/with_leaf_mut helpers and tests
+2025-06-04 Phase 2: Add find_child/find_child_mut helpers and tests
+2025-06-04 Phase 3: Add NodeRef id() and is_leaf() helpers with tests
+2025-06-05 refactor: eliminate nested if-let patterns with Option combinators
+2025-06-05 Refactor merge_with_left_branch and merge_with_right_branch to use Option + match for cleaner early returns
+2025-06-05 Refactor merge_with_right_branch to use Option combinators
+2025-06-05 refactor: formatting improvements from linter and documentation updates
+2025-06-05 refactor: replace nested if let patterns with Option combinators for cleaner code
+2025-06-05 refactor: improve leaf insertion logic with early return pattern
+2025-06-05 refactor: simplify Option combinator patterns with cleaner match expressions
+2025-06-05 refactor: simplify leaf borrowing and branch merge patterns with cleaner match expressions
+2025-06-05 refactor: move NodeRef tests from src/lib.rs to tests/bplus_tree.rs
+2025-06-05 refactor: unify get_mut with recursive pattern and add value overwrite test
+2025-06-05 refactor: simplify branch sibling lookup with match patterns
+2025-06-05 refactor: replace remove with recursive pattern following insert design
+2025-06-05 docs: remove outdated Phase 4 section and delete plan.md
+2025-06-05 refactor: improve code organization and formatting in remove operations
+2025-06-05 refactor: add polymorphic helpers for borrowing and merging operations
+2025-06-05 refactor: use Option combinator for linked list pointer update
+2025-06-05 refactor: simplify nested if-let with Option combinator chain
+2025-06-05 refactor: replace multiple if-let patterns with Option combinators
+2025-06-05 docs: add design analysis of parallel vectors vs entry vector
+2025-06-05 docs: add concurrency control analysis for B+ trees
+2025-06-06 feat: Add comprehensive fuzz testing, benchmarks, and range query optimization plan
+2025-06-06 cleanup
+2025-06-06 Merge pull request #5 from KentBeck/feature/fuzz-testing-and-benchmarks
+2025-06-06 feat: implement optimized range query iterator
+2025-06-06 docs: add comprehensive performance benchmark results and analysis
+2025-06-07 test: add comprehensive adversarial tests based on coverage analysis
+2025-06-07 feat: implement Rust range syntax support for range queries
+2025-06-07 fix: resolve compiler warnings
+2025-06-08 optimize: eliminate duplicate arena node lookups in rebalancing operations
+2025-06-08 feat: implement comprehensive code duplication elimination
+2025-06-08 Merge pull request #6 from KentBeck/feature/fuzz-testing-and-benchmarks
+2025-06-08 docs: add performance benchmark charts demonstrating optimization impact
+2025-06-08 refactor: reorganize project structure for dual-language implementation
+2025-06-08 docs: add comprehensive GA readiness plan for Python implementation
+2025-06-08 style: apply code formatting to Rust implementation
+2025-06-08 fix: resolve critical segfaults in C extension
+2025-06-08 feat: implement complete dictionary API for Python B+ Tree
+2025-06-08 docs: add comprehensive documentation and examples for Python implementation
+2025-06-08 feat: add comprehensive programming time analysis tools
+2025-06-09 feat: implement modern Python packaging infrastructure
+2025-06-09 feat: implement comprehensive testing suite for Phase 3 QA
+2025-06-09 fix: correct Python wheels workflow paths and configuration
+2025-06-09 docs: create comprehensive documentation suite for Phase 3.2
+2025-06-09 docs: complete comprehensive documentation suite for Phase 3.2
+2025-06-09 fix: update GitHub Actions to use latest non-deprecated versions
+2025-06-10 style: apply Black formatting to resolve CI lint failures
+2025-06-10 fix: eliminate all Rust compiler warnings
+2025-06-10 feat: implement comprehensive performance benchmarking and optimization suite
+2025-06-10 refactor: use test utility functions in adversarial_edge_cases.rs
+2025-06-10 refactor: use test utility functions in remove_operations.rs
+2025-06-10 feat: add populate_sequential_int_x10 utility and refactor tests
+2025-06-10 feat: implement comprehensive release engineering and GA automation
+2025-06-10 fix: correct shell syntax in cibuildwheel Linux build command
+2025-06-10 fix: use absolute path for yum and skip ARM64 macOS tests
+2025-06-10 fix: simplify Linux build setup for manylinux containers
+2025-06-10 fix: remove CIBW_BEFORE_BUILD_LINUX entirely
+2025-06-10 fix: import BPlusTreeMap from package in dictionary API tests
+2025-06-10 feat: add missing dictionary methods to pure Python BPlusTreeMap
+2025-06-10 fix: add missing dictionary methods to C extension wrapper
+2025-06-10 refactor: eliminate duplicate __init__.py and fix package structure
+2025-06-10 refactor: hide internal Node classes from public API
+2025-06-11 refactor: remove get_implementation from public API
+2025-06-11 fix: resolve GitHub Actions build failures by correcting Python package structure
+2025-06-11 refactor: rename bplustree3 back to bplustree and clean up duplicate code
+2025-06-11 fix: temporarily disable C extension to stabilize CI builds
+2025-06-11 docs: fix package name references from bplustree3 to bplustree
+2025-06-11 fix: correct remaining bplustree3 references and simplify wheel tests
+2025-06-11 Replace BPlusTree3 with BPlusTree
+2025-06-11 fix: correct import statements in test files after package restructuring
+2025-06-11 More package naming
+2025-06-11 ci: simplify workflows to achieve stable green builds
+2025-06-11 ci: add debug workflow to isolate build failure
+2025-06-11 fix: replace cibuildwheel with standard build for pure Python package
+2025-06-11 Phase 1: Clean slate CI rebuild - Replace all workflows with simple Rust CI

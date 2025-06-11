@@ -3,7 +3,7 @@ import gc
 
 import pytest
 
-from ..bplustree import BPlusTreeMap as BPlusTree
+from bplustree import BPlusTreeMap as BPlusTree
 
 
 def test_no_memory_leak_on_insert_delete():
