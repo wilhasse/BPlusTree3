@@ -6,7 +6,7 @@ optional C extension for improved performance.
 """
 
 # Re-export from the subpackage
-from bplustree import BPlusTreeMap, get_implementation
+from bplustree import BPlusTreeMap
 
 __version__ = "0.1.0"
-__all__ = ["BPlusTreeMap", "get_implementation"]
+__all__ = ["BPlusTreeMap"]
