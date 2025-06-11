@@ -40,9 +40,12 @@ else:
         def clear(self):
             """Remove all items from the tree."""
             # C extension doesn't have clear method, so remove keys one by one
-            keys_to_remove = list(self.keys())
-            for key in keys_to_remove:
-                del self[key]
+            # Use while loop to avoid issues with iterator invalidation
+            while len(self) > 0:
+                # Get first key and delete it
+                for key in self.keys():
+                    del self[key]
+                    break
 
         def pop(self, key, *args):
             """Remove and return value for key with optional default."""

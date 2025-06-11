@@ -116,7 +116,11 @@
       "Bash(./test_optimized_range)",
       "Bash(rm:*)",
       "Bash(cp:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(coverage run -m pytest:*)",
+      "Bash(coverage report:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(diff:*)"
     ],
     "deny": []
   },
