@@ -88,12 +88,12 @@ Issues = "https://github.com/KentBeck/BPlusTree3/issues"
 Changelog = "https://github.com/KentBeck/BPlusTree3/blob/main/python/CHANGELOG.md"
 
 [tool.setuptools]
-py-modules = ["bplus_tree"]
+packages = ["bplustree3"]
 include-package-data = true
 zip-safe = false
 
 [tool.setuptools.dynamic]
-version = {attr = "__init__.__version__"}
+version = {attr = "bplustree3.__version__"}
 
 [tool.setuptools.package-data]
 "*" = ["*.h", "*.c", "py.typed"]
@@ -166,11 +166,11 @@ ignore = [
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["bplustree"]
+known_first_party = ["bplustree3"]
 
 [tool.coverage.run]
 branch = true
-source = ["bplustree", "."]
+source = ["bplustree3", "."]
 omit = [
     "*/tests/*",
     "*/benchmarks/*",

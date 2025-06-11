@@ -115,8 +115,8 @@ jobs:
     - name: Test installed package
       run: |
         cd /  # Change to root to ensure we're not importing from source
-        python -c "from bplus_tree import BPlusTreeMap; tree = BPlusTreeMap(); tree[1] = 'test'; print(f'Success: {tree[1]}')"
-        python -c "from bplus_tree import get_implementation; print(f'Implementation: {get_implementation()}')"
+        python -c "import bplustree3; tree = bplustree3.BPlusTreeMap(); tree[1] = 'test'; print(f'Success: {tree[1]}')"
+        python -c "import bplustree3; print(f'Implementation: {bplustree3.get_implementation()}')"
 
   publish:
     needs: [test_wheels, build_sdist]
