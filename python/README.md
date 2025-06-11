@@ -15,7 +15,7 @@ pip install -e .
 
 **Option 2: Install from PyPI (coming soon)**
 ```bash
-pip install bplustree3
+pip install bplustree
 ```
 
 ### Requirements

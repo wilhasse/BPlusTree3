@@ -77,7 +77,7 @@ docs = [
     "myst-parser>=0.18"
 ]
 all = [
-    "bplustree3[dev,test,benchmark,docs]"
+    "bplustree[dev,test,benchmark,docs]"
 ]
 
 [project.urls]
