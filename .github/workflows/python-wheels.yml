@@ -46,7 +46,7 @@ jobs:
         CIBW_ARCHS_MACOS: "x86_64 arm64 universal2"
         CIBW_ARCHS_WINDOWS: "auto"
         CIBW_TEST_REQUIRES: pytest
-        CIBW_TEST_COMMAND: "pytest {project}/tests/test_dictionary_api.py::TestDictionaryAPI::test_clear"
+        CIBW_TEST_COMMAND: "python -c \"import bplustree; tree = bplustree.BPlusTreeMap(); tree[1] = 'test'; tree.clear(); assert len(tree) == 0; print('Test passed!')\""
         CIBW_BEFORE_BUILD_LINUX: "pip install cython"
         CIBW_BEFORE_BUILD_MACOS: "pip install cython"
         CIBW_BEFORE_BUILD_WINDOWS: "pip install cython"
