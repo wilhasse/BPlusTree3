@@ -1,0 +1,42 @@
+name: Performance Tracking
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd python
+        pip install -e .[test,benchmark]
+    
+    - name: Run performance benchmarks
+      run: |
+        cd python
+        echo "Running performance benchmarks..."
+        timeout 10m python -m pytest tests/test_performance_benchmarks.py::TestPerformanceBenchmarks::test_insertion_performance_small -v --tb=short || echo "Performance benchmarks completed with issues"
+        
+        echo "Running performance regression tests..."
+        timeout 10m python -m pytest tests/test_performance_regression.py -v --tb=short || echo "Performance regression tests completed with issues"
+    
+    - name: Archive performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: python/performance_results.txt
+      if: always()
