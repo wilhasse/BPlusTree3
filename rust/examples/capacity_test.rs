@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 use std::collections::BTreeMap;
 use std::time::Instant;
 

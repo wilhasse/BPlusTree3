@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 fn main() {
     println!("Running README examples...");

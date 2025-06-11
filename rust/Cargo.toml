@@ -1,5 +1,5 @@
 [package]
-name = "bplustree3"
+name = "bplustree"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

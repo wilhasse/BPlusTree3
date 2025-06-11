@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 use std::collections::HashSet;
 
 /// These tests target the linked list maintenance across complex operations,

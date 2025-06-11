@@ -2,7 +2,7 @@
 
 /// Comprehensive test utilities to eliminate massive test duplication
 /// This module provides reusable patterns for adversarial testing and common operations
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 /// Create a tree for adversarial testing with common setup
 pub fn create_attack_tree(capacity: usize) -> BPlusTreeMap<i32, String> {

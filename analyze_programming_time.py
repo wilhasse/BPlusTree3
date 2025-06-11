@@ -113,7 +113,7 @@ def create_visualizations(sessions, daily_data):
     # Create figure with subplots
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle(
-        "Programming Time Analysis for BPlusTree3 Repository",
+        "Programming Time Analysis for BPlusTree Repository",
         fontsize=16,
         fontweight="bold",
     )

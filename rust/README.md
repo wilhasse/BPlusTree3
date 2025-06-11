@@ -1,4 +1,4 @@
-# BPlusTree3 - Rust Implementation
+# BPlusTree - Rust Implementation
 
 A high-performance B+ tree implementation in Rust with a dictionary-like API, optimized for range queries and sequential access patterns.
 
@@ -8,30 +8,30 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bplustree3 = "0.1.0"
+bplustree = "0.1.0"
 ```
 
 ## 📖 Basic Usage
 
 ```rust
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 fn main() {
     let mut tree = BPlusTreeMap::new(16).unwrap();
-    
+
     // Insert data
     tree.insert(1, "one");
     tree.insert(3, "three");
     tree.insert(2, "two");
-    
+
     // Lookups
     assert_eq!(tree.get(&2), Some(&"two"));
     assert_eq!(tree.len(), 3);
-    
+
     // Range queries with Rust's range syntax!
     let range: Vec<_> = tree.range(1..=2).collect();
     println!("{:?}", range); // [(&1, &"one"), (&2, &"two")]
-    
+
     // Sequential iteration
     for (key, value) in tree.items() {
         println!("{}: {}", key, value);
@@ -49,7 +49,7 @@ let tree = BPlusTreeMap::new(16).unwrap();
 
 // Different range types
 let a: Vec<_> = tree.range(3..7).collect();        // Exclusive end
-let b: Vec<_> = tree.range(3..=7).collect();       // Inclusive end  
+let b: Vec<_> = tree.range(3..=7).collect();       // Inclusive end
 let c: Vec<_> = tree.range(5..).collect();         // Open end
 let d: Vec<_> = tree.range(..5).collect();         // From start
 let e: Vec<_> = tree.range(..).collect();          // Full range
@@ -99,7 +99,7 @@ cargo bench -- deletion
 ## 📊 Features
 
 - ✅ Full CRUD operations (insert, get, remove)
-- ✅ Arena-based memory management 
+- ✅ Arena-based memory management
 - ✅ Automatic tree balancing with node splitting/merging
 - ✅ Rust range syntax support (`3..7`, `3..=7`, `5..`, etc.)
 - ✅ Optimized range queries with hybrid navigation
@@ -110,6 +110,7 @@ cargo bench -- deletion
 ## 🏗️ Architecture
 
 This implementation uses:
+
 - **Arena-based allocation** for efficient memory management
 - **Optimized rebalancing** with reduced arena lookups
 - **Linked leaf nodes** for efficient range queries

@@ -7,7 +7,7 @@
 //! - Specific test: `cargo test fuzz_test_bplus_tree -- --ignored --nocapture`
 //! - With custom timing: `FUZZ_TIME=30s cargo test fuzz_test_timed -- --ignored --nocapture`
 
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::time::{Duration, Instant};

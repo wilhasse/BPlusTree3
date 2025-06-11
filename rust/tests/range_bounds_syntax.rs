@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 #[test]
 fn test_range_syntax_inclusive() {

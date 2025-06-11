@@ -1,4 +1,4 @@
-use bplustree3::{BPlusTreeMap, verify_attack_result, assert_tree_valid};
+use bplustree::{BPlusTreeMap, verify_attack_result, assert_tree_valid};
 
 mod test_utils;
 

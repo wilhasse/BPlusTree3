@@ -13,7 +13,7 @@
 Once released, you'll be able to install directly from PyPI:
 
 ```bash
-pip install bplustree3
+pip install bplustree
 ```
 
 ### From Source
@@ -21,8 +21,8 @@ pip install bplustree3
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/KentBeck/BPlusTree3.git
-cd BPlusTree3/python
+git clone https://github.com/KentBeck/BPlusTree.git
+cd BPlusTree/python
 ```
 
 #### 2. Install in Development Mode
@@ -36,16 +36,19 @@ This installs the package in editable mode, allowing you to modify the source co
 #### 3. Install with Optional Dependencies
 
 For development and testing:
+
 ```bash
 pip install -e ".[dev]"
 ```
 
 For benchmarking:
+
 ```bash
 pip install -e ".[benchmark]"
 ```
 
 For all extras:
+
 ```bash
 pip install -e ".[dev,benchmark]"
 ```
@@ -63,11 +66,13 @@ To build the C extension, you'll need:
 ### Build Steps
 
 1. **Install build dependencies:**
+
    ```bash
    pip install setuptools wheel cython
    ```
 
 2. **Build the package:**
+
    ```bash
    python -m build
    ```
@@ -114,6 +119,7 @@ No special requirements. The C extension builds automatically if a compiler is a
 ### macOS
 
 1. Install Xcode Command Line Tools if not already installed:
+
    ```bash
    xcode-select --install
    ```
@@ -123,6 +129,7 @@ No special requirements. The C extension builds automatically if a compiler is a
 ### Windows
 
 1. Install Microsoft C++ Build Tools:
+
    - Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/
    - Install "Desktop development with C++"
 
@@ -135,17 +142,19 @@ No special requirements. The C extension builds automatically if a compiler is a
 If the C extension fails to build, the package automatically falls back to the pure Python implementation. Common issues:
 
 1. **Missing compiler:**
+
    - Solution: Install a C compiler for your platform
    - Alternative: Use pure Python implementation
 
 2. **Cython not installed:**
+
    ```bash
    pip install cython>=0.29.30
    ```
 
 3. **Permission errors:**
    ```bash
-   pip install --user bplustree3
+   pip install --user bplustree
    ```
 
 ### Import Errors
@@ -153,13 +162,15 @@ If the C extension fails to build, the package automatically falls back to the p
 If you get import errors:
 
 1. **Check Python version:**
+
    ```bash
    python --version  # Should be 3.8+
    ```
 
 2. **Verify installation:**
+
    ```bash
-   pip show bplustree3
+   pip show bplustree
    ```
 
 3. **Check for conflicts:**
@@ -172,6 +183,7 @@ If you get import errors:
 If performance is slower than expected:
 
 1. **Verify C extension is loaded:**
+
    ```python
    from bplus_tree import get_implementation
    assert get_implementation() == "C extension"

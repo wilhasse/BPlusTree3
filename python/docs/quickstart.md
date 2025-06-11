@@ -1,6 +1,6 @@
 # Quickstart Guide
 
-Get up and running with BPlusTree3 in 5 minutes!
+Get up and running with BPlusTree in 5 minutes!
 
 ## Basic Usage
 
@@ -118,16 +118,16 @@ class OrderedCache:
     def __init__(self, max_size=1000):
         self.cache = BPlusTreeMap()
         self.max_size = max_size
-    
+
     def put(self, key, value):
         self.cache[key] = value
         # Remove oldest entries if over limit
         while len(self.cache) > self.max_size:
             self.cache.popitem()  # Removes smallest key
-    
+
     def get(self, key, default=None):
         return self.cache.get(key, default)
-    
+
     def get_range(self, start, end):
         return list(self.cache.items(start, end))
 ```
@@ -206,22 +206,24 @@ result = list(tree.items(100, 201))
 
 ## Comparison with dict
 
-| Operation | dict | BPlusTreeMap |
-|-----------|------|--------------|
-| Insert | O(1) average | O(log n) |
-| Lookup | O(1) average | O(log n) |
-| Delete | O(1) average | O(log n) |
-| Ordered iteration | O(n log n) | O(n) |
-| Range query | O(n) | O(log n + k) |
-| Memory | Lower | Higher |
+| Operation         | dict         | BPlusTreeMap |
+| ----------------- | ------------ | ------------ |
+| Insert            | O(1) average | O(log n)     |
+| Lookup            | O(1) average | O(log n)     |
+| Delete            | O(1) average | O(log n)     |
+| Ordered iteration | O(n log n)   | O(n)         |
+| Range query       | O(n)         | O(log n + k) |
+| Memory            | Lower        | Higher       |
 
 Use BPlusTreeMap when you need:
+
 - Ordered iteration
 - Range queries
 - Sorted keys
 - Predictable performance
 
 Use dict when you need:
+
 - Fastest possible random access
 - Minimal memory usage
 - No ordering requirements

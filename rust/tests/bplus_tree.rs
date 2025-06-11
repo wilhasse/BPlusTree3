@@ -1,4 +1,4 @@
-use bplustree3::{BPlusTreeError, BPlusTreeMap, NodeRef};
+use bplustree::{BPlusTreeError, BPlusTreeMap, NodeRef};
 use std::marker::PhantomData;
 
 // ============================================================================
@@ -854,9 +854,9 @@ fn test_leaf_allocation() {
     let mut tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
 
     // Create some leaf nodes to allocate
-    let leaf1 = bplustree3::LeafNode::new(4);
-    let leaf2 = bplustree3::LeafNode::new(4);
-    let leaf3 = bplustree3::LeafNode::new(4);
+    let leaf1 = bplustree::LeafNode::new(4);
+    let leaf2 = bplustree::LeafNode::new(4);
+    let leaf3 = bplustree::LeafNode::new(4);
 
     // Test allocation
     let id1 = tree.allocate_leaf(leaf1);
@@ -913,7 +913,7 @@ fn test_leaf_allocation() {
     );
 
     // Test reuse of deallocated ID
-    let leaf4 = bplustree3::LeafNode::new(4);
+    let leaf4 = bplustree::LeafNode::new(4);
     let id4 = tree.allocate_leaf(leaf4);
     assert_eq!(id4, id2, "Should reuse the deallocated ID");
     assert!(
@@ -941,9 +941,9 @@ fn test_leaf_linked_list() {
     let mut tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
 
     // Create three leaf nodes
-    let leaf1 = bplustree3::LeafNode::new(4);
-    let leaf2 = bplustree3::LeafNode::new(4);
-    let leaf3 = bplustree3::LeafNode::new(4);
+    let leaf1 = bplustree::LeafNode::new(4);
+    let leaf2 = bplustree::LeafNode::new(4);
+    let leaf3 = bplustree::LeafNode::new(4);
 
     let id1 = tree.allocate_leaf(leaf1);
     let id2 = tree.allocate_leaf(leaf2);
@@ -979,7 +979,7 @@ fn test_leaf_linked_list() {
 
     // Test setting next to NULL_NODE explicitly
     assert!(
-        tree.set_leaf_next(id2, bplustree3::NULL_NODE),
+        tree.set_leaf_next(id2, bplustree::NULL_NODE),
         "Should be able to set next to NULL"
     );
     assert_eq!(

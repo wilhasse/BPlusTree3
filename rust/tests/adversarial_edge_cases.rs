@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 mod test_utils;
 use test_utils::*;

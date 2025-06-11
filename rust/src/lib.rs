@@ -46,7 +46,7 @@ pub enum BPlusTreeError {
 /// # Examples
 ///
 /// ```
-/// use bplustree3::BPlusTreeMap;
+/// use bplustree::BPlusTreeMap;
 ///
 /// let mut tree = BPlusTreeMap::new(16).unwrap();
 /// tree.insert(1, "one");
@@ -154,7 +154,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// # Examples
     ///
     /// ```
-    /// use bplustree3::BPlusTreeMap;
+    /// use bplustree::BPlusTreeMap;
     ///
     /// let tree = BPlusTreeMap::<i32, String>::new(16).unwrap();
     /// assert!(tree.is_empty());
@@ -199,7 +199,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// # Examples
     ///
     /// ```
-    /// use bplustree3::BPlusTreeMap;
+    /// use bplustree::BPlusTreeMap;
     ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
     /// tree.insert(1, "one");
@@ -343,7 +343,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// # Examples
     ///
     /// ```
-    /// use bplustree3::BPlusTreeMap;
+    /// use bplustree::BPlusTreeMap;
     ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
     /// assert_eq!(tree.insert(1, "first"), None);
@@ -1224,7 +1224,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// # Examples
     ///
     /// ```
-    /// use bplustree3::BPlusTreeMap;
+    /// use bplustree::BPlusTreeMap;
     ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
     /// for i in 0..10 {

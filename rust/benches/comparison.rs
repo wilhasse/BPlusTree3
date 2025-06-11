@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use rand::prelude::*;
 use std::collections::BTreeMap;

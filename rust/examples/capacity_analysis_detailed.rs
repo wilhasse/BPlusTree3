@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 use std::time::{Duration, Instant};
 
 const ITERATIONS: usize = 5;

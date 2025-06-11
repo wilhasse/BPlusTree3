@@ -1,4 +1,4 @@
-use bplustree3::BPlusTreeMap;
+use bplustree::BPlusTreeMap;
 
 /// These tests are designed to break the B+ tree implementation by targeting
 /// the complex, untested branch rebalancing logic revealed by coverage analysis.
