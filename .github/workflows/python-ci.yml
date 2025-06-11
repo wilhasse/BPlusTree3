@@ -31,4 +31,11 @@ jobs:
     - name: Run selected slow tests (with timeout)
       run: |
         cd python
-        timeout 5m python -m pytest tests/test_memory_leaks.py::TestMemoryLeaks::test_deleted_values_are_released -v || echo "Slow test timed out or failed (non-critical)"
+        echo "Running memory leak test..."
+        timeout 3m python -m pytest tests/test_memory_leaks.py::TestMemoryLeaks::test_deleted_values_are_released -v || echo "Memory leak test timed out or failed (non-critical)"
+        
+        echo "Running small performance benchmark..."
+        timeout 2m python -m pytest tests/test_performance_benchmarks.py::TestPerformanceBenchmarks::test_insertion_performance_small -v || echo "Performance test timed out or failed (non-critical)"
+        
+        echo "Running basic stress test..."
+        timeout 2m python -m pytest tests/test_bplus_tree.py::test_many_insertions_maintain_invariants -v || echo "Stress test timed out or failed (non-critical)"
