@@ -1,4 +1,9 @@
-import bplustree_c
+import pytest
+
+try:
+    import bplustree_c
+except ImportError as e:
+    pytest.skip(f"C extension not available: {e}", allow_module_level=True)
 
 
 def test_data_alignment_default():

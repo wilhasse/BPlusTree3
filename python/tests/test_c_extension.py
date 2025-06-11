@@ -11,13 +11,13 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
+
 try:
     import bplustree_c
-
     HAS_C_EXTENSION = True
 except ImportError as e:
-    print(f"C extension not available: {e}")
-    HAS_C_EXTENSION = False
+    pytest.skip(f"C extension not available: {e}", allow_module_level=True)
 
 from bplustree import BPlusTreeMap
 
