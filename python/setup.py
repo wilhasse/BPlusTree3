@@ -72,20 +72,22 @@ if os.environ.get("BPLUSTREE_C_SANITIZE"):
     extra_compile_args.extend(sanitize_flags)
     extra_link_args.extend(sanitize_flags)
 
-# Define the C extension module
-bplustree_c = Extension(
-    "bplustree_c",
-    sources=[
-        "bplustree_c_src/bplustree_module.c",
-        "bplustree_c_src/node_ops.c",
-        "bplustree_c_src/tree_ops.c",
-    ],
-    include_dirs=["bplustree_c_src"],
-    extra_compile_args=extra_compile_args,
-    extra_link_args=extra_link_args,
-    define_macros=define_macros,
-    language="c",
-)
+# Define the C extension module (temporarily disabled for stable builds)
+bplustree_c = None
+if os.environ.get("BPLUSTREE_BUILD_C_EXTENSION"):
+    bplustree_c = Extension(
+        "bplustree_c",
+        sources=[
+            "bplustree_c_src/bplustree_module.c",
+            "bplustree_c_src/node_ops.c",
+            "bplustree_c_src/tree_ops.c",
+        ],
+        include_dirs=["bplustree_c_src"],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+        define_macros=define_macros,
+        language="c",
+    )
 
 # Setup configuration
 # Note: Most metadata now comes from pyproject.toml, but setup.py still needed for C extensions
@@ -106,8 +108,7 @@ setup(
         "Changelog": "https://github.com/KentBeck/BPlusTree3/blob/main/python/CHANGELOG.md",
     },
     packages=find_packages(exclude=["tests*", "examples*", "docs*"]),
-    py_modules=["bplus_tree"],
-    ext_modules=[bplustree_c],
+    ext_modules=[bplustree_c] if bplustree_c else [],
     include_package_data=True,
     zip_safe=False,
     python_requires=">=3.8",
