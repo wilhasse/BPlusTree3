@@ -6,7 +6,7 @@ resolver = "2"
 version = "0.9.0"
 authors = ["Kent Beck <kent@kentbeck.com>"]
 license = "MIT"
-repository = "https://github.com/KentBeck/BPlusTree"
+repository = "https://github.com/KentBeck/BPlusTree3"
 edition = "2021"
 
 [workspace.dependencies]

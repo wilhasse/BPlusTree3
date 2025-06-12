@@ -138,7 +138,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 **Links**
 
-- **[GitHub Repository](https://github.com/KentBeck/BPlusTree)**
+- **[GitHub Repository](https://github.com/KentBeck/BPlusTree3)**
 - **[Rust Crate](https://crates.io/crates/bplustree)** _(coming soon)_
 - **[Python Package](https://pypi.org/project/bplustree/)** _(coming soon)_
 
