@@ -140,10 +140,13 @@ BPlusTreeIterator_next(BPlusTreeIterator *self) {
     }
     
     if (self->current_index >= self->current_node->num_keys) {
-        self->current_node = self->current_node->next;
-        self->current_index = 0;
-        
-        if (!self->current_node) {
+        /* Validate next pointer before using it */
+        BPlusNode *next = self->current_node->next;
+        if (next && next->type == NODE_LEAF && next->num_keys > 0) {
+            self->current_node = next;
+            self->current_index = 0;
+        } else {
+            /* Next pointer is invalid or points to empty node - stop iteration */
             PyErr_SetNone(PyExc_StopIteration);
             return NULL;
         }
@@ -190,7 +193,18 @@ BPlusTree_iter(BPlusTree *self) {
     
     Py_INCREF(self);
     iter->tree = self;
-    iter->current_node = self->leaves;
+    
+    /* Safely find the first leaf node by traversing from root */
+    BPlusNode *first_leaf = self->root;
+    if (first_leaf) {
+        while (first_leaf->type == NODE_BRANCH && first_leaf->num_keys > 0) {
+            first_leaf = node_get_child(first_leaf, 0);
+        }
+        /* Update tree's leaves pointer to current first leaf */
+        self->leaves = first_leaf;
+    }
+    
+    iter->current_node = first_leaf;
     iter->current_index = 0;
     iter->include_values = 0;
     
@@ -209,7 +223,18 @@ BPlusTree_items(BPlusTree *self, PyObject *Py_UNUSED(args)) {
     
     Py_INCREF(self);
     iter->tree = self;
-    iter->current_node = self->leaves;
+    
+    /* Safely find the first leaf node by traversing from root */
+    BPlusNode *first_leaf = self->root;
+    if (first_leaf) {
+        while (first_leaf->type == NODE_BRANCH && first_leaf->num_keys > 0) {
+            first_leaf = node_get_child(first_leaf, 0);
+        }
+        /* Update tree's leaves pointer to current first leaf */
+        self->leaves = first_leaf;
+    }
+    
+    iter->current_node = first_leaf;
     iter->current_index = 0;
     iter->include_values = 1;
     

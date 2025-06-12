@@ -23,10 +23,15 @@ jobs:
         cd python
         pip install -e .[test]
     
+    - name: Build C extension
+      run: |
+        cd python
+        BPLUSTREE_BUILD_C_EXTENSION=1 python setup.py build_ext --inplace
+    
     - name: Run fast tests
       run: |
         cd python
-        python -m pytest tests/ --ignore=tests/test_c_extension_segfault_fix.py -m "not slow" -x -v
+        python -m pytest tests/ -m "not slow" -x -v
     
     - name: Run critical reliability tests
       run: |
@@ -39,3 +44,6 @@ jobs:
         
         echo "Running invariant stress test (CRITICAL)..."
         timeout 3m python -m pytest tests/test_bplus_tree.py::TestSetItemSplitting::test_many_insertions_maintain_invariants -v --tb=short
+        
+        echo "Running C extension segfault tests (CRITICAL)..."
+        timeout 2m python -m pytest tests/test_c_extension_segfault_fix.py -v --tb=short
