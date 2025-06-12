@@ -13,7 +13,7 @@ authors = [
 maintainers = [
     {name = "Kent Beck", email = "kent@kentbeck.com"}
 ]
-license = "MIT"
+license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
