@@ -23,8 +23,7 @@ def test_single_node_split_maintains_order():
     This test MUST fail until the bug is fixed.
     """
     if not HAS_C_EXTENSION:
-        print("C extension not available")
-        return
+        pytest.skip("C extension not available")
 
     # Create tree with capacity 4 - split will happen after 4 items
     tree = bplustree_c.BPlusTree(capacity=4)
@@ -40,15 +39,8 @@ def test_single_node_split_maintains_order():
     print(f"Expected: [0, 1, 2, 3, 4]")
 
     # THE CRITICAL TEST: keys must be sorted
-    is_sorted = keys == [0, 1, 2, 3, 4]
-
-    if not is_sorted:
-        print("❌ FAILED: Keys not in sorted order after single node split")
-        print(f"Got: {keys}")
-        return False
-    else:
-        print("✅ PASSED: Keys in correct order after split")
-        return True
+    assert keys == [0, 1, 2, 3, 4], f"Keys not in sorted order after single node split. Got: {keys}"
+    print("✅ PASSED: Keys in correct order after split")
 
 
 def test_two_splits_maintains_order():
@@ -56,8 +48,7 @@ def test_two_splits_maintains_order():
     Second minimal test: Two splits must maintain sorted order.
     """
     if not HAS_C_EXTENSION:
-        print("C extension not available")
-        return
+        pytest.skip("C extension not available")
 
     # Create tree with capacity 4
     tree = bplustree_c.BPlusTree(capacity=4)
@@ -73,14 +64,8 @@ def test_two_splits_maintains_order():
     print(f"Keys after two splits: {keys}")
     print(f"Expected: {expected}")
 
-    is_sorted = keys == expected
-
-    if not is_sorted:
-        print("❌ FAILED: Keys not in sorted order after two splits")
-        return False
-    else:
-        print("✅ PASSED: Keys in correct order after two splits")
-        return True
+    assert keys == expected, f"Keys not in sorted order after two splits. Got: {keys}"
+    print("✅ PASSED: Keys in correct order after two splits")
 
 
 if __name__ == "__main__":
