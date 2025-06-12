@@ -41,7 +41,8 @@ fn test_create_empty_tree() {
     let tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
     assert_eq!(tree.len(), 0);
     assert!(tree.is_empty());
-    // TODO: Add invariant checking when implemented
+    #[cfg(feature = "testing")]
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -52,7 +53,7 @@ fn test_insert_and_get_single_item() {
     assert_eq!(tree.len(), 1);
     assert!(!tree.is_empty());
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -66,7 +67,7 @@ fn test_insert_multiple_items() {
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -78,7 +79,7 @@ fn test_update_existing_key() {
     assert_eq!(tree.len(), 1); // Size shouldn't change
     assert_eq!(tree.get(&1), Some(&"ONE".to_string()));
     assert_eq!(old_value, Some("one".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -90,7 +91,7 @@ fn test_contains_key() {
     assert!(tree.contains_key(&1));
     assert!(tree.contains_key(&2));
     assert!(!tree.contains_key(&3));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -104,7 +105,7 @@ fn test_get_with_default() {
         tree.get_or_default(&2, &"default".to_string()),
         &"default".to_string()
     );
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 // ============================================================================
@@ -121,7 +122,7 @@ fn test_overflow() {
     tree.insert(4, "four".to_string());
     tree.insert(5, "five".to_string());
 
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
     assert_eq!(tree.len(), 5);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
@@ -146,7 +147,7 @@ fn test_split_then_add() {
     tree.insert(8, "eight".to_string());
 
     // Check correctness via invariants instead of exact structure
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
     assert_eq!(tree.len(), 8);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
@@ -169,7 +170,7 @@ fn test_many_insertions_maintain_invariants() {
     // Insert many items
     for i in 0..20 {
         tree.insert(i, format!("value_{}", i));
-        // TODO: Check invariants after each insertion when implemented
+        assert!(tree.check_invariants());
     }
 
     // Verify all items are retrievable
@@ -185,7 +186,7 @@ fn test_parent_splitting() {
     // Insert enough items to force multiple levels of splits
     for i in 0..50 {
         tree.insert(i, format!("value_{}", i));
-        // TODO: Check invariants after each insertion when implemented
+        assert!(tree.check_invariants());
     }
 
     // Verify all items are still retrievable
@@ -215,7 +216,7 @@ fn test_remove_single_item_from_leaf_root() {
     assert_eq!(removed, Some("one".to_string()));
     assert_eq!(tree.len(), 0);
     assert!(!tree.contains_key(&1));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 
     // Should return None when trying to get removed item
     assert_eq!(tree.get(&1), None);
@@ -239,7 +240,7 @@ fn test_remove_multiple_items_from_leaf_root() {
     assert!(tree.contains_key(&3));
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 
     // Remove another item
     let removed = tree.remove(&1);
@@ -250,7 +251,7 @@ fn test_remove_multiple_items_from_leaf_root() {
     assert!(!tree.contains_key(&1));
     assert!(tree.contains_key(&3));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 
     // Remove last item
     let removed = tree.remove(&3);
@@ -258,7 +259,7 @@ fn test_remove_multiple_items_from_leaf_root() {
     // Tree should be empty
     assert_eq!(removed, Some("three".to_string()));
     assert_eq!(tree.len(), 0);
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -277,7 +278,7 @@ fn test_remove_nonexistent_key_returns_none() {
     assert_eq!(tree.len(), 2);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 // ============================================================================
@@ -308,7 +309,7 @@ fn test_remove_from_tree_with_branch_root() {
     assert_eq!(tree.get(&3), Some(&"value_3".to_string()));
     assert_eq!(tree.get(&4), Some(&"value_4".to_string()));
     assert_eq!(tree.get(&5), Some(&"value_5".to_string()));
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 #[test]
@@ -342,7 +343,7 @@ fn test_remove_multiple_from_tree_with_branches() {
     assert!(!tree.contains_key(&3));
     assert!(!tree.contains_key(&6));
 
-    // TODO: Add invariant checking when implemented
+    assert!(tree.check_invariants());
 }
 
 // ============================================================================
