@@ -218,7 +218,7 @@ def test_no_segfaults():
     """Run all segfault prevention tests."""
     if not HAS_C_EXTENSION:
         print("C extension not available, skipping segfault tests")
-        return
+        pytest.skip("C extension not available")
 
     test_suite = TestNoSegfaults()
 
@@ -261,8 +261,10 @@ def test_no_segfaults():
         print("🎉 NO SEGFAULTS! C extension is memory-safe.")
     else:
         print("🚨 CRITICAL: Fix all issues before proceeding!")
-
-    return failed == 0
+        assert False, f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
+    
+    # Explicitly assert success
+    assert failed == 0, f"CRITICAL: {failed} segfault tests failed - must fix immediately!"
 
 
 if __name__ == "__main__":
