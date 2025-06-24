@@ -406,6 +406,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         new_root.children.push(old_root);
         new_root.children.push(new_node);
+        
+        // CRITICAL FIX: Deallocate the placeholder to prevent memory leak
+        self.deallocate_leaf(placeholder_id);
+        
         new_root
     }
 
