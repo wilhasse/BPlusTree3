@@ -1896,9 +1896,12 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
         let min_keys = self.min_keys();
         let total_keys = self.keys.len();
 
-        // Calculate split point to ensure both sides have at least min_keys
-        // Left side gets min_keys, right side gets the rest
-        let mid = min_keys;
+        // Calculate split point for better balance while ensuring both sides have at least min_keys
+        // Use a more balanced split: aim for roughly equal distribution
+        let mid = (total_keys + 1) / 2; // Round up for odd numbers
+        
+        // Ensure the split point respects minimum requirements
+        let mid = mid.max(min_keys).min(total_keys - min_keys);
 
         // Verify this split is valid
         debug_assert!(mid >= min_keys, "Left side would be underfull");
