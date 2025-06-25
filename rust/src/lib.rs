@@ -1521,6 +1521,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         // Then check the linked list invariants
         self.check_linked_list_invariants()?;
 
+        // Finally check arena-tree consistency
+        self.check_arena_tree_consistency()?;
+
         Ok(())
     }
 
@@ -1546,6 +1549,117 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         Ok(())
+    }
+
+    /// Check arena-tree consistency: verify node counts match between tree and arena.
+    fn check_arena_tree_consistency(&self) -> Result<(), String> {
+        // Count nodes in the tree structure
+        let (tree_leaf_count, tree_branch_count) = self.count_nodes_in_tree();
+        
+        // Get arena counts
+        let arena_leaf_count = self.allocated_leaf_count();
+        let arena_branch_count = self.allocated_branch_count();
+        
+        // Check leaf node consistency
+        if tree_leaf_count != arena_leaf_count {
+            return Err(format!(
+                "Leaf count mismatch: {} in tree structure but {} allocated in arena",
+                tree_leaf_count, arena_leaf_count
+            ));
+        }
+        
+        // Check branch node consistency
+        if tree_branch_count != arena_branch_count {
+            return Err(format!(
+                "Branch count mismatch: {} in tree structure but {} allocated in arena",
+                tree_branch_count, arena_branch_count
+            ));
+        }
+        
+        // Check that all leaf nodes in tree are reachable via linked list
+        self.check_leaf_linked_list_completeness()?;
+        
+        Ok(())
+    }
+    
+    /// Count the number of leaf and branch nodes actually in the tree structure.
+    fn count_nodes_in_tree(&self) -> (usize, usize) {
+        if matches!(self.root, NodeRef::Leaf(_, _)) {
+            // Single leaf root
+            (1, 0)
+        } else {
+            self.count_nodes_recursive(&self.root)
+        }
+    }
+    
+    /// Recursively count nodes in the tree.
+    fn count_nodes_recursive(&self, node: &NodeRef<K, V>) -> (usize, usize) {
+        match node {
+            NodeRef::Leaf(_, _) => (1, 0), // Found a leaf
+            NodeRef::Branch(id, _) => {
+                if let Some(branch) = self.get_branch(*id) {
+                    let mut total_leaves = 0;
+                    let mut total_branches = 1; // Count this branch
+                    
+                    // Recursively count in all children
+                    for child in &branch.children {
+                        let (child_leaves, child_branches) = self.count_nodes_recursive(child);
+                        total_leaves += child_leaves;
+                        total_branches += child_branches;
+                    }
+                    
+                    (total_leaves, total_branches)
+                } else {
+                    // Invalid branch reference
+                    (0, 0)
+                }
+            }
+        }
+    }
+    
+    /// Check that all leaf nodes in the tree are reachable via the linked list.
+    fn check_leaf_linked_list_completeness(&self) -> Result<(), String> {
+        // Collect all leaf IDs from the tree structure
+        let mut tree_leaf_ids = Vec::new();
+        self.collect_leaf_ids(&self.root, &mut tree_leaf_ids);
+        tree_leaf_ids.sort();
+        
+        // Collect all leaf IDs from the linked list traversal
+        let mut linked_list_ids = Vec::new();
+        if let Some(first_id) = self.get_first_leaf_id() {
+            let mut current_id = Some(first_id);
+            while let Some(id) = current_id {
+                linked_list_ids.push(id);
+                current_id = self.get_leaf(id).and_then(|leaf| {
+                    if leaf.next == crate::NULL_NODE { None } else { Some(leaf.next) }
+                });
+            }
+        }
+        linked_list_ids.sort();
+        
+        // Compare the two lists
+        if tree_leaf_ids != linked_list_ids {
+            return Err(format!(
+                "Linked list incomplete: tree has leaf IDs {:?} but linked list has {:?}",
+                tree_leaf_ids, linked_list_ids
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    /// Collect all leaf node IDs from the tree structure.
+    fn collect_leaf_ids(&self, node: &NodeRef<K, V>, ids: &mut Vec<NodeId>) {
+        match node {
+            NodeRef::Leaf(id, _) => ids.push(*id),
+            NodeRef::Branch(id, _) => {
+                if let Some(branch) = self.get_branch(*id) {
+                    for child in &branch.children {
+                        self.collect_leaf_ids(child, ids);
+                    }
+                }
+            }
+        }
     }
 
     /// Alias for check_invariants_detailed (for test compatibility).
