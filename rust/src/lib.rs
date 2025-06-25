@@ -1095,34 +1095,41 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Collapse the root if it's a branch with only one child or no children.
     fn collapse_root_if_needed(&mut self) {
         loop {
-            match &self.root {
-                NodeRef::Branch(id, _) => {
-                    if let Some(branch) = self.get_branch(*id) {
-                        if branch.children.is_empty() {
-                            // Root branch has no children, replace with empty arena leaf
-                            let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
-                            self.root = NodeRef::Leaf(empty_id, PhantomData);
-                            break;
-                        } else if branch.children.len() == 1 {
-                            // Root branch has only one child, replace root with that child
-                            let new_root = branch.children[0].clone();
-                            self.root = new_root;
-                            // Continue the loop in case the new root also needs collapsing
-                        } else {
-                            // Root branch has multiple children, no collapse needed
-                            break;
-                        }
-                    } else {
-                        // Missing arena branch, replace with empty arena leaf
+            // Capture root ID first to avoid borrowing conflicts
+            let root_branch_id = match &self.root {
+                NodeRef::Branch(id, _) => Some(*id),
+                NodeRef::Leaf(_, _) => None,
+            };
+            
+            if let Some(branch_id) = root_branch_id {
+                if let Some(branch) = self.get_branch(branch_id) {
+                    if branch.children.is_empty() {
+                        // Root branch has no children, replace with empty arena leaf
                         let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
                         self.root = NodeRef::Leaf(empty_id, PhantomData);
+                        // Deallocate the old root branch to prevent arena leak
+                        self.deallocate_branch(branch_id);
+                        break;
+                    } else if branch.children.len() == 1 {
+                        // Root branch has only one child, replace root with that child
+                        let new_root = branch.children[0].clone();
+                        self.root = new_root;
+                        // Deallocate the old root branch to prevent arena leak
+                        self.deallocate_branch(branch_id);
+                        // Continue the loop in case the new root also needs collapsing
+                    } else {
+                        // Root branch has multiple children, no collapse needed
                         break;
                     }
-                }
-                NodeRef::Leaf(_, _) => {
-                    // Arena leaf root, no collapse needed
+                } else {
+                    // Missing arena branch, replace with empty arena leaf
+                    let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
+                    self.root = NodeRef::Leaf(empty_id, PhantomData);
                     break;
                 }
+            } else {
+                // Already a leaf root, no collapse needed
+                break;
             }
         }
     }

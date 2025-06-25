@@ -4,7 +4,6 @@
 use bplustree::BPlusTreeMap;
 
 #[test]
-#[should_panic(expected = "Memory leak detected")]
 fn test_memory_leak_in_root_creation() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -28,7 +27,6 @@ fn test_memory_leak_in_root_creation() {
 }
 
 #[test]
-#[should_panic(expected = "Linked list corruption")]
 fn test_linked_list_corruption_during_merge() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -67,7 +65,6 @@ fn test_linked_list_corruption_during_merge() {
 }
 
 #[test]
-#[should_panic(expected = "Split invariant violation")]
 fn test_incorrect_split_logic_odd_capacity() {
     let mut tree = BPlusTreeMap::new(5).unwrap(); // Odd capacity
     
@@ -89,7 +86,6 @@ fn test_incorrect_split_logic_odd_capacity() {
 }
 
 #[test]
-#[should_panic(expected = "Root split linked list race")]
 fn test_root_split_linked_list_race() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -117,7 +113,6 @@ fn test_root_split_linked_list_race() {
 }
 
 #[test]
-#[should_panic(expected = "Range iterator bound error")]
 fn test_range_iterator_bound_handling() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -179,7 +174,6 @@ fn test_min_keys_calculation_inconsistency() {
 }
 
 #[test]
-#[should_panic(expected = "Rebalancing logic error")]
 fn test_incomplete_rebalancing_logic() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -211,7 +205,6 @@ fn test_incomplete_rebalancing_logic() {
 }
 
 #[test]
-#[should_panic(expected = "Arena-tree consistency violation")]
 fn test_arena_tree_consistency() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     
@@ -259,7 +252,6 @@ fn test_iterator_lifetime_safety() {
 }
 
 #[test]
-#[should_panic(expected = "Root collapse cascade error")]
 fn test_root_collapse_edge_cases() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
     

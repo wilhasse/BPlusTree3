@@ -4,7 +4,6 @@
 use bplustree::BPlusTreeMap;
 
 #[test]
-#[should_panic(expected = "CRITICAL BUG")]
 fn test_linked_list_corruption_causes_data_loss() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
     
