@@ -419,7 +419,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         new_root.children.push(old_root);
         new_root.children.push(new_node);
 
-        // CRITICAL FIX: Deallocate the placeholder to prevent memory leak
         self.deallocate_leaf(placeholder_id);
 
         new_root
@@ -1607,7 +1606,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Count the number of leaf and branch nodes actually in the tree structure.
-    fn count_nodes_in_tree(&self) -> (usize, usize) {
+    pub fn count_nodes_in_tree(&self) -> (usize, usize) {
         if matches!(self.root, NodeRef::Leaf(_, _)) {
             // Single leaf root
             (1, 0)
