@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 /// Enhanced generic arena allocator that eliminates all arena duplication
 /// This replaces ~160 lines of duplicated arena code with a single generic implementation
 use std::fmt::Debug;
@@ -35,11 +36,12 @@ impl<T> Arena<T> {
         let id = self.next_id();
 
         // Extend storage if needed
-        if id as usize >= self.storage.len() {
-            self.storage.resize_with(id as usize + 1, || None);
+        let id_usize = usize::try_from(id).expect("NodeId should fit in usize");
+        if id_usize >= self.storage.len() {
+            self.storage.resize_with(id_usize + 1, || None);
         }
 
-        self.storage[id as usize] = Some(item);
+        self.storage[id_usize] = Some(item);
         id
     }
 
@@ -49,7 +51,8 @@ impl<T> Arena<T> {
             return None;
         }
 
-        self.storage.get_mut(id as usize)?.take().inspect(|_item| {
+        let id_usize = usize::try_from(id).ok()?;
+        self.storage.get_mut(id_usize)?.take().inspect(|_item| {
             self.free_ids.push(id);
         })
     }
@@ -59,7 +62,8 @@ impl<T> Arena<T> {
         if id == NULL_NODE {
             return None;
         }
-        self.storage.get(id as usize)?.as_ref()
+        let id_usize = usize::try_from(id).ok()?;
+        self.storage.get(id_usize)?.as_ref()
     }
 
     /// Get a mutable reference to an item in the arena
@@ -67,7 +71,8 @@ impl<T> Arena<T> {
         if id == NULL_NODE {
             return None;
         }
-        self.storage.get_mut(id as usize)?.as_mut()
+        let id_usize = usize::try_from(id).ok()?;
+        self.storage.get_mut(id_usize)?.as_mut()
     }
 
     /// Check if an ID is valid and allocated
@@ -75,14 +80,17 @@ impl<T> Arena<T> {
         if id == NULL_NODE {
             return false;
         }
+        let id_usize = usize::try_from(id).unwrap_or(usize::MAX);
         self.storage
-            .get(id as usize)
+            .get(id_usize)
             .is_some_and(|item| item.is_some())
     }
 
     /// Get the next available ID (from free list or storage length)
     fn next_id(&mut self) -> NodeId {
-        self.free_ids.pop().unwrap_or(self.storage.len() as NodeId)
+        self.free_ids.pop().unwrap_or_else(|| {
+            u32::try_from(self.storage.len()).expect("Arena size exceeds maximum NodeId capacity")
+        })
     }
 
     // ============================================================================
@@ -152,7 +160,8 @@ impl<T> Arena<T> {
         self.storage.truncate(last_allocated);
 
         // Remove free IDs that are now out of bounds
-        self.free_ids.retain(|&id| (id as usize) < last_allocated);
+        self.free_ids
+            .retain(|&id| usize::try_from(id).is_ok_and(|id_usize| id_usize < last_allocated));
     }
 
     /// Clear all items from the arena
@@ -174,10 +183,10 @@ impl<T> Arena<T> {
 
     /// Iterate over all allocated items with their IDs
     pub fn iter(&self) -> impl Iterator<Item = (NodeId, &T)> {
-        self.storage
-            .iter()
-            .enumerate()
-            .filter_map(|(id, item)| item.as_ref().map(|item| (id as NodeId, item)))
+        self.storage.iter().enumerate().filter_map(|(id, item)| {
+            let node_id = u32::try_from(id).ok()?;
+            item.as_ref().map(|item| (node_id, item))
+        })
     }
 
     /// Iterate over all allocated items mutably with their IDs
@@ -185,7 +194,10 @@ impl<T> Arena<T> {
         self.storage
             .iter_mut()
             .enumerate()
-            .filter_map(|(id, item)| item.as_mut().map(|item| (id as NodeId, item)))
+            .filter_map(|(id, item)| {
+                let node_id = u32::try_from(id).ok()?;
+                item.as_mut().map(|item| (node_id, item))
+            })
     }
 
     /// Iterate over all allocated items (without IDs)
@@ -206,10 +218,13 @@ impl<T> Arena<T> {
     pub fn validate(&self) -> Result<(), String> {
         // Check that all free IDs are valid and point to None
         for &free_id in &self.free_ids {
-            if free_id as usize >= self.storage.len() {
+            let id_usize = usize::try_from(free_id)
+                .map_err(|_| format!("Free ID {} cannot be converted to usize", free_id))?;
+
+            if id_usize >= self.storage.len() {
                 return Err(format!("Free ID {} is out of bounds", free_id));
             }
-            if self.storage[free_id as usize].is_some() {
+            if self.storage[id_usize].is_some() {
                 return Err(format!("Free ID {} points to allocated item", free_id));
             }
         }

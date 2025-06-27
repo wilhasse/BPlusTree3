@@ -73,7 +73,8 @@ pub fn fragmentation_attack(tree: &mut BPlusTreeMap<i32, String>, base_key: i32)
 pub fn deep_tree_attack(tree: &mut BPlusTreeMap<i32, i32>, capacity: usize) {
     let mut key = 0;
     for level in 0..5 {
-        let count = capacity.pow(level as u32);
+        let level_u32 = u32::try_from(level).expect("Level should fit in u32");
+        let count = capacity.pow(level_u32);
         for _ in 0..count * 10 {
             tree.insert(key, key);
             key += 100; // Large gaps to force deep structure
