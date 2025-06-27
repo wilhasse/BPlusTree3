@@ -31,7 +31,37 @@ pub enum BPlusTreeError {
     InvalidCapacity(String),
     /// Internal data structure integrity violation.
     DataIntegrityError(String),
+    /// Arena operation failed.
+    ArenaError(String),
+    /// Node operation failed.
+    NodeError(String),
+    /// Tree structure is corrupted.
+    CorruptedTree(String),
+    /// Operation failed due to invalid state.
+    InvalidState(String),
+    /// Memory allocation failed.
+    AllocationError(String),
 }
+
+impl std::fmt::Display for BPlusTreeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BPlusTreeError::KeyNotFound => write!(f, "Key not found in tree"),
+            BPlusTreeError::InvalidCapacity(msg) => write!(f, "Invalid capacity: {}", msg),
+            BPlusTreeError::DataIntegrityError(msg) => write!(f, "Data integrity error: {}", msg),
+            BPlusTreeError::ArenaError(msg) => write!(f, "Arena error: {}", msg),
+            BPlusTreeError::NodeError(msg) => write!(f, "Node error: {}", msg),
+            BPlusTreeError::CorruptedTree(msg) => write!(f, "Corrupted tree: {}", msg),
+            BPlusTreeError::InvalidState(msg) => write!(f, "Invalid state: {}", msg),
+            BPlusTreeError::AllocationError(msg) => write!(f, "Allocation error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for BPlusTreeError {}
+
+/// Internal result type for tree operations
+type TreeResult<T> = Result<T, BPlusTreeError>;
 
 /// B+ Tree implementation with Rust dict-like API.
 ///
@@ -1425,6 +1455,52 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_arena.get_mut(id)
     }
 
+    /// Get a leaf node with error handling
+    fn get_leaf_checked(&self, id: NodeId) -> TreeResult<&LeafNode<K, V>> {
+        self.get_leaf(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Leaf node {} not found", id)))
+    }
+
+    /// Get a mutable leaf node with error handling
+    fn get_leaf_mut_checked(&mut self, id: NodeId) -> TreeResult<&mut LeafNode<K, V>> {
+        self.get_leaf_mut(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Leaf node {} not found", id)))
+    }
+
+    /// Get a branch node with error handling
+    fn get_branch_checked(&self, id: NodeId) -> TreeResult<&BranchNode<K, V>> {
+        self.get_branch(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Branch node {} not found", id)))
+    }
+
+    /// Get a mutable branch node with error handling
+    fn get_branch_mut_checked(&mut self, id: NodeId) -> TreeResult<&mut BranchNode<K, V>> {
+        self.get_branch_mut(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Branch node {} not found", id)))
+    }
+
+    /// Safely allocate a leaf node with error handling
+    fn allocate_leaf_checked(&mut self, leaf: LeafNode<K, V>) -> TreeResult<NodeId> {
+        // Check if we're approaching NodeId limits
+        if self.allocated_leaf_count() > (u32::MAX as usize / 2) {
+            return Err(BPlusTreeError::AllocationError(
+                "Approaching maximum leaf node capacity".to_string(),
+            ));
+        }
+        Ok(self.allocate_leaf(leaf))
+    }
+
+    /// Safely allocate a branch node with error handling
+    fn allocate_branch_checked(&mut self, branch: BranchNode<K, V>) -> TreeResult<NodeId> {
+        // Check if we're approaching NodeId limits
+        if self.allocated_branch_count() > (u32::MAX as usize / 2) {
+            return Err(BPlusTreeError::AllocationError(
+                "Approaching maximum branch node capacity".to_string(),
+            ));
+        }
+        Ok(self.allocate_branch(branch))
+    }
+
     /// Get the number of free leaf nodes in the arena.
     pub fn free_leaf_count(&self) -> usize {
         self.leaf_arena.free_count()
@@ -1496,6 +1572,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.branch_arena.deallocate(id)
     }
 
+    /// Safely deallocate a leaf with validation
+    fn deallocate_leaf_checked(&mut self, id: NodeId) -> TreeResult<LeafNode<K, V>> {
+        self.deallocate_leaf(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Cannot deallocate leaf {}", id)))
+    }
+
+    /// Safely deallocate a branch with validation
+    fn deallocate_branch_checked(&mut self, id: NodeId) -> TreeResult<BranchNode<K, V>> {
+        self.deallocate_branch(id)
+            .ok_or_else(|| BPlusTreeError::NodeError(format!("Cannot deallocate branch {}", id)))
+    }
+
     /// Get a reference to a branch node in the arena.
     pub fn get_branch(&self, id: NodeId) -> Option<&BranchNode<K, V>> {
         self.branch_arena.get(id)
@@ -1542,7 +1630,38 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.check_linked_list_invariants()?;
 
         // Finally check arena-tree consistency
-        self.check_arena_tree_consistency()?;
+        self.check_arena_tree_consistency()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Check that arena allocation matches tree structure
+    fn check_arena_tree_consistency(&self) -> TreeResult<()> {
+        // Count nodes in the tree structure
+        let (tree_leaf_count, tree_branch_count) = self.count_nodes_in_tree();
+
+        // Get arena counts
+        let arena_leaf_count = self.allocated_leaf_count();
+        let arena_branch_count = self.allocated_branch_count();
+
+        // Check leaf node consistency
+        if tree_leaf_count != arena_leaf_count {
+            return Err(BPlusTreeError::ArenaError(format!(
+                "Arena-tree leaf inconsistency: {} in tree vs {} in arena",
+                tree_leaf_count, arena_leaf_count
+            )));
+        }
+
+        // Check branch node consistency
+        if tree_branch_count != arena_branch_count {
+            return Err(BPlusTreeError::ArenaError(format!(
+                "Arena-tree branch inconsistency: {} in tree vs {} in arena",
+                tree_branch_count, arena_branch_count
+            )));
+        }
+
+        // Check that all leaf nodes in tree are reachable via linked list
+        self.check_leaf_linked_list_completeness()?;
 
         Ok(())
     }
@@ -1567,37 +1686,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 self.len()
             ));
         }
-
-        Ok(())
-    }
-
-    /// Check arena-tree consistency: verify node counts match between tree and arena.
-    fn check_arena_tree_consistency(&self) -> Result<(), String> {
-        // Count nodes in the tree structure
-        let (tree_leaf_count, tree_branch_count) = self.count_nodes_in_tree();
-
-        // Get arena counts
-        let arena_leaf_count = self.allocated_leaf_count();
-        let arena_branch_count = self.allocated_branch_count();
-
-        // Check leaf node consistency
-        if tree_leaf_count != arena_leaf_count {
-            return Err(format!(
-                "Leaf count mismatch: {} in tree structure but {} allocated in arena",
-                tree_leaf_count, arena_leaf_count
-            ));
-        }
-
-        // Check branch node consistency
-        if tree_branch_count != arena_branch_count {
-            return Err(format!(
-                "Branch count mismatch: {} in tree structure but {} allocated in arena",
-                tree_branch_count, arena_branch_count
-            ));
-        }
-
-        // Check that all leaf nodes in tree are reachable via linked list
-        self.check_leaf_linked_list_completeness()?;
 
         Ok(())
     }
@@ -1638,7 +1726,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     }
 
     /// Check that all leaf nodes in the tree are reachable via the linked list.
-    fn check_leaf_linked_list_completeness(&self) -> Result<(), String> {
+    fn check_leaf_linked_list_completeness(&self) -> TreeResult<()> {
         // Collect all leaf IDs from the tree structure
         let mut tree_leaf_ids = Vec::new();
         self.collect_leaf_ids(&self.root, &mut tree_leaf_ids);
@@ -1663,10 +1751,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Compare the two lists
         if tree_leaf_ids != linked_list_ids {
-            return Err(format!(
-                "Linked list incomplete: tree has leaf IDs {:?} but linked list has {:?}",
+            return Err(BPlusTreeError::CorruptedTree(format!(
+                "Linked list incompleteness: tree has {:?}, linked list has {:?}",
                 tree_leaf_ids, linked_list_ids
-            ));
+            )));
         }
 
         Ok(())
