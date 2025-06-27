@@ -411,15 +411,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         new_root.keys.push(separator_key);
 
         // Move the current root to be the left child
-        // For arena-based implementation, create a placeholder arena leaf
-        let placeholder_id = self.allocate_leaf(LeafNode::new(self.capacity));
-        let placeholder = NodeRef::Leaf(placeholder_id, PhantomData);
-        let old_root = std::mem::replace(&mut self.root, placeholder);
+        // Use a dummy NodeRef with NULL_NODE to avoid arena allocation
+        let dummy = NodeRef::Leaf(NULL_NODE, PhantomData);
+        let old_root = std::mem::replace(&mut self.root, dummy);
 
         new_root.children.push(old_root);
         new_root.children.push(new_node);
-
-        self.deallocate_leaf(placeholder_id);
 
         new_root
     }
