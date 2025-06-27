@@ -46,3 +46,4 @@ python/wheelhouse/
 # Temporary analysis files
 plot_commits_vs_duration.py
 commits_vs_duration_analysis.png
+rust/test_simple.rs

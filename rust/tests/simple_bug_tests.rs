@@ -128,7 +128,7 @@ fn test_range_excluded_bounds() {
 #[test]
 fn test_min_keys_consistency() {
     // This test checks if the min_keys calculation is appropriate
-    let tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
+    let _tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
     
     // Create a tree that will have both leaf and branch nodes
     let mut test_tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();

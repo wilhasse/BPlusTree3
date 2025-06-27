@@ -1,4 +1,4 @@
-/// Macros to eliminate repetitive patterns in B+ Tree operations and testing
+//! Macros to eliminate repetitive patterns in B+ Tree operations and testing
 
 /// Macro to eliminate repetitive invariant checking patterns
 /// This replaces 90+ occurrences of similar invariant checking code

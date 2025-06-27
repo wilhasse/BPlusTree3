@@ -366,10 +366,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                         let new_id = self.allocate_leaf(new_leaf_data);
 
                         // Update linked list pointers for root leaf split
-                        matches!(&self.root, NodeRef::Leaf(_, _))
+                        if let Some(leaf) = matches!(&self.root, NodeRef::Leaf(_, _))
                             .then(|| self.root.id())
                             .and_then(|original_id| self.get_leaf_mut(original_id))
-                            .map(|leaf| leaf.next = new_id);
+                        {
+                            leaf.next = new_id;
+                        }
 
                         NodeRef::Leaf(new_id, PhantomData)
                     }
@@ -867,8 +869,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Update separator in parent (second and final parent access)
-        self.get_branch_mut(parent_id)
-            .map(|parent| parent.keys[child_index - 1] = new_separator);
+        if let Some(parent) = self.get_branch_mut(parent_id) {
+            parent.keys[child_index - 1] = new_separator;
+        }
 
         true
     }
@@ -908,8 +911,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         };
 
         // Update separator in parent (second and final parent access)
-        self.get_branch_mut(parent_id)
-            .map(|parent| parent.keys[child_index] = new_separator);
+        if let Some(parent) = self.get_branch_mut(parent_id) {
+            parent.keys[child_index] = new_separator;
+        }
 
         true
     }
@@ -949,8 +953,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         }
 
         // Update separator in parent (second and final parent access)
-        self.get_branch_mut(branch_id)
-            .map(|branch| branch.keys[child_index - 1] = key);
+        if let Some(branch) = self.get_branch_mut(branch_id) {
+            branch.keys[child_index - 1] = key;
+        }
 
         true
     }
@@ -994,10 +999,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             .get_leaf(right_id)
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
 
-        new_separator.and_then(|new_sep| {
-            self.get_branch_mut(branch_id)
-                .map(|branch| branch.keys[child_index] = new_sep)
-        });
+        if let Some(new_sep) = new_separator {
+            if let Some(branch) = self.get_branch_mut(branch_id) {
+                branch.keys[child_index] = new_sep;
+            }
+        }
 
         true
     }
@@ -2019,7 +2025,7 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
 
         // Calculate split point for better balance while ensuring both sides have at least min_keys
         // Use a more balanced split: aim for roughly equal distribution
-        let mid = (total_keys + 1) / 2; // Round up for odd numbers
+        let mid = total_keys.div_ceil(2); // Round up for odd numbers
         
         // Ensure the split point respects minimum requirements
         let mid = mid.max(min_keys).min(total_keys - min_keys);
@@ -2260,7 +2266,7 @@ impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
         debug_assert!(mid < total_keys, "Not enough keys to promote one");
         debug_assert!(mid >= min_keys, "Left side would be underfull");
         debug_assert!(
-            total_keys - mid - 1 >= min_keys,
+            total_keys - mid > min_keys,
             "Right side would be underfull"
         );
 
@@ -2475,7 +2481,7 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                         let value = &leaf.values[self.current_leaf_index];
 
                         // Check if we've reached the end bound
-                        if let Some(ref end) = self.end_key {
+                        if let Some(end) = self.end_key {
                             if key >= end {
                                 self.finished = true;
                                 return None;
@@ -2486,11 +2492,9 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
                                     self.finished = true;
                                     return None;
                                 }
-                            } else {
-                                if key >= end {
-                                    self.finished = true;
-                                    return None;
-                                }
+                            } else if key >= end {
+                                self.finished = true;
+                                return None;
                             }
                         }
 
@@ -2583,13 +2587,9 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
             }
         } else {
             // Start from beginning
-            if let Some(first_leaf) = tree.get_first_leaf_id() {
-                Some(ItemIterator::new_from_position(
+            tree.get_first_leaf_id().map(|first_leaf| ItemIterator::new_from_position(
                     tree, first_leaf, 0, end_key,
                 ))
-            } else {
-                None // Empty tree
-            }
         };
 
         Self {

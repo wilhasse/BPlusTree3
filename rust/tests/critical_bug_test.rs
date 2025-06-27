@@ -107,7 +107,7 @@ fn test_invariants_after_problematic_operations() {
     println!("  Leaf sizes: {:?}", tree.leaf_sizes());
     
     // Check for specific invariant violations
-    let min_keys = 2; // Current incorrect calculation for capacity 5
+    let _min_keys = 2; // Current incorrect calculation for capacity 5
     let correct_min_keys = 3; // What it should be
     
     let leaf_sizes = tree.leaf_sizes();

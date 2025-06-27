@@ -49,9 +49,8 @@ impl<T> Arena<T> {
             return None;
         }
 
-        self.storage.get_mut(id as usize)?.take().map(|item| {
+        self.storage.get_mut(id as usize)?.take().inspect(|_item| {
             self.free_ids.push(id);
-            item
         })
     }
 
@@ -78,7 +77,7 @@ impl<T> Arena<T> {
         }
         self.storage
             .get(id as usize)
-            .map_or(false, |item| item.is_some())
+            .is_some_and(|item| item.is_some())
     }
 
     /// Get the next available ID (from free list or storage length)

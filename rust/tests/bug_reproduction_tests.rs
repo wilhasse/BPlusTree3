@@ -149,7 +149,7 @@ fn test_range_iterator_bound_handling() {
 #[test]
 #[should_panic(expected = "Min keys inconsistency")]
 fn test_min_keys_calculation_inconsistency() {
-    let tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
+    let _tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
     
     // For capacity 6, different node types might need different min_keys
     // Standard B+ tree: leaves need ceil(6/2) = 3, branches need ceil(6/2)-1 = 2
@@ -223,7 +223,7 @@ fn test_arena_tree_consistency() {
     let total_allocated = allocated_leaves + allocated_branches;
     
     // Count actual nodes in tree structure
-    let actual_leaves = tree.leaf_count();
+    let _actual_leaves = tree.leaf_count();
     // For branches, we need to count them by traversing the tree
     let actual_total = count_total_nodes(&tree);
     
