@@ -7,8 +7,7 @@ NEVER write production code that contains:
 1. **panic!() statements in normal operation paths** - always return Result<T, Error>
 2. **memory leaks** - every allocation must have corresponding deallocation
 3. **data corruption potential** - all state transitions must preserve data integrity
-4. **monolithic files >1000 lines** - decompose into focused modules
-5. **inconsistent error handling patterns** - establish and follow single pattern
+4. **inconsistent error handling patterns** - establish and follow single pattern
 
 ALWAYS:
 
@@ -29,7 +28,6 @@ ALWAYS:
 - Validate all edge cases and boundary conditions
 
 ### ARCHITECTURE REQUIREMENTS:
-- Single responsibility principle - one concern per module
 - Explicit error handling - no hidden panics or unwraps
 - Memory safety - all unsafe code must be justified and audited
 - Performance conscious - avoid unnecessary allocations/clones
@@ -72,7 +70,6 @@ Before marking any code complete, verify:
 - Validate state consistency at module boundaries
 
 ### MODULE ORGANIZATION:
-- Maximum 500 lines per module file
 - Single responsibility per module
 - Clear public/private API boundaries
 - Comprehensive module documentation
@@ -141,22 +138,22 @@ impl Drop for ResourceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_normal_operation() {
         // Test typical usage patterns
     }
-    
+
     #[test]
     fn test_edge_cases() {
         // Test boundary conditions
     }
-    
+
     #[test]
     fn test_error_conditions() {
         // Test all error paths
     }
-    
+
     #[test]
     fn test_invariants_preserved() {
         // Verify data structure invariants
@@ -166,7 +163,7 @@ mod tests {
 #[cfg(test)]
 mod property_tests {
     use proptest::prelude::*;
-    
+
     proptest! {
         #[test]
         fn test_invariant_always_holds(input in any::<InputType>()) {
@@ -182,7 +179,7 @@ mod property_tests {
 #[test]
 fn test_no_memory_leaks() {
     let initial_count = get_allocation_count();
-    
+
     {
         let mut structure = DataStructure::new();
         // Perform operations that allocate/deallocate
@@ -193,7 +190,7 @@ fn test_no_memory_leaks() {
             structure.remove(i);
         }
     } // structure dropped here
-    
+
     let final_count = get_allocation_count();
     assert_eq!(initial_count, final_count, "Memory leak detected");
 }
@@ -211,26 +208,26 @@ fn test_no_memory_leaks() {
 ### ERROR DOCUMENTATION:
 ```rust
 /// Inserts a key-value pair into the tree.
-/// 
+///
 /// # Arguments
 /// * `key` - The key to insert (must implement Ord)
 /// * `value` - The value to associate with the key
-/// 
+///
 /// # Returns
 /// * `Ok(old_value)` if key existed (returns old value)
 /// * `Ok(None)` if key was newly inserted
 /// * `Err(Error::InvalidKey)` if key violates constraints
-/// 
+///
 /// # Examples
 /// ```
 /// let mut tree = BPlusTree::new(4)?;
 /// assert_eq!(tree.insert(1, "value")?, None);
 /// assert_eq!(tree.insert(1, "new")?, Some("value"));
 /// ```
-/// 
+///
 /// # Panics
 /// Never panics - all error conditions return Result
-/// 
+///
 /// # Safety
 /// This function maintains all tree invariants
 pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, Error> {
