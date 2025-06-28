@@ -271,6 +271,16 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // HELPERS FOR GET OPERATIONS
     // ============================================================================
 
+    fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
+        match node {
+            NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
+                .and_then(|branch| branch.get_child(key))
+                .and_then(|child| self.get_recursive(child, key)),
+        }
+    }
+
     /// Get mutable reference recursively
     fn get_mut_recursive(&mut self, node: &NodeRef<K, V>, key: &K) -> Option<&mut V> {
         match node {
@@ -343,16 +353,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 branch.children.get(sibling_index).cloned()
             }
             _ => None,
-        }
-    }
-
-    fn get_recursive<'a>(&'a self, node: &'a NodeRef<K, V>, key: &K) -> Option<&'a V> {
-        match node {
-            NodeRef::Leaf(id, _) => self.get_leaf(*id).and_then(|leaf| leaf.get(key)),
-            NodeRef::Branch(id, _) => self
-                .get_branch(*id)
-                .and_then(|branch| branch.get_child(key))
-                .and_then(|child| self.get_recursive(child, key)),
         }
     }
 
@@ -530,7 +530,35 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // DELETE OPERATIONS
     // ============================================================================
 
-    /// Remove a key from the tree.
+    /// Remove a key from the tree and return its associated value.
+    ///
+    /// # Arguments
+    /// * `key` - The key to remove from the tree
+    ///
+    /// # Returns
+    /// * `Some(value)` - The value that was associated with the key
+    /// * `None` - If the key was not present in the tree
+    ///
+    /// # Examples
+    /// ```
+    /// use bplustree::BPlusTreeMap;
+    ///
+    /// let mut tree = BPlusTreeMap::new(4).unwrap();
+    /// tree.insert(1, "one");
+    /// tree.insert(2, "two");
+    ///
+    /// assert_eq!(tree.remove(&1), Some("one"));
+    /// assert_eq!(tree.remove(&1), None); // Key no longer exists
+    /// assert_eq!(tree.len(), 1);
+    /// ```
+    ///
+    /// # Performance
+    /// * Time complexity: O(log n) where n is the number of keys
+    /// * May trigger node rebalancing or merging operations
+    /// * Maintains all B+ tree invariants after removal
+    ///
+    /// # Panics
+    /// Never panics - all operations are memory safe
     pub fn remove(&mut self, key: &K) -> Option<V> {
         // Use remove_recursive to handle the removal
         let result = self.remove_recursive(&self.root.clone(), key);
