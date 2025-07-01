@@ -967,17 +967,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Accept into child branch
-        let new_separator = if let Some(child_branch) = self.get_branch_mut(child_id) {
-            child_branch.accept_from_right(separator_key, moved_key, moved_child)
-        } else {
+        // Accept into child branch - use early return for cleaner flow
+        let Some(child_branch) = self.get_branch_mut(child_id) else {
             return false;
         };
+        let new_separator = child_branch.accept_from_right(separator_key, moved_key, moved_child);
 
         // Update separator in parent (second and final parent access)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.keys[child_index] = new_separator;
-        }
+        let Some(parent) = self.get_branch_mut(parent_id) else {
+            return false;
+        };
+        parent.keys[child_index] = new_separator;
 
         true
     }
