@@ -1418,15 +1418,12 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                             return Some((*leaf_id, index));
                         } else {
                             // All keys in this leaf are < start_key
-                            // Move to next leaf if it exists
-                            if leaf.next != NULL_NODE {
-                                if let Some(next_leaf) = self.get_leaf(leaf.next) {
-                                    if !next_leaf.keys.is_empty() {
-                                        return Some((leaf.next, 0));
-                                    }
-                                }
-                            }
-                            return None; // No valid start position
+                            // Move to next leaf if it exists using Option combinators
+                            return (leaf.next != NULL_NODE)
+                                .then_some(leaf.next)
+                                .and_then(|next_id| self.get_leaf(next_id))
+                                .filter(|next_leaf| !next_leaf.keys.is_empty())
+                                .map(|_| (leaf.next, 0));
                         }
                     }
                     return None;
