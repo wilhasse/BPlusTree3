@@ -1139,20 +1139,20 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Merge into child leaf and update linked list
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.keys.append(&mut right_keys);
-            child_leaf.values.append(&mut right_values);
-            child_leaf.next = right_next;
-        } else {
+        // Merge into child leaf and update linked list - use early return for cleaner flow
+        let Some(child_leaf) = self.get_leaf_mut(child_id) else {
             return false;
-        }
+        };
+        child_leaf.keys.append(&mut right_keys);
+        child_leaf.values.append(&mut right_values);
+        child_leaf.next = right_next;
 
         // Remove right from parent (second and final parent access)
-        if let Some(branch) = self.get_branch_mut(branch_id) {
-            branch.children.remove(child_index + 1);
-            branch.keys.remove(child_index);
-        }
+        let Some(branch) = self.get_branch_mut(branch_id) else {
+            return false;
+        };
+        branch.children.remove(child_index + 1);
+        branch.keys.remove(child_index);
 
         // Deallocate the merged right sibling
         self.deallocate_leaf(right_id);
