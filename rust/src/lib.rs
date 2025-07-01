@@ -1051,12 +1051,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Accept into child leaf
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.accept_from_right(key, value);
-        } else {
+        // Accept into child leaf - use early return for cleaner flow
+        let Some(child_leaf) = self.get_leaf_mut(child_id) else {
             return false;
-        }
+        };
+        child_leaf.accept_from_right(key, value);
 
         // Update separator in parent (new first key of right sibling, second parent access)
         let new_separator = self
