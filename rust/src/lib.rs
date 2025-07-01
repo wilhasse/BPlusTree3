@@ -1009,17 +1009,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Accept into child leaf
-        if let Some(child_leaf) = self.get_leaf_mut(child_id) {
-            child_leaf.accept_from_left(key.clone(), value);
-        } else {
+        // Accept into child leaf - use early return for cleaner flow
+        let Some(child_leaf) = self.get_leaf_mut(child_id) else {
             return false;
-        }
+        };
+        child_leaf.accept_from_left(key.clone(), value);
 
         // Update separator in parent (second and final parent access)
-        if let Some(branch) = self.get_branch_mut(branch_id) {
-            branch.keys[child_index - 1] = key;
-        }
+        let Some(branch) = self.get_branch_mut(branch_id) else {
+            return false;
+        };
+        branch.keys[child_index - 1] = key;
 
         true
     }
