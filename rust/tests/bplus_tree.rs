@@ -1,6 +1,9 @@
 use bplustree::{BPlusTreeError, BPlusTreeMap, NodeRef};
 use std::marker::PhantomData;
 
+mod test_utils;
+use test_utils::*;
+
 // ============================================================================
 // NODE REF TESTS
 // ============================================================================
@@ -22,43 +25,42 @@ fn test_node_ref_id_and_is_leaf() {
 
 #[test]
 fn test_insert_overwrite_value() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
-    
+    let mut tree = create_tree_4();
+
     // Insert key 1 with value "one"
-    tree.insert(1, "one");
-    assert_eq!(tree.get(&1), Some(&"one"));
-    
+    tree.insert(1, "one".to_string());
+    assert_eq!(tree.get(&1), Some(&"one".to_string()));
+
     // Insert key 1 again with value "two"
-    tree.insert(1, "two");
-    
+    tree.insert(1, "two".to_string());
+
     // Make sure the value at key 1 is now "two"
-    assert_eq!(tree.get(&1), Some(&"two"));
+    assert_eq!(tree.get(&1), Some(&"two".to_string()));
     assert_eq!(tree.len(), 1); // Should still be only one item
 }
 
 #[test]
 fn test_create_empty_tree() {
-    let tree = BPlusTreeMap::<i32, String>::new(4).unwrap();
+    let tree = create_tree_4();
     assert_eq!(tree.len(), 0);
     assert!(tree.is_empty());
-    #[cfg(feature = "testing")]
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "empty tree");
 }
 
 #[test]
 fn test_insert_and_get_single_item() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
 
     assert_eq!(tree.len(), 1);
     assert!(!tree.is_empty());
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "single item");
 }
 
 #[test]
 fn test_insert_multiple_items() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
     tree.insert(3, "three".to_string());
@@ -67,36 +69,36 @@ fn test_insert_multiple_items() {
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "multiple items");
 }
 
 #[test]
 fn test_update_existing_key() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
     let old_value = tree.insert(1, "ONE".to_string());
 
     assert_eq!(tree.len(), 1); // Size shouldn't change
     assert_eq!(tree.get(&1), Some(&"ONE".to_string()));
     assert_eq!(old_value, Some("one".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "key update");
 }
 
 #[test]
 fn test_contains_key() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
 
     assert!(tree.contains_key(&1));
     assert!(tree.contains_key(&2));
     assert!(!tree.contains_key(&3));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "contains key");
 }
 
 #[test]
 fn test_get_with_default() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
 
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
@@ -105,7 +107,7 @@ fn test_get_with_default() {
         tree.get_or_default(&2, &"default".to_string()),
         &"default".to_string()
     );
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "get with default");
 }
 
 // ============================================================================
@@ -114,7 +116,7 @@ fn test_get_with_default() {
 
 #[test]
 fn test_overflow() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     // With capacity=4, need 5 items to force a split
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
@@ -122,7 +124,7 @@ fn test_overflow() {
     tree.insert(4, "four".to_string());
     tree.insert(5, "five".to_string());
 
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "overflow test");
     assert_eq!(tree.len(), 5);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
@@ -135,7 +137,7 @@ fn test_overflow() {
 
 #[test]
 fn test_split_then_add() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     // With capacity=4, need more items to force multiple splits
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
@@ -147,7 +149,7 @@ fn test_split_then_add() {
     tree.insert(8, "eight".to_string());
 
     // Check correctness via invariants instead of exact structure
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "split then add");
     assert_eq!(tree.len(), 8);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
@@ -165,12 +167,12 @@ fn test_split_then_add() {
 
 #[test]
 fn test_many_insertions_maintain_invariants() {
-    let mut tree = BPlusTreeMap::new(6).unwrap();
+    let mut tree = create_tree_capacity(6);
 
     // Insert many items
     for i in 0..20 {
         tree.insert(i, format!("value_{}", i));
-        assert!(tree.check_invariants());
+        assert_invariants(&tree, &format!("insertion {}", i));
     }
 
     // Verify all items are retrievable
@@ -181,12 +183,12 @@ fn test_many_insertions_maintain_invariants() {
 
 #[test]
 fn test_parent_splitting() {
-    let mut tree = BPlusTreeMap::new(5).unwrap(); // Small capacity to force parent splits
+    let mut tree = create_tree_5(); // Small capacity to force parent splits
 
     // Insert enough items to force multiple levels of splits
     for i in 0..50 {
         tree.insert(i, format!("value_{}", i));
-        assert!(tree.check_invariants());
+        assert_invariants(&tree, &format!("parent split {}", i));
     }
 
     // Verify all items are still retrievable
@@ -206,7 +208,7 @@ fn test_parent_splitting() {
 
 #[test]
 fn test_remove_single_item_from_leaf_root() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
 
     // Remove the item
@@ -216,7 +218,7 @@ fn test_remove_single_item_from_leaf_root() {
     assert_eq!(removed, Some("one".to_string()));
     assert_eq!(tree.len(), 0);
     assert!(!tree.contains_key(&1));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "remove single item");
 
     // Should return None when trying to get removed item
     assert_eq!(tree.get(&1), None);
@@ -224,7 +226,7 @@ fn test_remove_single_item_from_leaf_root() {
 
 #[test]
 fn test_remove_multiple_items_from_leaf_root() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
     tree.insert(3, "three".to_string());
@@ -240,7 +242,7 @@ fn test_remove_multiple_items_from_leaf_root() {
     assert!(tree.contains_key(&3));
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "remove multiple first");
 
     // Remove another item
     let removed = tree.remove(&1);
@@ -251,7 +253,7 @@ fn test_remove_multiple_items_from_leaf_root() {
     assert!(!tree.contains_key(&1));
     assert!(tree.contains_key(&3));
     assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "remove multiple second");
 
     // Remove last item
     let removed = tree.remove(&3);
@@ -259,12 +261,12 @@ fn test_remove_multiple_items_from_leaf_root() {
     // Tree should be empty
     assert_eq!(removed, Some("three".to_string()));
     assert_eq!(tree.len(), 0);
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "remove multiple last");
 }
 
 #[test]
 fn test_remove_nonexistent_key_returns_none() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
     tree.insert(1, "one".to_string());
     tree.insert(2, "two".to_string());
 
@@ -278,7 +280,7 @@ fn test_remove_nonexistent_key_returns_none() {
     assert_eq!(tree.len(), 2);
     assert_eq!(tree.get(&1), Some(&"one".to_string()));
     assert_eq!(tree.get(&2), Some(&"two".to_string()));
-    assert!(tree.check_invariants());
+    assert_invariants(&tree, "remove nonexistent");
 }
 
 // ============================================================================
@@ -287,12 +289,10 @@ fn test_remove_nonexistent_key_returns_none() {
 
 #[test]
 fn test_remove_from_tree_with_branch_root() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert enough items to create a branch root
-    for i in 1..=5 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_range(&mut tree, 1, 6);
 
     // Verify we have a branch root
     assert!(!tree.is_leaf_root());
