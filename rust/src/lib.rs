@@ -832,18 +832,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Merge into left branch
-        if let Some(left_branch) = self.get_branch_mut(left_id) {
-            left_branch.merge_from(separator_key, &mut child_branch);
-        } else {
+        // Merge into left branch - use early return for cleaner flow
+        let Some(left_branch) = self.get_branch_mut(left_id) else {
             return false;
-        }
+        };
+        left_branch.merge_from(separator_key, &mut child_branch);
 
         // Remove child from parent (second and final parent access)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.children.remove(child_index);
-            parent.keys.remove(child_index - 1);
-        }
+        let Some(parent) = self.get_branch_mut(parent_id) else {
+            return false;
+        };
+        parent.children.remove(child_index);
+        parent.keys.remove(child_index - 1);
 
         // Deallocate the merged child
         self.deallocate_branch(child_id);
@@ -880,18 +880,18 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Merge into child branch
-        if let Some(child_branch) = self.get_branch_mut(child_id) {
-            child_branch.merge_from(separator_key, &mut right_branch);
-        } else {
+        // Merge into child branch - use early return for cleaner flow
+        let Some(child_branch) = self.get_branch_mut(child_id) else {
             return false;
-        }
+        };
+        child_branch.merge_from(separator_key, &mut right_branch);
 
         // Remove right from parent (second and final parent access)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.children.remove(child_index + 1);
-            parent.keys.remove(child_index);
-        }
+        let Some(parent) = self.get_branch_mut(parent_id) else {
+            return false;
+        };
+        parent.children.remove(child_index + 1);
+        parent.keys.remove(child_index);
 
         // Deallocate the merged right sibling
         self.deallocate_branch(right_id);
@@ -926,17 +926,17 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Accept into child branch
-        let new_separator = if let Some(child_branch) = self.get_branch_mut(child_id) {
-            child_branch.accept_from_left(separator_key, moved_key, moved_child)
-        } else {
+        // Accept into child branch - use early return for cleaner flow
+        let Some(child_branch) = self.get_branch_mut(child_id) else {
             return false;
         };
+        let new_separator = child_branch.accept_from_left(separator_key, moved_key, moved_child);
 
         // Update separator in parent (second and final parent access)
-        if let Some(parent) = self.get_branch_mut(parent_id) {
-            parent.keys[child_index - 1] = new_separator;
-        }
+        let Some(parent) = self.get_branch_mut(parent_id) else {
+            return false;
+        };
+        parent.keys[child_index - 1] = new_separator;
 
         true
     }
@@ -1064,11 +1064,10 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             .get_leaf(right_id)
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
 
-        if let Some(new_sep) = new_separator {
-            if let Some(branch) = self.get_branch_mut(branch_id) {
-                branch.keys[child_index] = new_sep;
-            }
-        }
+        // Use Option combinators for nested conditional update
+        new_separator
+            .zip(self.get_branch_mut(branch_id))
+            .map(|(sep, branch)| branch.keys[child_index] = sep);
 
         true
     }
