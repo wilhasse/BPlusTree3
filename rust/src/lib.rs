@@ -1172,37 +1172,49 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
                 NodeRef::Leaf(_, _) => None,
             };
 
-            if let Some(branch_id) = root_branch_id {
-                if let Some(branch) = self.get_branch(branch_id) {
-                    if branch.children.is_empty() {
-                        // Root branch has no children, replace with empty arena leaf
-                        let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
-                        self.root = NodeRef::Leaf(empty_id, PhantomData);
-                        // Deallocate the old root branch to prevent arena leak
-                        self.deallocate_branch(branch_id);
-                        break;
-                    } else if branch.children.len() == 1 {
-                        // Root branch has only one child, replace root with that child
-                        let new_root = branch.children[0].clone();
-                        self.root = new_root;
-                        // Deallocate the old root branch to prevent arena leak
-                        self.deallocate_branch(branch_id);
-                        // Continue the loop in case the new root also needs collapsing
-                    } else {
-                        // Root branch has multiple children, no collapse needed
-                        break;
-                    }
-                } else {
-                    // Missing arena branch, replace with empty arena leaf
-                    let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
-                    self.root = NodeRef::Leaf(empty_id, PhantomData);
+            // Use Option combinators for cleaner nested logic handling
+            let branch_info = root_branch_id.and_then(|branch_id| {
+                self.get_branch(branch_id).map(|branch| {
+                    (
+                        branch_id,
+                        branch.children.len(),
+                        branch.children.first().cloned(),
+                    )
+                })
+            });
+
+            match branch_info {
+                Some((branch_id, 0, _)) => {
+                    // Empty branch - replace with empty leaf
+                    self.create_empty_root_leaf();
+                    self.deallocate_branch(branch_id);
                     break;
                 }
-            } else {
-                // Already a leaf root, no collapse needed
-                break;
+                Some((branch_id, 1, Some(child))) => {
+                    // Single child - promote it and continue collapsing
+                    self.root = child;
+                    self.deallocate_branch(branch_id);
+                    // Continue loop in case new root also needs collapsing
+                }
+                Some((_, _, _)) => {
+                    // Multiple children - no collapse needed
+                    break;
+                }
+                None => {
+                    // Handle missing branch or already leaf root
+                    root_branch_id
+                        .filter(|_| true) // Branch ID exists but branch is missing
+                        .map(|_| self.create_empty_root_leaf());
+                    break;
+                }
             }
         }
+    }
+
+    /// Helper method to create empty root leaf
+    fn create_empty_root_leaf(&mut self) {
+        let empty_id = self.allocate_leaf(LeafNode::new(self.capacity));
+        self.root = NodeRef::Leaf(empty_id, PhantomData);
     }
 
     // ============================================================================
