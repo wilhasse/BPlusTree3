@@ -95,7 +95,7 @@ fn test_intensive_linked_list_corruption_detection() {
     println!("Before alternating deletions: {:?}", before_alternating);
 
     // Remove every other element to stress the linked list
-    let mut keys_to_remove_alternating: Vec<_> = before_alternating
+    let keys_to_remove_alternating: Vec<_> = before_alternating
         .iter()
         .enumerate()
         .filter(|(i, _)| i % 2 == 1)

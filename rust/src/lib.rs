@@ -1489,52 +1489,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_arena.get_mut(id)
     }
 
-    /// Get a leaf node with error handling
-    fn get_leaf_checked(&self, id: NodeId) -> TreeResult<&LeafNode<K, V>> {
-        self.get_leaf(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Leaf node {} not found", id)))
-    }
-
-    /// Get a mutable leaf node with error handling
-    fn get_leaf_mut_checked(&mut self, id: NodeId) -> TreeResult<&mut LeafNode<K, V>> {
-        self.get_leaf_mut(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Leaf node {} not found", id)))
-    }
-
-    /// Get a branch node with error handling
-    fn get_branch_checked(&self, id: NodeId) -> TreeResult<&BranchNode<K, V>> {
-        self.get_branch(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Branch node {} not found", id)))
-    }
-
-    /// Get a mutable branch node with error handling
-    fn get_branch_mut_checked(&mut self, id: NodeId) -> TreeResult<&mut BranchNode<K, V>> {
-        self.get_branch_mut(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Branch node {} not found", id)))
-    }
-
-    /// Safely allocate a leaf node with error handling
-    fn allocate_leaf_checked(&mut self, leaf: LeafNode<K, V>) -> TreeResult<NodeId> {
-        // Check if we're approaching NodeId limits
-        if self.allocated_leaf_count() > (u32::MAX as usize / 2) {
-            return Err(BPlusTreeError::AllocationError(
-                "Approaching maximum leaf node capacity".to_string(),
-            ));
-        }
-        Ok(self.allocate_leaf(leaf))
-    }
-
-    /// Safely allocate a branch node with error handling
-    fn allocate_branch_checked(&mut self, branch: BranchNode<K, V>) -> TreeResult<NodeId> {
-        // Check if we're approaching NodeId limits
-        if self.allocated_branch_count() > (u32::MAX as usize / 2) {
-            return Err(BPlusTreeError::AllocationError(
-                "Approaching maximum branch node capacity".to_string(),
-            ));
-        }
-        Ok(self.allocate_branch(branch))
-    }
-
     /// Get the number of free leaf nodes in the arena.
     pub fn free_leaf_count(&self) -> usize {
         self.leaf_arena.free_count()
@@ -1604,18 +1558,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// Deallocate a branch node from the arena.
     pub fn deallocate_branch(&mut self, id: NodeId) -> Option<BranchNode<K, V>> {
         self.branch_arena.deallocate(id)
-    }
-
-    /// Safely deallocate a leaf with validation
-    fn deallocate_leaf_checked(&mut self, id: NodeId) -> TreeResult<LeafNode<K, V>> {
-        self.deallocate_leaf(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Cannot deallocate leaf {}", id)))
-    }
-
-    /// Safely deallocate a branch with validation
-    fn deallocate_branch_checked(&mut self, id: NodeId) -> TreeResult<BranchNode<K, V>> {
-        self.deallocate_branch(id)
-            .ok_or_else(|| BPlusTreeError::NodeError(format!("Cannot deallocate branch {}", id)))
     }
 
     /// Get a reference to a branch node in the arena.
