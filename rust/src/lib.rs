@@ -2736,20 +2736,21 @@ pub struct RangeIterator<'a, K, V> {
 
 impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
     fn new(tree: &'a BPlusTreeMap<K, V>, start_key: Option<&K>, end_key: Option<&'a K>) -> Self {
-        let iterator = if let Some(start) = start_key {
-            // Find the starting position using tree navigation
-            if let Some((leaf_id, index)) = tree.find_range_start(start) {
-                Some(ItemIterator::new_from_position(
-                    tree, leaf_id, index, end_key,
-                ))
-            } else {
-                None // No items in range
-            }
-        } else {
-            // Start from beginning
-            tree.get_first_leaf_id()
-                .map(|first_leaf| ItemIterator::new_from_position(tree, first_leaf, 0, end_key))
-        };
+        // Use Option combinators to handle start position logic cleanly
+        let iterator = start_key
+            .and_then(|start| tree.find_range_start(start))
+            .map(|(leaf_id, index)| ItemIterator::new_from_position(tree, leaf_id, index, end_key))
+            .or_else(|| {
+                // No start key provided - start from beginning
+                start_key
+                    .is_none()
+                    .then(|| {
+                        tree.get_first_leaf_id().map(|first_leaf| {
+                            ItemIterator::new_from_position(tree, first_leaf, 0, end_key)
+                        })
+                    })
+                    .flatten()
+            });
 
         Self {
             iterator,
@@ -2764,29 +2765,33 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
         skip_first: bool,
         end_info: Option<(K, bool)>, // (end_key, is_inclusive)
     ) -> Self {
-        let (iterator, first_key) = if let Some((leaf_id, index)) = start_info {
-            // Create iterator with appropriate end bound
-            let end_bound = match end_info {
-                Some((ref key, true)) => Bound::Included(key),
-                Some((ref key, false)) => Bound::Excluded(key),
-                None => Bound::Unbounded,
-            };
+        let (iterator, first_key) = start_info
+            .map(|(leaf_id, index)| {
+                // Create iterator with appropriate end bound using Option combinators
+                let end_bound = end_info
+                    .as_ref()
+                    .map(|(key, is_inclusive)| {
+                        if *is_inclusive {
+                            Bound::Included(key)
+                        } else {
+                            Bound::Excluded(key)
+                        }
+                    })
+                    .unwrap_or(Bound::Unbounded);
 
-            let iter = ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+                let iter =
+                    ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
 
-            // If we need to skip first, we need to know what key to skip
-            let first_key = if skip_first {
-                tree.get_leaf(leaf_id)
+                // Extract first key if needed for skipping, using Option combinators
+                let first_key = skip_first
+                    .then(|| tree.get_leaf(leaf_id))
+                    .flatten()
                     .and_then(|leaf| leaf.keys.get(index))
-                    .cloned()
-            } else {
-                None
-            };
+                    .cloned();
 
-            (Some(iter), first_key)
-        } else {
-            (None, None)
-        };
+                (Some(iter), first_key)
+            })
+            .unwrap_or((None, None));
 
         Self {
             iterator,
