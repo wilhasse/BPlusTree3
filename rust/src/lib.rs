@@ -2603,54 +2603,72 @@ impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
         }
 
         loop {
-            if let Some(leaf_id) = self.current_leaf_id {
-                if let Some(leaf) = self.tree.get_leaf(leaf_id) {
-                    // Check if we have more items in the current leaf
-                    if self.current_leaf_index < leaf.keys.len() {
-                        let key = &leaf.keys[self.current_leaf_index];
-                        let value = &leaf.values[self.current_leaf_index];
+            // Use Option::and_then to chain operations cleanly
+            let result = self
+                .current_leaf_id
+                .and_then(|leaf_id| self.tree.get_leaf(leaf_id))
+                .and_then(|leaf| self.try_get_next_item(leaf));
 
-                        // Check if we've reached the end bound
-                        if let Some(end) = self.end_key {
-                            if key >= end {
-                                self.finished = true;
-                                return None;
-                            }
-                        } else if let Some(ref end) = self.end_bound_key {
-                            if self.end_inclusive {
-                                if key > end {
-                                    self.finished = true;
-                                    return None;
-                                }
-                            } else if key >= end {
-                                self.finished = true;
-                                return None;
-                            }
-                        }
-
-                        self.current_leaf_index += 1;
-                        return Some((key, value));
-                    } else {
-                        // Move to next leaf
-                        self.current_leaf_id = if leaf.next != NULL_NODE {
-                            Some(leaf.next)
-                        } else {
-                            None
-                        };
-                        self.current_leaf_index = 0;
-                        // Continue loop to try next leaf
+            match result {
+                Some(item) => return Some(item),
+                None => {
+                    // Either no current leaf or no more items in current leaf
+                    if !self.advance_to_next_leaf().unwrap_or(false) {
+                        self.finished = true;
+                        return None;
                     }
-                } else {
-                    // Invalid leaf ID
-                    self.finished = true;
-                    return None;
+                    // Continue loop with next leaf
                 }
-            } else {
-                // No more leaves
-                self.finished = true;
-                return None;
             }
         }
+    }
+}
+
+impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
+    /// Helper method to try getting the next item from the current leaf
+    fn try_get_next_item(&mut self, leaf: &'a LeafNode<K, V>) -> Option<(&'a K, &'a V)> {
+        // Check if we have more items in the current leaf
+        if self.current_leaf_index >= leaf.keys.len() {
+            return None;
+        }
+
+        let key = &leaf.keys[self.current_leaf_index];
+        let value = &leaf.values[self.current_leaf_index];
+
+        // Check if we've reached the end bound using Option combinators
+        let beyond_end = self
+            .end_key
+            .map(|end| key >= end)
+            .or_else(|| {
+                self.end_bound_key.as_ref().map(|end| {
+                    if self.end_inclusive {
+                        key > end
+                    } else {
+                        key >= end
+                    }
+                })
+            })
+            .unwrap_or(false);
+
+        if beyond_end {
+            self.finished = true;
+            return None;
+        }
+
+        self.current_leaf_index += 1;
+        Some((key, value))
+    }
+
+    /// Helper method to advance to the next leaf
+    /// Returns Some(true) if successfully advanced, Some(false) if no more leaves, None if invalid leaf
+    fn advance_to_next_leaf(&mut self) -> Option<bool> {
+        let current_leaf = self.current_leaf_id?;
+        let leaf = self.tree.get_leaf(current_leaf)?;
+
+        self.current_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
+        self.current_leaf_index = 0;
+
+        Some(self.current_leaf_id.is_some())
     }
 }
 
