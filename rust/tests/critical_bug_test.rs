@@ -2,6 +2,9 @@
 /// These tests ensure proper linked list maintenance during deletions
 use bplustree::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 #[test]
 fn test_linked_list_corruption_causes_data_loss() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
@@ -96,9 +99,7 @@ fn test_invariants_after_problematic_operations() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(5).unwrap(); // Odd capacity
 
     // Perform operations that might violate invariants due to the bugs
-    for i in 0..25 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 20);
 
     println!("After insertions with odd capacity:");
     println!("  Invariants valid: {}", tree.check_invariants());

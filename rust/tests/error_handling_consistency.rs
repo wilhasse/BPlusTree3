@@ -3,6 +3,9 @@
 
 use bplustree::{BPlusTreeError, BPlusTreeMap};
 
+mod test_utils;
+use test_utils::*;
+
 /// Test that all public APIs return consistent error types
 #[test]
 fn test_public_api_error_consistency() {
@@ -24,7 +27,7 @@ fn test_public_api_error_consistency() {
     }
 
     // Test valid constructor
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Test get_item error handling
     let missing_key_result = tree.get_item(&999);
@@ -125,18 +128,14 @@ fn test_edge_case_error_handling() {
     );
 
     // Add some data for further testing
-    for i in 0..10 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 10);
 
     // Test boundary conditions
     assert!(tree.get(&-1).is_none(), "get should handle negative keys");
     assert!(tree.get(&1000).is_none(), "get should handle large keys");
 
     // Test invariant checking with complex operations
-    for i in 0..5 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 0, 5);
 
     // Tree should still be valid after operations
     assert!(
@@ -152,12 +151,8 @@ fn test_edge_case_error_handling() {
 fn test_error_propagation() {
     println!("=== ERROR PROPAGATION TEST ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-    // Create a tree with various operations
-    for i in 0..100 {
-        tree.insert(i, format!("test_value_{}", i));
-    }
+    let mut tree = create_tree_4();
+    let mut tree = create_tree_4_with_data(100);
 
     // Test that errors propagate correctly through the tree structure
     // This tests internal error handling consistency
@@ -179,9 +174,7 @@ fn test_error_propagation() {
     }
 
     // Test mixed operations
-    for i in 20..80 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 20, 80);
 
     // Verify remaining items
     let remaining_items: Vec<_> = tree.items().map(|(k, _)| *k).collect();
@@ -200,16 +193,14 @@ fn test_error_propagation() {
 fn test_operation_safety() {
     println!("=== OPERATION SAFETY TEST ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(8).unwrap();
+    let mut tree = create_tree_capacity(8);
 
     // Test rapid insertion/deletion cycles
     for cycle in 0..50 {
         let base = cycle * 100;
 
         // Insert batch
-        for i in 0..50 {
-            tree.insert(base + i, format!("cycle_{}_{}", cycle, i));
-        }
+        insert_with_offset_multiplier(&mut tree, 50, base, 1);
 
         // Verify batch was inserted correctly
         for i in 0..50 {
@@ -254,7 +245,7 @@ fn test_operation_safety() {
 fn test_error_recovery() {
     println!("=== ERROR RECOVERY TEST ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Test recovery from various error conditions
 
@@ -280,14 +271,10 @@ fn test_error_recovery() {
     }
 
     // 2. Add data and test recovery from edge cases
-    for i in 0..20 {
-        tree.insert(i, format!("recovery_test_{}", i));
-    }
+    insert_sequential_range(&mut tree, 20);
 
     // Remove all data and verify tree can recover
-    for i in 0..20 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 0, 20);
 
     assert!(
         tree.is_empty(),
@@ -299,9 +286,7 @@ fn test_error_recovery() {
     );
 
     // 3. Test that tree can be used normally after recovery
-    for i in 100..110 {
-        tree.insert(i, format!("post_recovery_{}", i));
-    }
+    insert_range(&mut tree, 100, 110);
 
     assert_eq!(tree.len(), 10, "Tree should have 10 items after recovery");
 
@@ -321,12 +306,17 @@ fn test_error_recovery() {
 fn test_internal_error_consistency() {
     println!("=== INTERNAL ERROR CONSISTENCY TEST ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Test that internal validation is working
-    for i in 0..1000 {
-        tree.insert(i, format!("consistency_test_{}", i));
+    insert_with_custom_fn(
+        &mut tree,
+        1000,
+        |i| i as i32,
+        |i| format!("consistency_test_{}", i),
+    );
 
+    for i in 0..1000 {
         // Check invariants every 100 insertions
         if i % 100 == 99 {
             assert!(
@@ -337,9 +327,9 @@ fn test_internal_error_consistency() {
     }
 
     // Test large-scale deletions
-    for i in 200..800 {
-        tree.remove(&i);
+    deletion_range_attack(&mut tree, 200, 800);
 
+    for i in 200..800 {
         // Check invariants every 100 deletions
         if i % 100 == 99 {
             assert!(

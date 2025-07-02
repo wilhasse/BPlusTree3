@@ -19,7 +19,7 @@ fn fuzz_test_bplustree() {
     for branching_factor in 4..=10 {
         println!("\n=== Testing branching factor {} ===", branching_factor);
 
-        let mut bplustree = BPlusTreeMap::new(branching_factor).unwrap();
+        let mut bplustree = create_tree_capacity_int(branching_factor);
         let mut btree_map = BTreeMap::new();
         let mut operations = Vec::new();
 

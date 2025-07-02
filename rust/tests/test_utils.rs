@@ -92,6 +92,23 @@ pub fn insert_with_offset_multiplier(
     }
 }
 
+/// Insert data with custom key and value functions
+pub fn insert_with_custom_fn<F, G>(
+    tree: &mut BPlusTreeMap<i32, String>,
+    count: usize,
+    key_fn: F,
+    value_fn: G,
+) where
+    F: Fn(usize) -> i32,
+    G: Fn(usize) -> String,
+{
+    for i in 0..count {
+        let key = key_fn(i);
+        let value = value_fn(i);
+        tree.insert(key, value);
+    }
+}
+
 /// Insert sequential data start..end with string values
 pub fn insert_range(tree: &mut BPlusTreeMap<i32, String>, start: usize, end: usize) {
     for i in start..end {

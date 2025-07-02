@@ -3,6 +3,9 @@
 
 use bplustree::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 /// REGRESSION TEST: Prevents memory leaks in arena allocation system
 /// This test was added after fixing the memory leak issue mentioned in code review.
 /// It ensures allocated nodes always match tree structure nodes.
@@ -309,9 +312,7 @@ fn test_edge_case_memory_scenarios() {
             tree.insert(i, format!("min_cap_{}", i));
         }
 
-        for i in 0..5 {
-            tree.remove(&i);
-        }
+        deletion_range_attack(&mut tree, 10, 40);
 
         let allocated = tree.allocated_leaf_count() + tree.allocated_branch_count();
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();

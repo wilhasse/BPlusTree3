@@ -1,6 +1,9 @@
 /// Tests that specifically demonstrate the identified bugs with clear evidence
 use bplustree::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 #[test]
 fn demonstrate_memory_leak_bug() {
     println!("\n=== DEMONSTRATING MEMORY LEAK BUG ===");
@@ -10,9 +13,7 @@ fn demonstrate_memory_leak_bug() {
     println!("Initial: {} allocated leaves", tree.allocated_leaf_count());
 
     // Force multiple root splits
-    for i in 0..20 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 20);
 
     let allocated = tree.allocated_leaf_count();
     let actual_in_tree = tree.leaf_count();
@@ -140,9 +141,7 @@ fn demonstrate_linked_list_merge_corruption() {
 
     // Create a scenario that will cause leaf merging
     // Insert keys that will create multiple leaves
-    for i in 0..20 {
-        tree.insert(i * 10, format!("value_{}", i));
-    }
+    insert_with_multiplier(&mut tree, 30, 2);
 
     println!("Before deletions - items via iteration:");
     let before: Vec<_> = tree.items().map(|(k, _)| *k).collect();
@@ -185,18 +184,14 @@ fn demonstrate_rebalancing_issues() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
 
     // Create a tree that will need rebalancing
-    for i in 0..50 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 50);
 
     println!("Before deletions:");
     println!("  Leaf count: {}", tree.leaf_count());
     println!("  Leaf sizes: {:?}", tree.leaf_sizes());
 
     // Delete a range that should trigger rebalancing
-    for i in 15..35 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 15, 35);
 
     println!("After deletions:");
     println!("  Leaf count: {}", tree.leaf_count());

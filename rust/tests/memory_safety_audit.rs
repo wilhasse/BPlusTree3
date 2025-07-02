@@ -12,9 +12,7 @@ fn test_arena_bounds_checking() {
 
     // Test with a reasonable number of items to verify no panics
     // This used to potentially overflow on 64-bit systems
-    for i in 0..10000 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 1000);
 
     println!("Successfully inserted 10,000 items");
     println!("Allocated leaves: {}", tree.allocated_leaf_count());
@@ -96,9 +94,7 @@ fn test_arena_iteration_type_safety() {
     }
 
     // Remove some items to create fragmentation
-    for i in 100..200 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 100, 900);
 
     // Test that iteration works correctly with type conversions
     let items: Vec<_> = tree.items().collect();

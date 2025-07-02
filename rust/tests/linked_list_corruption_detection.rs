@@ -1,14 +1,15 @@
 //! Linked list integrity verification tests
 //! These tests verify proper linked list maintenance during merge operations
 
-use bplustree::BPlusTreeMap;
+mod test_utils;
+use test_utils::*;
 
 /// INTENSIVE TEST: Verify linked list integrity through aggressive merge patterns
 #[test]
 fn test_intensive_linked_list_corruption_detection() {
     println!("=== INTENSIVE LINKED LIST INTEGRITY VERIFICATION ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Phase 1: Create a complex tree structure with multiple leaves
     println!("\n--- Phase 1: Building complex tree structure ---");
@@ -137,21 +138,17 @@ fn test_merge_scenarios_linked_list_integrity() {
     // Test 1: Left merge scenario
     {
         println!("\n--- Test 1: Left merge scenario ---");
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+        let mut tree = create_tree_4();
 
         // Create pattern: [A] -> [B] -> [C] -> [D]
         // Then merge B into A, should result in: [A+B] -> [C] -> [D]
-        for i in 0..16 {
-            tree.insert(i, format!("test1_{}", i));
-        }
+        insert_sequential_range(&mut tree, 16);
 
         let before_merge: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("Before deletions: {:?}", before_merge);
 
         // Delete elements to force left merge
-        for i in 4..8 {
-            tree.remove(&i);
-        }
+        deletion_range_attack(&mut tree, 4, 8);
 
         let after_merge: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("After deletions: {:?}", after_merge);
@@ -171,19 +168,15 @@ fn test_merge_scenarios_linked_list_integrity() {
     // Test 2: Right merge scenario
     {
         println!("\n--- Test 2: Right merge scenario ---");
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+        let mut tree = create_tree_4();
 
-        for i in 0..16 {
-            tree.insert(i, format!("test2_{}", i));
-        }
+        insert_sequential_range(&mut tree, 16);
 
         let before_merge: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("Before deletions: {:?}", before_merge);
 
         // Delete elements to force right merge
-        for i in 8..12 {
-            tree.remove(&i);
-        }
+        deletion_range_attack(&mut tree, 8, 12);
 
         let after_merge: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("After deletions: {:?}", after_merge);
@@ -203,19 +196,13 @@ fn test_merge_scenarios_linked_list_integrity() {
     // Test 3: Cascading merges
     {
         println!("\n--- Test 3: Cascading merges ---");
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-        for i in 0..32 {
-            tree.insert(i, format!("test3_{}", i));
-        }
+        let mut tree = create_tree_4_with_data(32);
 
         let before_cascade: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("Before cascading deletions: {:?}", before_cascade);
 
         // Delete large ranges to force cascading merges
-        for i in 8..24 {
-            tree.remove(&i);
-        }
+        deletion_range_attack(&mut tree, 8, 24);
 
         let after_cascade: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         println!("After cascading deletions: {:?}", after_cascade);
@@ -242,7 +229,7 @@ fn test_linked_list_edge_cases() {
 
     // Edge case 1: Single leaf operations
     {
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+        let mut tree = create_tree_4();
         tree.insert(1, "single".to_string());
 
         let items: Vec<_> = tree.items().map(|(k, _)| *k).collect();
@@ -257,19 +244,13 @@ fn test_linked_list_edge_cases() {
 
     // Edge case 2: Two leaf operations
     {
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-        for i in 0..8 {
-            tree.insert(i, format!("two_leaf_{}", i));
-        }
+        let mut tree = create_tree_4_with_data(8);
 
         // Should have exactly 2 leaves
         assert!(tree.leaf_count() >= 2, "Should have at least 2 leaves");
 
         // Remove elements from first leaf
-        for i in 0..3 {
-            tree.remove(&i);
-        }
+        deletion_range_attack(&mut tree, 0, 3);
 
         let remaining: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         let expected: Vec<_> = (3..8).collect();
@@ -280,15 +261,8 @@ fn test_linked_list_edge_cases() {
 
     // Edge case 3: Empty tree after operations
     {
-        let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-        for i in 0..10 {
-            tree.insert(i, format!("empty_test_{}", i));
-        }
-
-        for i in 0..10 {
-            tree.remove(&i);
-        }
+        let mut tree = create_tree_4_with_data(10);
+        deletion_range_attack(&mut tree, 0, 10);
 
         let final_items: Vec<_> = tree.items().map(|(k, _)| *k).collect();
         assert!(
@@ -307,7 +281,7 @@ fn test_linked_list_edge_cases() {
 fn test_linked_list_stress_consistency() {
     println!("=== LINKED LIST STRESS CONSISTENCY TEST ===");
 
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
+    let mut tree = create_tree_6();
 
     for round in 0..10 {
         println!("\n--- Stress Round {} ---", round + 1);

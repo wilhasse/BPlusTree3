@@ -1,5 +1,3 @@
-use bplustree::BPlusTreeMap;
-
 mod test_utils;
 use test_utils::*;
 
@@ -57,9 +55,7 @@ fn test_minimum_capacity_edge_cases_attack() {
     tree.clear();
 
     // Insert pattern to create specific structure
-    for i in 0..16 {
-        tree.insert(i * 2, format!("node-{}", i));
-    }
+    insert_with_multiplier(&mut tree, 50, 2);
 
     // Delete to leave each node at minimum
     for i in vec![1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29] {
@@ -155,11 +151,11 @@ fn test_get_mut_corruption_attack() {
     // Attack: Use get_mut to try to corrupt tree invariants
 
     let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert items
     for i in 0..30 {
-        tree.insert(i, vec![i; 10]); // Mutable vectors as values
+        tree.insert(i, format!("vec_{}_data", i)); // String data for testing
     }
 
     // Get mutable references and modify
@@ -193,12 +189,10 @@ fn test_split_merge_thrashing_attack() {
     // Attack: Cause repeated splits and merges in the same nodes
 
     let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert to create initial structure
-    for i in 0..20 {
-        tree.insert(i * 3, format!("v{}", i));
-    }
+    insert_with_multiplier(&mut tree, 20, 3);
 
     // Thrash: repeatedly fill and empty nodes
     for round in 0..10 {
@@ -210,9 +204,7 @@ fn test_split_merge_thrashing_attack() {
         }
 
         // Remove to cause merges
-        for i in 0..20 {
-            tree.remove(&(i * 3 + 1));
-        }
+        deletion_range_attack(&mut tree, 20, 80);
 
         // Verify tree is still consistent
         if let Err(e) = tree.check_invariants_detailed() {
@@ -234,7 +226,7 @@ fn test_extreme_key_values_attack() {
     // Attack: Use extreme key values to test boundary conditions
 
     let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
+    let mut tree = create_tree_4();
 
     // Test with minimum and maximum i32 values
     let extreme_keys = vec![
@@ -294,17 +286,17 @@ fn test_ultimate_adversarial_attack() {
     // Final attack: Everything we can think of
 
     let capacity = 4;
-    let mut tree = BPlusTreeMap::new(capacity).unwrap();
+    let mut tree = create_tree_4();
 
     // Combine all attack patterns
     for attack_round in 0..5 {
         // 1. Extreme keys
-        tree.insert(i32::MAX - attack_round, attack_round);
-        tree.insert(i32::MIN + attack_round, attack_round);
+        tree.insert(i32::MAX - attack_round, format!("max_{}", attack_round));
+        tree.insert(i32::MIN + attack_round, format!("min_{}", attack_round));
 
         // 2. Rapid operations
         for i in 0..20 {
-            tree.insert(i, i);
+            tree.insert(i, format!("attack_{}", i));
             if i % 2 == 0 {
                 tree.remove(&i);
             }
@@ -312,7 +304,7 @@ fn test_ultimate_adversarial_attack() {
 
         // 3. Force root changes
         for i in 0..100 {
-            tree.insert(i * attack_round, i);
+            tree.insert(i * attack_round, format!("combo_{}_{}", attack_round, i));
         }
         for i in (0..100).rev().step_by(2) {
             tree.remove(&(i * attack_round));

@@ -10,7 +10,7 @@ fn test_underfull_child_rebalancing_path() {
 
     // Use capacity 4 so min_keys for leaf = max(1, (4+1)/2) = 3
     // and min_keys for branch = max(1, (4+1)/2-1) = 2
-    let mut tree = create_simple_tree(4);
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert enough keys to create a multi-level tree structure
     // We need to create a scenario where:
@@ -19,7 +19,7 @@ fn test_underfull_child_rebalancing_path() {
     // 3. Removing one key makes it underfull but not empty
 
     // Insert keys to force tree growth and create the right structure
-    populate_sequential_int_x10(&mut tree, 20);
+    insert_with_multiplier_int(&mut tree, 20, 10);
 
     // Verify we have a multi-level tree
     assert!(!tree.is_leaf_root(), "Tree should have branch nodes");
@@ -73,8 +73,7 @@ fn test_underfull_child_rebalancing_path() {
     assert_eq!(tree.get(&8), Some(&80));
 
     // The tree should maintain basic correctness even with underfull nodes
-    tree.validate()
-        .expect("Tree should maintain basic invariants");
+    assert_invariants_int(&tree, "underfull child rebalancing");
 }
 
 #[test]
@@ -82,7 +81,7 @@ fn test_underfull_leaf_detection() {
     // This test specifically verifies that we can detect underfull conditions
     // and demonstrates the current behavior where underfull nodes are left as-is
 
-    let mut tree = create_simple_tree(4);
+    let mut tree = create_tree_capacity_int(4);
 
     // For capacity 4:
     // - Leaf min_keys = max(1, (4+1)/2) = 3
@@ -141,7 +140,7 @@ fn test_underfull_without_root_collapse() {
 
     // Insert enough keys to create a stable multi-level structure
     // that won't collapse when we remove a few keys
-    populate_sequential_int_x10(&mut tree, 30);
+    insert_sequential_range_int(&mut tree, 10);
 
     println!("Initial large tree:");
     tree.print_node_chain();
@@ -281,11 +280,11 @@ fn test_strict_invariant_checking_should_fail() {
     // This test uses the built-in strict invariant checking that includes underfull detection
     // It should fail, demonstrating that the current implementation violates B+ tree invariants
 
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Create a tree structure
     for i in 0..16 {
-        tree.insert(i, i * 10);
+        tree.insert(i, format!("value_{}", i * 10));
     }
 
     // Remove keys to create underfull nodes
@@ -305,7 +304,7 @@ fn test_strict_invariant_checking_should_fail() {
 
 #[test]
 fn test_bplustree_remove_existing_key() {
-    let mut tree = create_simple_tree(4);
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert some test data
     tree.insert(10, 100);
@@ -366,7 +365,7 @@ fn test_bplustree_remove_with_underflow() {
 
 #[test]
 fn test_bplustree_remove_last_key_from_tree() {
-    let mut tree = create_simple_tree(4);
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert a single key
     tree.insert(42, 420);
@@ -393,12 +392,12 @@ fn test_bplustree_remove_last_key_from_tree() {
 
 #[test]
 fn test_bplustree_remove_all_keys_from_single_node() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert multiple keys in a single node
-    tree.insert(10, 100);
-    tree.insert(20, 200);
-    tree.insert(30, 300);
+    tree.insert(10, "100".to_string());
+    tree.insert(20, "200".to_string());
+    tree.insert(30, "300".to_string());
 
     // Verify we have one node with 3 keys
     assert_eq!(tree.leaf_count(), 1);
@@ -462,7 +461,7 @@ fn test_bplustree_remove_from_first_node_causing_empty() {
 
 #[test]
 fn test_bplustree_remove_with_root_node_empty_validation() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert a single key and remove it
     tree.insert(42, 420);
@@ -484,7 +483,7 @@ fn test_bplustree_remove_with_root_node_empty_validation() {
 
 #[test]
 fn test_remove_nonexistent_key() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Insert some test data
     tree.insert(10, 100);

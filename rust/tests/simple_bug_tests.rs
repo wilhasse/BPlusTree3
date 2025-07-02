@@ -1,17 +1,18 @@
 /// Simplified tests to demonstrate specific bugs in the B+ tree implementation
 use bplustree::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 #[test]
 fn test_memory_leak_placeholder() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Record initial arena state
     let _initial_count = tree.allocated_leaf_count();
 
     // Force root splits to trigger the placeholder leak
-    for i in 0..20 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 20);
 
     // Check if we have more allocated nodes than actual tree nodes
     let allocated = tree.allocated_leaf_count();
@@ -39,12 +40,10 @@ fn test_memory_leak_placeholder() {
 
 #[test]
 fn test_odd_capacity_split() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(5).unwrap();
+    let mut tree = create_tree_5();
 
     // Insert enough to force splits with odd capacity
-    for i in 0..10 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 10);
 
     // Check leaf node sizes
     let leaf_sizes = tree.leaf_sizes();
@@ -64,12 +63,10 @@ fn test_odd_capacity_split() {
 
 #[test]
 fn test_linked_list_integrity() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Create multiple leaves
-    for i in 0..20 {
-        tree.insert(i * 10, format!("value_{}", i));
-    }
+    insert_with_multiplier(&mut tree, 20, 10);
 
     // Collect items via iteration (uses linked list)
     let items_via_iteration: Vec<_> = tree.items().map(|(k, _)| *k).collect();
@@ -92,9 +89,7 @@ fn test_linked_list_integrity() {
     );
 
     // Now delete some items and retest
-    for i in 5..15 {
-        tree.remove(&(i * 10));
-    }
+    deletion_range_attack(&mut tree, 50, 150);
 
     let items_after_delete: Vec<_> = tree.items().map(|(k, _)| *k).collect();
 
@@ -109,11 +104,9 @@ fn test_linked_list_integrity() {
 
 #[test]
 fn test_range_excluded_bounds() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
-    for i in 0..10 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 10);
 
     // Test excluded start bound
     use std::ops::Bound;
@@ -150,19 +143,13 @@ fn test_range_excluded_bounds() {
 #[test]
 fn test_min_keys_consistency() {
     // This test checks if the min_keys calculation is appropriate
-    let _tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
+    let _tree = create_tree_6();
 
     // Create a tree that will have both leaf and branch nodes
-    let mut test_tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(6).unwrap();
-    for i in 0..50 {
-        test_tree.insert(i, format!("value_{}", i));
-    }
+    let test_tree = create_tree_with_data(6, 50);
 
     // Check if the tree maintains proper structure
-    assert!(
-        test_tree.check_invariants(),
-        "Tree should maintain invariants"
-    );
+    assert_invariants(&test_tree, "min keys consistency");
 
     // The min_keys formula might be problematic for certain capacities
     // This test documents the current behavior
@@ -172,29 +159,22 @@ fn test_min_keys_consistency() {
 
 #[test]
 fn test_rebalancing_after_deletions() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     // Create a substantial tree
-    for i in 0..50 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 50);
 
     println!("Before deletions - leaf count: {}", tree.leaf_count());
     println!("Leaf sizes: {:?}", tree.leaf_sizes());
 
     // Delete many items to force rebalancing
-    for i in 10..40 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 10, 40);
 
     println!("After deletions - leaf count: {}", tree.leaf_count());
     println!("Leaf sizes: {:?}", tree.leaf_sizes());
 
     // Check that tree is still valid
-    assert!(
-        tree.check_invariants(),
-        "Tree should maintain invariants after deletions"
-    );
+    assert_invariants(&tree, "rebalancing after deletions");
 
     // Check for underfull nodes (this might reveal rebalancing issues)
     let min_keys = 2; // For capacity 4
@@ -213,11 +193,9 @@ fn test_rebalancing_after_deletions() {
 
 #[test]
 fn test_iterator_consistency() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
-    for i in 0..10 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 10);
 
     // Multiple iterations should give same results
     let iter1: Vec<_> = tree.items().map(|(k, _)| *k).collect();
@@ -233,7 +211,7 @@ fn test_iterator_consistency() {
 
 #[test]
 fn test_arena_utilization() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
+    let mut tree = create_tree_4();
 
     println!("Initial state:");
     println!("  Leaf utilization: {:.2}", tree.leaf_utilization());
@@ -241,9 +219,7 @@ fn test_arena_utilization() {
     println!("  Free leaves: {}", tree.free_leaf_count());
 
     // Add data
-    for i in 0..20 {
-        tree.insert(i, format!("value_{}", i));
-    }
+    insert_sequential_range(&mut tree, 20);
 
     println!("After insertions:");
     println!("  Leaf utilization: {:.2}", tree.leaf_utilization());
@@ -251,9 +227,7 @@ fn test_arena_utilization() {
     println!("  Free leaves: {}", tree.free_leaf_count());
 
     // Remove some data
-    for i in 5..15 {
-        tree.remove(&i);
-    }
+    deletion_range_attack(&mut tree, 5, 15);
 
     println!("After deletions:");
     println!("  Leaf utilization: {:.2}", tree.leaf_utilization());
