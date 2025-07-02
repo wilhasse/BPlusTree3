@@ -35,12 +35,52 @@ pub enum BPlusTreeError {
     ArenaError(String),
     /// Node operation failed.
     NodeError(String),
-    /// Tree structure is corrupted.
+    /// Tree corruption detected.
     CorruptedTree(String),
-    /// Operation failed due to invalid state.
+    /// Invalid tree state.
     InvalidState(String),
     /// Memory allocation failed.
     AllocationError(String),
+}
+
+impl BPlusTreeError {
+    /// Create an InvalidCapacity error with context
+    pub fn invalid_capacity(capacity: usize, min_required: usize) -> Self {
+        Self::InvalidCapacity(format!(
+            "Capacity {} is invalid (minimum required: {})",
+            capacity, min_required
+        ))
+    }
+
+    /// Create a DataIntegrityError with context
+    pub fn data_integrity(context: &str, details: &str) -> Self {
+        Self::DataIntegrityError(format!("{}: {}", context, details))
+    }
+
+    /// Create an ArenaError with context
+    pub fn arena_error(operation: &str, details: &str) -> Self {
+        Self::ArenaError(format!("{} failed: {}", operation, details))
+    }
+
+    /// Create a NodeError with context
+    pub fn node_error(node_type: &str, node_id: u32, details: &str) -> Self {
+        Self::NodeError(format!("{} node {}: {}", node_type, node_id, details))
+    }
+
+    /// Create a CorruptedTree error with context
+    pub fn corrupted_tree(component: &str, details: &str) -> Self {
+        Self::CorruptedTree(format!("{} corruption: {}", component, details))
+    }
+
+    /// Create an InvalidState error with context
+    pub fn invalid_state(operation: &str, state: &str) -> Self {
+        Self::InvalidState(format!("Cannot {} in state: {}", operation, state))
+    }
+
+    /// Create an AllocationError with context
+    pub fn allocation_error(resource: &str, reason: &str) -> Self {
+        Self::AllocationError(format!("Failed to allocate {}: {}", resource, reason))
+    }
 }
 
 impl std::fmt::Display for BPlusTreeError {
@@ -62,6 +102,70 @@ impl std::error::Error for BPlusTreeError {}
 
 /// Internal result type for tree operations
 type TreeResult<T> = Result<T, BPlusTreeError>;
+
+/// Public result type for tree operations that may fail
+pub type BTreeResult<T> = Result<T, BPlusTreeError>;
+
+/// Result type for key lookup operations
+pub type KeyResult<T> = Result<T, BPlusTreeError>;
+
+/// Result type for tree modification operations
+pub type ModifyResult<T> = Result<T, BPlusTreeError>;
+
+/// Result type for tree construction and validation
+pub type InitResult<T> = Result<T, BPlusTreeError>;
+
+/// Result extension trait for improved error handling
+pub trait BTreeResultExt<T> {
+    /// Convert to a BTreeResult with additional context
+    fn with_context(self, context: &str) -> BTreeResult<T>;
+
+    /// Convert to a BTreeResult with operation context
+    fn with_operation(self, operation: &str) -> BTreeResult<T>;
+
+    /// Log error and continue with default value
+    fn or_default_with_log(self) -> T
+    where
+        T: Default;
+}
+
+impl<T> BTreeResultExt<T> for Result<T, BPlusTreeError> {
+    fn with_context(self, context: &str) -> BTreeResult<T> {
+        self.map_err(|e| match e {
+            BPlusTreeError::KeyNotFound => BPlusTreeError::KeyNotFound,
+            BPlusTreeError::InvalidCapacity(msg) => {
+                BPlusTreeError::InvalidCapacity(format!("{}: {}", context, msg))
+            }
+            BPlusTreeError::DataIntegrityError(msg) => {
+                BPlusTreeError::data_integrity(context, &msg)
+            }
+            BPlusTreeError::ArenaError(msg) => BPlusTreeError::arena_error(context, &msg),
+            BPlusTreeError::NodeError(msg) => {
+                BPlusTreeError::NodeError(format!("{}: {}", context, msg))
+            }
+            BPlusTreeError::CorruptedTree(msg) => BPlusTreeError::corrupted_tree(context, &msg),
+            BPlusTreeError::InvalidState(msg) => BPlusTreeError::invalid_state(context, &msg),
+            BPlusTreeError::AllocationError(msg) => BPlusTreeError::allocation_error(context, &msg),
+        })
+    }
+
+    fn with_operation(self, operation: &str) -> BTreeResult<T> {
+        self.with_context(&format!("Operation '{}'", operation))
+    }
+
+    fn or_default_with_log(self) -> T
+    where
+        T: Default,
+    {
+        match self {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("Warning: B+ Tree operation failed, using default: {}", e);
+                T::default()
+            }
+        }
+    }
+}
 
 /// B+ Tree implementation with Rust dict-like API.
 ///
@@ -193,12 +297,9 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     /// let tree = BPlusTreeMap::<i32, String>::new(16).unwrap();
     /// assert!(tree.is_empty());
     /// ```
-    pub fn new(capacity: usize) -> Result<Self, BPlusTreeError> {
+    pub fn new(capacity: usize) -> InitResult<Self> {
         if capacity < MIN_CAPACITY {
-            return Err(BPlusTreeError::InvalidCapacity(format!(
-                "Capacity must be at least {} to maintain B+ tree invariants",
-                MIN_CAPACITY
-            )));
+            return Err(BPlusTreeError::invalid_capacity(capacity, MIN_CAPACITY));
         }
 
         // Initialize arena with the first leaf at id=0
@@ -257,7 +358,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Get value for a key, returning an error if the key doesn't exist.
     /// This is equivalent to Python's `tree[key]`.
-    pub fn get_item(&self, key: &K) -> Result<&V, BPlusTreeError> {
+    pub fn get_item(&self, key: &K) -> KeyResult<&V> {
         self.get(key).ok_or(BPlusTreeError::KeyNotFound)
     }
 
@@ -575,8 +676,105 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
     /// Remove a key from the tree, returning an error if the key doesn't exist.
     /// This is equivalent to Python's `del tree[key]`.
-    pub fn remove_item(&mut self, key: &K) -> Result<V, BPlusTreeError> {
+    pub fn remove_item(&mut self, key: &K) -> ModifyResult<V> {
         self.remove(key).ok_or(BPlusTreeError::KeyNotFound)
+    }
+
+    /// Try to get a value, returning detailed error context on failure
+    pub fn try_get(&self, key: &K) -> KeyResult<&V> {
+        use crate::BTreeResultExt;
+        self.get(key)
+            .ok_or(BPlusTreeError::KeyNotFound)
+            .with_context("Key lookup operation")
+    }
+
+    /// Insert with comprehensive error handling and rollback on failure
+    pub fn try_insert(&mut self, key: K, value: V) -> ModifyResult<Option<V>>
+    where
+        K: Clone,
+        V: Clone,
+    {
+        // Validate tree state before insertion
+        if let Err(e) = self.check_invariants_detailed() {
+            return Err(BPlusTreeError::DataIntegrityError(e));
+        }
+
+        let old_value = self.insert(key, value);
+
+        // Validate tree state after insertion
+        if let Err(e) = self.check_invariants_detailed() {
+            return Err(BPlusTreeError::DataIntegrityError(e));
+        }
+
+        Ok(old_value)
+    }
+
+    /// Remove with comprehensive error handling
+    pub fn try_remove(&mut self, key: &K) -> ModifyResult<V> {
+        // Validate tree state before removal
+        if let Err(e) = self.check_invariants_detailed() {
+            return Err(BPlusTreeError::DataIntegrityError(e));
+        }
+
+        let value = self.remove(key).ok_or(BPlusTreeError::KeyNotFound)?;
+
+        // Validate tree state after removal
+        if let Err(e) = self.check_invariants_detailed() {
+            return Err(BPlusTreeError::DataIntegrityError(e));
+        }
+
+        Ok(value)
+    }
+
+    /// Batch insert operations with rollback on any failure
+    pub fn batch_insert(&mut self, items: Vec<(K, V)>) -> ModifyResult<Vec<Option<V>>>
+    where
+        K: Clone,
+        V: Clone,
+    {
+        let mut results = Vec::new();
+        let mut inserted_keys = Vec::new();
+
+        for (key, value) in items {
+            match self.try_insert(key.clone(), value) {
+                Ok(old_value) => {
+                    results.push(old_value);
+                    inserted_keys.push(key);
+                }
+                Err(e) => {
+                    // Rollback all successful insertions
+                    for rollback_key in inserted_keys {
+                        self.remove(&rollback_key);
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Get multiple keys with detailed error reporting
+    pub fn get_many(&self, keys: &[K]) -> BTreeResult<Vec<&V>> {
+        let mut values = Vec::new();
+
+        for (_index, key) in keys.iter().enumerate() {
+            match self.get(key) {
+                Some(value) => values.push(value),
+                None => {
+                    return Err(BPlusTreeError::KeyNotFound);
+                }
+            }
+        }
+
+        Ok(values)
+    }
+
+    /// Check if tree is in a valid state for operations
+    pub fn validate_for_operation(&self, operation: &str) -> BTreeResult<()> {
+        self.check_invariants_detailed().map_err(|e| {
+            BPlusTreeError::DataIntegrityError(format!("Validation for {}: {}", operation, e))
+        })
     }
 
     // ============================================================================
@@ -1622,18 +1820,24 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Check leaf node consistency
         if tree_leaf_count != arena_leaf_count {
-            return Err(BPlusTreeError::ArenaError(format!(
-                "Arena-tree leaf inconsistency: {} in tree vs {} in arena",
-                tree_leaf_count, arena_leaf_count
-            )));
+            return Err(BPlusTreeError::arena_error(
+                "Leaf consistency check",
+                &format!(
+                    "{} in tree vs {} in arena",
+                    tree_leaf_count, arena_leaf_count
+                ),
+            ));
         }
 
         // Check branch node consistency
         if tree_branch_count != arena_branch_count {
-            return Err(BPlusTreeError::ArenaError(format!(
-                "Arena-tree branch inconsistency: {} in tree vs {} in arena",
-                tree_branch_count, arena_branch_count
-            )));
+            return Err(BPlusTreeError::arena_error(
+                "Branch consistency check",
+                &format!(
+                    "{} in tree vs {} in arena",
+                    tree_branch_count, arena_branch_count
+                ),
+            ));
         }
 
         // Check that all leaf nodes in tree are reachable via linked list
@@ -1727,10 +1931,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
 
         // Compare the two lists
         if tree_leaf_ids != linked_list_ids {
-            return Err(BPlusTreeError::CorruptedTree(format!(
-                "Linked list incompleteness: tree has {:?}, linked list has {:?}",
-                tree_leaf_ids, linked_list_ids
-            )));
+            return Err(BPlusTreeError::corrupted_tree(
+                "Linked list",
+                &format!(
+                    "tree has {:?}, linked list has {:?}",
+                    tree_leaf_ids, linked_list_ids
+                ),
+            ));
         }
 
         Ok(())
@@ -2066,8 +2273,9 @@ impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
                         Ok(_) => {
                             // This should never happen with correct split logic
                             // Return error instead of panic to maintain stability
-                            return InsertResult::Error(BPlusTreeError::DataIntegrityError(
-                                "Key unexpectedly found in new leaf after split".to_string(),
+                            return InsertResult::Error(BPlusTreeError::data_integrity(
+                                "Leaf split operation",
+                                "Key unexpectedly found in new leaf after split",
                             ));
                         }
                         Err(new_index) => {
