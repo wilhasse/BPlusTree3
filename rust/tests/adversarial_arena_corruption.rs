@@ -151,7 +151,7 @@ fn test_deep_recursion_arena_explosion() {
 
     for level in 0..10 {
         let count = 2_usize.pow(level);
-        for i in 0..count {
+        for _i in 0..count {
             tree.insert(key as i32, level as i32);
             key += multiplier / count as i64;
         }
@@ -196,7 +196,7 @@ fn test_deep_recursion_arena_explosion() {
 fn test_force_arena_corruption_panic() {
     // Attack: Try everything we can think of to corrupt the arena
 
-    let capacity = 5; // Odd number for interesting arithmetic
+    let _capacity = 5; // Odd number for interesting arithmetic
     let mut tree = create_tree_5();
 
     // Rapidly allocate and deallocate

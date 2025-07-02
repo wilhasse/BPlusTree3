@@ -151,7 +151,6 @@ fn test_edge_case_error_handling() {
 fn test_error_propagation() {
     println!("=== ERROR PROPAGATION TEST ===");
 
-    let mut tree = create_tree_4();
     let mut tree = create_tree_4_with_data(100);
 
     // Test that errors propagate correctly through the tree structure

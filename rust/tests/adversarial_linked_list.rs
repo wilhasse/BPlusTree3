@@ -214,7 +214,7 @@ fn test_linked_list_fragmentation_attack() {
     let mut tree = create_tree_4();
 
     // Insert in a pattern that creates many leaves
-    insert_with_multiplier_int(&mut tree, 100, 3);
+    insert_with_multiplier(&mut tree, 100, 3);
 
     // Delete in a pattern that fragments the leaves
     for i in (0..100).step_by(3) {
@@ -223,7 +223,7 @@ fn test_linked_list_fragmentation_attack() {
 
     // Insert items that will go into the gaps
     for i in 0..33 {
-        tree.insert(i * 9 + 1, i * 1000);
+        tree.insert(i * 9 + 1, format!("reused_{}", i * 1000));
     }
 
     // Now verify the linked list is still intact
@@ -327,7 +327,7 @@ fn test_force_linked_list_corruption() {
     for round in 0..20 {
         // Fill to capacity
         for i in 0..capacity * 3 {
-            tree.insert(round * 100 + i as i32, round * 1000 + i as i32);
+            tree.insert(round * 100 + i as i32, format!("round_{}_{}", round, i));
         }
 
         // Delete first and last items (boundary stress)
@@ -341,7 +341,10 @@ fn test_force_linked_list_corruption() {
 
         // Reinsert with different keys to force splits
         for i in 0..capacity {
-            tree.insert(round * 100 + i as i32 * 3 / 2, round * 2000 + i as i32);
+            tree.insert(
+                round * 100 + i as i32 * 3 / 2,
+                format!("reused_{}_{}", round, i),
+            );
         }
 
         // Check for corruption
@@ -362,7 +365,7 @@ fn test_force_linked_list_corruption() {
     // Final desperate attempt
     tree.clear();
     for i in 0..1000 {
-        tree.insert(i, i);
+        tree.insert(i, format!("final_{}", i));
     }
     for i in (0..1000).rev().step_by(2) {
         tree.remove(&i);

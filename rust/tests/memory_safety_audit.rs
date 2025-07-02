@@ -3,6 +3,9 @@
 
 use bplustree::BPlusTreeMap;
 
+mod test_utils;
+use test_utils::*;
+
 /// Test arena bounds checking with large data sets
 #[test]
 fn test_arena_bounds_checking() {
@@ -12,14 +15,14 @@ fn test_arena_bounds_checking() {
 
     // Test with a reasonable number of items to verify no panics
     // This used to potentially overflow on 64-bit systems
-    insert_sequential_range(&mut tree, 1000);
+    insert_sequential_range(&mut tree, 10000);
 
     println!("Successfully inserted 10,000 items");
     println!("Allocated leaves: {}", tree.allocated_leaf_count());
     println!("Allocated branches: {}", tree.allocated_branch_count());
 
     // Verify all items are accessible
-    for i in 0..1000 {
+    for i in 0..10000 {
         assert!(tree.contains_key(&i), "Key {} should be accessible", i);
     }
 
@@ -32,7 +35,7 @@ fn test_arena_bounds_checking() {
     println!("Remaining items: {}", tree.len());
 
     // Verify remaining items are still accessible
-    for i in 5000..6000 {
+    for i in 5000..10000 {
         assert!(
             tree.contains_key(&i),
             "Key {} should still be accessible",
@@ -94,13 +97,13 @@ fn test_arena_iteration_type_safety() {
     }
 
     // Remove some items to create fragmentation
-    deletion_range_attack(&mut tree, 100, 900);
+    deletion_range_attack(&mut tree, 100, 200);
 
     // Test that iteration works correctly with type conversions
     let items: Vec<_> = tree.items().collect();
     println!("Iteration collected {} items", items.len());
 
-    // Verify iteration is working properly
+    // Verify iteration is working properly (1000 - 100 removed = 900)
     assert_eq!(items.len(), 900, "Should have 900 items after removals");
 
     // Check that items are in order (verifies NodeId conversions in iteration)

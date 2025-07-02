@@ -19,7 +19,7 @@ fn test_underfull_child_rebalancing_path() {
     // 3. Removing one key makes it underfull but not empty
 
     // Insert keys to force tree growth and create the right structure
-    insert_with_multiplier_int(&mut tree, 20, 10);
+    populate_sequential_int_x10(&mut tree, 20);
 
     // Verify we have a multi-level tree
     assert!(!tree.is_leaf_root(), "Tree should have branch nodes");
@@ -140,7 +140,7 @@ fn test_underfull_without_root_collapse() {
 
     // Insert enough keys to create a stable multi-level structure
     // that won't collapse when we remove a few keys
-    insert_sequential_range_int(&mut tree, 10);
+    populate_sequential_int_x10(&mut tree, 30);
 
     println!("Initial large tree:");
     tree.print_node_chain();
@@ -280,11 +280,11 @@ fn test_strict_invariant_checking_should_fail() {
     // This test uses the built-in strict invariant checking that includes underfull detection
     // It should fail, demonstrating that the current implementation violates B+ tree invariants
 
-    let mut tree = create_tree_4();
+    let mut tree = create_tree_capacity_int(4);
 
     // Create a tree structure
     for i in 0..16 {
-        tree.insert(i, format!("value_{}", i * 10));
+        tree.insert(i, i * 10);
     }
 
     // Remove keys to create underfull nodes
@@ -392,12 +392,12 @@ fn test_bplustree_remove_last_key_from_tree() {
 
 #[test]
 fn test_bplustree_remove_all_keys_from_single_node() {
-    let mut tree = create_tree_4();
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert multiple keys in a single node
-    tree.insert(10, "100".to_string());
-    tree.insert(20, "200".to_string());
-    tree.insert(30, "300".to_string());
+    tree.insert(10, 100);
+    tree.insert(20, 200);
+    tree.insert(30, 300);
 
     // Verify we have one node with 3 keys
     assert_eq!(tree.leaf_count(), 1);
@@ -461,7 +461,7 @@ fn test_bplustree_remove_from_first_node_causing_empty() {
 
 #[test]
 fn test_bplustree_remove_with_root_node_empty_validation() {
-    let mut tree = create_tree_4();
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert a single key and remove it
     tree.insert(42, 420);
@@ -483,7 +483,7 @@ fn test_bplustree_remove_with_root_node_empty_validation() {
 
 #[test]
 fn test_remove_nonexistent_key() {
-    let mut tree = create_tree_4();
+    let mut tree = create_tree_capacity_int(4);
 
     // Insert some test data
     tree.insert(10, 100);

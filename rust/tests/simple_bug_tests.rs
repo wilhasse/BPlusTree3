@@ -1,6 +1,4 @@
 /// Simplified tests to demonstrate specific bugs in the B+ tree implementation
-use bplustree::BPlusTreeMap;
-
 mod test_utils;
 use test_utils::*;
 

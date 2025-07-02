@@ -150,7 +150,7 @@ fn test_insert_remove_same_key_attack() {
 fn test_get_mut_corruption_attack() {
     // Attack: Use get_mut to try to corrupt tree invariants
 
-    let capacity = 4;
+    let _capacity = 4;
     let mut tree = create_tree_4();
 
     // Insert items
@@ -163,7 +163,7 @@ fn test_get_mut_corruption_attack() {
         if let Some(v) = tree.get_mut(&i) {
             // Modify the value in a way that might confuse tree
             v.clear();
-            v.extend(vec![i * 100; 20]);
+            v.push_str(&format!("modified_{}", i * 100));
         }
     }
 
@@ -175,7 +175,7 @@ fn test_get_mut_corruption_attack() {
     // Verify all values were modified correctly
     for i in 0..30 {
         if let Some(v) = tree.get(&i) {
-            if v.len() != 20 || v[0] != i * 100 {
+            if !v.contains(&format!("modified_{}", i * 100)) {
                 panic!("ATTACK SUCCESSFUL: Value corruption through get_mut!");
             }
         } else {
@@ -188,7 +188,7 @@ fn test_get_mut_corruption_attack() {
 fn test_split_merge_thrashing_attack() {
     // Attack: Cause repeated splits and merges in the same nodes
 
-    let capacity = 4;
+    let _capacity = 4;
     let mut tree = create_tree_4();
 
     // Insert to create initial structure
@@ -203,8 +203,10 @@ fn test_split_merge_thrashing_attack() {
             tree.insert(i * 3 + 1, format!("fill-{}-{}", round, i));
         }
 
-        // Remove to cause merges
-        deletion_range_attack(&mut tree, 20, 80);
+        // Remove the fill items to cause merges
+        for i in 0..20 {
+            tree.remove(&(i * 3 + 1));
+        }
 
         // Verify tree is still consistent
         if let Err(e) = tree.check_invariants_detailed() {
@@ -225,7 +227,7 @@ fn test_split_merge_thrashing_attack() {
 fn test_extreme_key_values_attack() {
     // Attack: Use extreme key values to test boundary conditions
 
-    let capacity = 4;
+    let _capacity = 4;
     let mut tree = create_tree_4();
 
     // Test with minimum and maximum i32 values
@@ -285,7 +287,7 @@ fn test_extreme_key_values_attack() {
 fn test_ultimate_adversarial_attack() {
     // Final attack: Everything we can think of
 
-    let capacity = 4;
+    let _capacity = 4;
     let mut tree = create_tree_4();
 
     // Combine all attack patterns
@@ -319,7 +321,7 @@ fn test_ultimate_adversarial_attack() {
         // Try to corrupt through get_mut
         let some_key = *tree.keys().next().unwrap();
         if let Some(v) = tree.get_mut(&some_key) {
-            *v = i32::MAX; // Extreme value modification
+            *v = format!("extreme_{}", i32::MAX); // Extreme value modification
         }
 
         // 5. Check for any sign of corruption
