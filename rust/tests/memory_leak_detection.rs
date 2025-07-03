@@ -16,19 +16,17 @@ fn test_memory_leak_regression_prevention() {
     let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
 
     // Record initial state
-    let initial_allocated_leaves = tree.allocated_leaf_count();
-    let initial_allocated_branches = tree.allocated_branch_count();
-    let initial_free_leaves = tree.free_leaf_count();
-    let initial_free_branches = tree.free_branch_count();
+    let initial_leaf_stats = tree.leaf_arena_stats();
+    let initial_branch_stats = tree.branch_arena_stats();
 
     println!("Initial state:");
     println!(
         "  Allocated leaves: {}, branches: {}",
-        initial_allocated_leaves, initial_allocated_branches
+        initial_leaf_stats.allocated_count, initial_branch_stats.allocated_count
     );
     println!(
         "  Free leaves: {}, branches: {}",
-        initial_free_leaves, initial_free_branches
+        initial_leaf_stats.free_count, initial_branch_stats.free_count
     );
 
     // Perform operations that force multiple root splits and merges
@@ -41,15 +39,15 @@ fn test_memory_leak_regression_prevention() {
             tree.insert(base + i, format!("value_{}_{}", cycle, i));
         }
 
-        let after_insert_leaves = tree.allocated_leaf_count();
-        let after_insert_branches = tree.allocated_branch_count();
+        let after_insert_leaf_stats = tree.leaf_arena_stats();
+        let after_insert_branch_stats = tree.branch_arena_stats();
         let tree_leaves = tree.leaf_count();
         let (_, tree_branches) = tree.count_nodes_in_tree();
 
         println!("  After insertions:");
         println!(
             "    Arena: {} leaves, {} branches",
-            after_insert_leaves, after_insert_branches
+            after_insert_leaf_stats.allocated_count, after_insert_branch_stats.allocated_count
         );
         println!(
             "    Tree:  {} leaves, {} branches",
@@ -57,16 +55,16 @@ fn test_memory_leak_regression_prevention() {
         );
 
         // Check for immediate leaks
-        if after_insert_leaves > tree_leaves {
+        if after_insert_leaf_stats.allocated_count > tree_leaves {
             println!(
                 "    ⚠ LEAK: {} extra leaves allocated",
-                after_insert_leaves - tree_leaves
+                after_insert_leaf_stats.allocated_count - tree_leaves
             );
         }
-        if after_insert_branches > tree_branches {
+        if after_insert_branch_stats.allocated_count > tree_branches {
             println!(
                 "    ⚠ LEAK: {} extra branches allocated",
-                after_insert_branches - tree_branches
+                after_insert_branch_stats.allocated_count - tree_branches
             );
         }
 
@@ -75,15 +73,15 @@ fn test_memory_leak_regression_prevention() {
             tree.remove(&(base + i));
         }
 
-        let after_delete_leaves = tree.allocated_leaf_count();
-        let after_delete_branches = tree.allocated_branch_count();
+        let after_delete_leaf_stats = tree.leaf_arena_stats();
+        let after_delete_branch_stats = tree.branch_arena_stats();
         let tree_leaves_after = tree.leaf_count();
         let (_, tree_branches_after) = tree.count_nodes_in_tree();
 
         println!("  After deletions:");
         println!(
             "    Arena: {} leaves, {} branches",
-            after_delete_leaves, after_delete_branches
+            after_delete_leaf_stats.allocated_count, after_delete_branch_stats.allocated_count
         );
         println!(
             "    Tree:  {} leaves, {} branches",
@@ -91,23 +89,23 @@ fn test_memory_leak_regression_prevention() {
         );
 
         // Check for leaks after deletions
-        if after_delete_leaves > tree_leaves_after {
+        if after_delete_leaf_stats.allocated_count > tree_leaves_after {
             println!(
                 "    ⚠ LEAK: {} extra leaves allocated",
-                after_delete_leaves - tree_leaves_after
+                after_delete_leaf_stats.allocated_count - tree_leaves_after
             );
         }
-        if after_delete_branches > tree_branches_after {
+        if after_delete_branch_stats.allocated_count > tree_branches_after {
             println!(
                 "    ⚠ LEAK: {} extra branches allocated",
-                after_delete_branches - tree_branches_after
+                after_delete_branch_stats.allocated_count - tree_branches_after
             );
         }
     }
 
     // Final state check
-    let final_allocated_leaves = tree.allocated_leaf_count();
-    let final_allocated_branches = tree.allocated_branch_count();
+    let final_leaf_stats = tree.leaf_arena_stats();
+    let final_branch_stats = tree.branch_arena_stats();
     let final_tree_leaves = tree.leaf_count();
     let (_, final_tree_branches) = tree.count_nodes_in_tree();
 
@@ -115,7 +113,7 @@ fn test_memory_leak_regression_prevention() {
     println!("Final arena state:");
     println!(
         "  Allocated leaves: {}, branches: {}",
-        final_allocated_leaves, final_allocated_branches
+        final_leaf_stats.allocated_count, final_branch_stats.allocated_count
     );
     println!("Final tree state:");
     println!(
@@ -124,8 +122,8 @@ fn test_memory_leak_regression_prevention() {
     );
 
     // Calculate potential leaks
-    let leaf_leak = final_allocated_leaves.saturating_sub(final_tree_leaves);
-    let branch_leak = final_allocated_branches.saturating_sub(final_tree_branches);
+    let leaf_leak = final_leaf_stats.allocated_count.saturating_sub(final_tree_leaves);
+    let branch_leak = final_branch_stats.allocated_count.saturating_sub(final_tree_branches);
 
     if leaf_leak > 0 {
         println!("❌ LEAF MEMORY LEAK DETECTED: {} leaked nodes", leaf_leak);
@@ -164,7 +162,7 @@ fn test_root_split_no_memory_accumulation() {
             tree.insert(i, format!("value_{}", i));
         }
 
-        let allocated = tree.allocated_leaf_count() + tree.allocated_branch_count();
+        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
 
@@ -202,16 +200,16 @@ fn test_arena_fragmentation_and_reuse() {
             tree.insert(base + i, format!("phase_{}_{}", phase, i));
         }
 
-        let after_insert = tree.allocated_leaf_count();
-        let free_after_insert = tree.free_leaf_count();
+        let after_insert = tree.leaf_arena_stats().allocated_count;
+        let free_after_insert = tree.leaf_arena_stats().free_count;
 
         // Remove most data to create fragmentation
         for i in 0..80 {
             tree.remove(&(base + i));
         }
 
-        let after_remove = tree.allocated_leaf_count();
-        let free_after_remove = tree.free_leaf_count();
+        let after_remove = tree.leaf_arena_stats().allocated_count;
+        let free_after_remove = tree.leaf_arena_stats().free_count;
 
         println!("  Allocated: {} -> {}", after_insert, after_remove);
         println!("  Free: {} -> {}", free_after_insert, free_after_remove);
@@ -225,7 +223,7 @@ fn test_arena_fragmentation_and_reuse() {
     }
 
     // Final consistency check
-    let final_allocated = tree.allocated_leaf_count();
+    let final_allocated = tree.leaf_arena_stats().allocated_count;
     let final_in_tree = tree.leaf_count();
 
     if final_allocated != final_in_tree {
@@ -258,7 +256,7 @@ fn test_stress_allocation_deallocation_cycles() {
 
         // Every few cycles, check for leaks
         if cycle % 5 == 4 {
-            let allocated = tree.allocated_leaf_count() + tree.allocated_branch_count();
+            let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
             let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
             let in_tree = tree_leaves + tree_branches;
 
@@ -288,12 +286,12 @@ fn test_edge_case_memory_scenarios() {
         let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
         tree.insert(1, "single".to_string());
 
-        let allocated = tree.allocated_leaf_count();
+        let allocated = tree.leaf_arena_stats().allocated_count;
         let in_tree = tree.leaf_count();
         assert_eq!(allocated, in_tree, "Single node leak");
 
         tree.remove(&1);
-        let after_remove_allocated = tree.allocated_leaf_count();
+        let after_remove_allocated = tree.leaf_arena_stats().allocated_count;
         let after_remove_in_tree = tree.leaf_count();
         assert_eq!(
             after_remove_allocated, after_remove_in_tree,
@@ -314,7 +312,7 @@ fn test_edge_case_memory_scenarios() {
 
         deletion_range_attack(&mut tree, 10, 40);
 
-        let allocated = tree.allocated_leaf_count() + tree.allocated_branch_count();
+        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
         assert_eq!(allocated, in_tree, "Minimum capacity leak");
@@ -331,7 +329,7 @@ fn test_edge_case_memory_scenarios() {
             tree.insert(i, format!("large_cap_{}", i));
         }
 
-        let allocated = tree.allocated_leaf_count() + tree.allocated_branch_count();
+        let allocated = tree.leaf_arena_stats().allocated_count + tree.branch_arena_stats().allocated_count;
         let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
         let in_tree = tree_leaves + tree_branches;
         assert_eq!(allocated, in_tree, "Large capacity leak");

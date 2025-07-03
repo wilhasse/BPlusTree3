@@ -235,19 +235,17 @@ fn demonstrate_arena_tree_consistency_issues() {
         tree.remove(&i);
     }
 
-    let allocated_leaves = tree.allocated_leaf_count();
-    let allocated_branches = tree.allocated_branch_count();
-    let free_leaves = tree.free_leaf_count();
-    let free_branches = tree.free_branch_count();
+    let leaf_stats = tree.leaf_arena_stats();
+    let branch_stats = tree.branch_arena_stats();
 
     println!("Arena state:");
     println!(
         "  Allocated leaves: {}, Free leaves: {}",
-        allocated_leaves, free_leaves
+        leaf_stats.allocated_count, leaf_stats.free_count
     );
     println!(
         "  Allocated branches: {}, Free branches: {}",
-        allocated_branches, free_branches
+        branch_stats.allocated_count, branch_stats.free_count
     );
 
     let actual_leaves = tree.leaf_count();
@@ -256,17 +254,17 @@ fn demonstrate_arena_tree_consistency_issues() {
     println!("  Leaves in tree: {}", actual_leaves);
 
     // Check for inconsistencies
-    let total_leaf_slots = allocated_leaves + free_leaves;
+    let total_leaf_slots = leaf_stats.allocated_count + leaf_stats.free_count;
 
     println!("  Total leaf arena slots: {}", total_leaf_slots);
 
     // The issue is that arena validation doesn't check if allocated nodes
     // are actually referenced by the tree structure
 
-    if allocated_leaves > actual_leaves {
+    if leaf_stats.allocated_count > actual_leaves {
         println!(
             "⚠ POTENTIAL ISSUE: More leaves allocated ({}) than in tree ({})",
-            allocated_leaves, actual_leaves
+            leaf_stats.allocated_count, actual_leaves
         );
     }
 }

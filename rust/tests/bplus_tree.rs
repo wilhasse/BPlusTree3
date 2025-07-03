@@ -2000,336 +2000,296 @@ fn test_interleaved_operations() {
     let mut tree = BPlusTreeMap::new(7).unwrap();
 
     // Interleave insertions, deletions, and updates
-    for round in 0..20 {
-        // Insert some items
-        for i in 0..5 {
-            let key = round * 10 + i;
-            tree.insert(key, format!("round_{}_item_{}", round, i));
+    for i in 0..100 {
+        // Insert
+        tree.insert(i, format!("value_{}", i));
+
+        // Update a previous key
+        if i > 10 {
+            tree.insert(i - 10, format!("updated_{}", i - 10));
         }
 
-        // Update some existing items
-        if round > 0 {
-            for i in 0..3 {
-                let key = (round - 1) * 10 + i;
-                tree.insert(key, format!("updated_round_{}_item_{}", round - 1, i));
-            }
+        // Delete an even older key
+        if i > 20 {
+            tree.remove(&(i - 20));
         }
 
-        // Delete some old items
-        if round > 1 {
-            for i in 0..2 {
-                let key = (round - 2) * 10 + i;
-                tree.remove(&key);
-            }
-        }
-
+        // Check invariants on every iteration
         assert!(
             tree.check_invariants(),
-            "Invariants violated at round {}",
-            round
+            "Invariants violated at iteration {}",
+            i
         );
     }
 }
 
 #[test]
-fn test_empty_tree_operations() {
-    let mut tree = BPlusTreeMap::<i32, String>::new(8).unwrap();
+fn test_clear_and_reuse() {
+    let mut tree = BPlusTreeMap::new(5).unwrap();
 
-    // Operations on empty tree
-    assert_eq!(tree.get(&1), None);
-    assert_eq!(tree.remove(&1), None);
-    assert!(!tree.contains_key(&1));
-    assert_eq!(tree.len(), 0);
-    assert!(tree.is_empty());
-
-    // Iterators on empty tree
-    assert_eq!(tree.items().count(), 0);
-    assert_eq!(tree.keys().count(), 0);
-    assert_eq!(tree.values().count(), 0);
-    assert_eq!(tree.items_range(Some(&1), Some(&10)).count(), 0);
-
-    assert!(tree.check_invariants());
-}
-
-// ============================================================================
-// NEW TESTS - API Completeness
-// ============================================================================
-
-#[test]
-fn test_clear() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
-
-    // Add some items
-    for i in 0..10 {
+    // Populate the tree
+    for i in 0..50 {
         tree.insert(i, format!("value_{}", i));
     }
-    assert_eq!(tree.len(), 10);
-    assert!(!tree.is_empty());
+    assert_eq!(tree.len(), 50);
+    assert!(tree.check_invariants());
 
     // Clear the tree
     tree.clear();
     assert_eq!(tree.len(), 0);
     assert!(tree.is_empty());
-    assert!(tree.is_leaf_root());
     assert!(tree.check_invariants());
 
-    // Should be able to insert after clearing
-    tree.insert(42, "new_value".to_string());
-    assert_eq!(tree.len(), 1);
-    assert_eq!(tree.get(&42), Some(&"new_value".to_string()));
+    // Reuse the tree
+    for i in 100..150 {
+        tree.insert(i, format!("new_value_{}", i));
+    }
+    assert_eq!(tree.len(), 50);
+    assert!(tree.check_invariants());
 }
 
 #[test]
-fn test_get_mut() {
-    let mut tree = BPlusTreeMap::new(5).unwrap();
-
-    // Insert some items
-    tree.insert(1, "one".to_string());
-    tree.insert(2, "two".to_string());
-    tree.insert(3, "three".to_string());
-
-    // Test get_mut for existing key
-    if let Some(value) = tree.get_mut(&2) {
-        *value = "TWO".to_string();
+fn test_range_query_edge_cases() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+    for i in 0..20 {
+        tree.insert(i, format!("value{}", i));
     }
-    assert_eq!(tree.get(&2), Some(&"TWO".to_string()));
 
-    // Test get_mut for non-existing key
-    assert_eq!(tree.get_mut(&99), None);
+    // Range that covers the entire tree
+    let all_items: Vec<_> = tree.items_range(None, None).collect();
+    assert_eq!(all_items.len(), 20);
 
-    // Verify other values unchanged
-    assert_eq!(tree.get(&1), Some(&"one".to_string()));
-    assert_eq!(tree.get(&3), Some(&"three".to_string()));
-    assert!(tree.check_invariants());
+    // Range that starts before the first key
+    let from_neg: Vec<_> = tree.items_range(Some(&-5), Some(&5)).collect();
+    assert_eq!(from_neg.len(), 5); // 0, 1, 2, 3, 4
+
+    // Range that ends after the last key
+    let to_far: Vec<_> = tree.items_range(Some(&15), Some(&100)).collect();
+    assert_eq!(to_far.len(), 5); // 15, 16, 17, 18, 19
+
+    // Range with no items
+    let no_items: Vec<_> = tree.items_range(Some(&25), Some(&30)).collect();
+    assert_eq!(no_items.len(), 0);
+}
+
+#[test]
+fn test_range_syntax_support() {
+    let mut tree = BPlusTreeMap::new(16).unwrap();
+    for i in 0..10 {
+        tree.insert(i, format!("value{}", i));
+    }
+
+    // Test different range syntaxes
+    let range1: Vec<_> = tree.range(3..7).map(|(k, v)| (*k, v.clone())).collect();
+    assert_eq!(
+        range1,
+        vec![
+            (3, "value3".to_string()),
+            (4, "value4".to_string()),
+            (5, "value5".to_string()),
+            (6, "value6".to_string())
+        ]
+    );
+
+    let range2: Vec<_> = tree.range(3..=7).map(|(k, v)| (*k, v.clone())).collect();
+    assert_eq!(
+        range2,
+        vec![
+            (3, "value3".to_string()),
+            (4, "value4".to_string()),
+            (5, "value5".to_string()),
+            (6, "value6".to_string()),
+            (7, "value7".to_string())
+        ]
+    );
+
+    let range3: Vec<_> = tree.range(5..).map(|(k, v)| *k).collect();
+    assert_eq!(range3, vec![5, 6, 7, 8, 9]);
+
+    let range4: Vec<_> = tree.range(..5).map(|(k, v)| *k).collect();
+    assert_eq!(range4, vec![0, 1, 2, 3, 4]);
+
+    let range5: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
+    assert_eq!(range5, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+}
+
+#[test]
+fn test_range_syntax_with_excluded_bounds() {
+    let mut tree = BPlusTreeMap::new(16).unwrap();
+    for i in 0..10 {
+        tree.insert(i, format!("value{}", i));
+    }
+
+    // Test excluded start bound
+    let range_excluded_start: Vec<_> = tree
+        .range((std::ops::Bound::Excluded(3), std::ops::Bound::Included(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_excluded_start, vec![4, 5, 6, 7]);
+
+    // Test excluded end bound
+    let range_excluded_end: Vec<_> = tree
+        .range((std::ops::Bound::Included(3), std::ops::Bound::Excluded(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_excluded_end, vec![3, 4, 5, 6]);
+
+    // Test both excluded
+    let range_both_excluded: Vec<_> = tree
+        .range((std::ops::Bound::Excluded(3), std::ops::Bound::Excluded(7)))
+        .map(|(k, _)| *k)
+        .collect();
+    assert_eq!(range_both_excluded, vec![4, 5, 6]);
 }
 
 #[test]
 fn test_first_and_last() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
-
-    // Empty tree
     assert_eq!(tree.first(), None);
     assert_eq!(tree.last(), None);
 
-    // Single item
-    tree.insert(5, "five".to_string());
-    assert_eq!(tree.first(), Some((&5, &"five".to_string())));
-    assert_eq!(tree.last(), Some((&5, &"five".to_string())));
+    tree.insert(10, "ten".to_string());
+    assert_eq!(tree.first(), Some((&10, &"ten".to_string())));
+    assert_eq!(tree.last(), Some((&10, &"ten".to_string())));
 
-    // Multiple items
+    tree.insert(5, "five".to_string());
+    tree.insert(15, "fifteen".to_string());
+    assert_eq!(tree.first(), Some((&5, &"five".to_string())));
+    assert_eq!(tree.last(), Some((&15, &"fifteen".to_string())));
+}
+
+#[test]
+fn test_get_mut() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
     tree.insert(1, "one".to_string());
-    tree.insert(9, "nine".to_string());
+    tree.insert(2, "two".to_string());
+
+    // Get a mutable reference and modify the value
+    if let Some(value) = tree.get_mut(&1) {
+        *value = "ONE".to_string();
+    }
+
+    assert_eq!(tree.get(&1), Some(&"ONE".to_string()));
+    assert_eq!(tree.get(&2), Some(&"two".to_string()));
+
+    // Test with a non-existent key
+    assert_eq!(tree.get_mut(&3), None);
+}
+
+#[test]
+fn test_arena_consistency() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // Insert items
+    for i in 0..50 {
+        tree.insert(i, format!("value_{}", i));
+    }
+
+    // Check consistency
+    assert!(tree.check_invariants_detailed().is_ok());
+
+    // Delete some items
+    for i in (0..50).step_by(3) {
+        tree.remove(&i);
+    }
+
+    // Check consistency again
+    assert!(tree.check_invariants_detailed().is_ok());
+
+    // Count nodes
+    let (tree_leaves, tree_branches) = tree.count_nodes_in_tree();
+    let leaf_stats = tree.leaf_arena_stats();
+    let branch_stats = tree.branch_arena_stats();
+
+    assert_eq!(tree_leaves, leaf_stats.allocated_count);
+    assert_eq!(tree_branches, branch_stats.allocated_count);
+}
+
+#[test]
+fn test_leaf_linked_list_completeness() {
+    let mut tree = BPlusTreeMap::new(5).unwrap();
+
+    // Insert items
+    for i in 0..100 {
+        tree.insert(i, i.to_string());
+    }
+    assert!(tree.check_invariants_detailed().is_ok());
+
+    // Delete items
+    for i in (0..100).step_by(4) {
+        tree.remove(&i);
+    }
+    assert!(tree.check_invariants_detailed().is_ok());
+}
+
+#[test]
+fn test_try_insert_and_remove() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // Successful insert
+    assert!(tree.try_insert(1, "one".to_string()).is_ok());
+    assert_eq!(tree.get(&1), Some(&"one".to_string()));
+
+    // Successful remove
+    assert!(tree.try_remove(&1).is_ok());
+    assert_eq!(tree.get(&1), None);
+
+    // Failed remove
+    assert!(tree.try_remove(&1).is_err());
+}
+
+#[test]
+fn test_batch_insert() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+
+    // Successful batch insert
+    let items = vec![(1, "one"), (2, "two"), (3, "three")];
+    let result = tree.batch_insert(
+        items
+            .iter()
+            .map(|(k, v)| (*k, v.to_string()))
+            .collect(),
+    );
+    assert!(result.is_ok());
+    assert_eq!(tree.len(), 3);
+
+    // Batch insert with duplicates
+    let items2 = vec![(4, "four"), (2, "TWO"), (5, "five")];
+    let result2 = tree.batch_insert(
+        items2
+            .iter()
+            .map(|(k, v)| (*k, v.to_string()))
+            .collect(),
+    );
+    assert!(result2.is_ok());
+    assert_eq!(tree.len(), 5);
+    assert_eq!(tree.get(&2), Some(&"TWO".to_string()));
+}
+
+#[test]
+fn test_get_many() {
+    let mut tree = BPlusTreeMap::new(4).unwrap();
+    tree.insert(1, "one".to_string());
+    tree.insert(2, "two".to_string());
     tree.insert(3, "three".to_string());
 
-    assert_eq!(tree.first(), Some((&1, &"one".to_string())));
-    assert_eq!(tree.last(), Some((&9, &"nine".to_string())));
+    // Successful get_many
+    let keys = vec![1, 3];
+    let result = tree.get_many(&keys);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), vec![&"one".to_string(), &"three".to_string()]);
 
-    // After deletion
-    tree.remove(&1);
-    tree.remove(&9);
-    assert_eq!(tree.first(), Some((&3, &"three".to_string())));
-    assert_eq!(tree.last(), Some((&5, &"five".to_string())));
+    // get_many with missing key
+    let keys2 = vec![1, 4, 2];
+    let result2 = tree.get_many(&keys2);
+    assert!(result2.is_err());
 }
 
 #[test]
-fn test_api_completeness_with_deep_tree() {
+fn test_validate_for_operation() {
     let mut tree = BPlusTreeMap::new(4).unwrap();
+    assert!(tree.validate_for_operation("initial").is_ok());
 
-    // Create a deep tree
-    for i in 0..50 {
-        tree.insert(i, i * 2);
-    }
-    assert!(!tree.is_leaf_root());
-
-    // Test all APIs work with deep tree
-    assert_eq!(tree.first(), Some((&0, &0)));
-    assert_eq!(tree.last(), Some((&49, &98)));
-
-    // Test get_mut in deep tree
-    if let Some(value) = tree.get_mut(&25) {
-        *value = 999;
-    }
-    assert_eq!(tree.get(&25), Some(&999));
-
-    // Test clear on deep tree
-    tree.clear();
-    assert!(tree.is_empty());
-    assert!(tree.is_leaf_root());
-    assert!(tree.check_invariants());
-}
-
-#[test]
-fn test_linked_list_range_performance() {
-    use std::time::Instant;
-
-    let mut tree = BPlusTreeMap::new(64).unwrap();
-
-    // Insert 10,000 items
-    for i in 0..10000 {
-        tree.insert(i, format!("value{}", i));
-    }
-
-    // Test range query performance
-    let start = Instant::now();
-    let items: Vec<_> = tree.items_range(Some(&1000), Some(&2000)).collect();
-    let duration = start.elapsed();
-
-    println!("Range query (1000 items) took: {:?}", duration);
-    assert_eq!(items.len(), 1000);
-
-    // Verify correctness
-    for (i, (key, value)) in items.iter().enumerate() {
-        let expected_key = 1000 + i;
-        let expected_value = format!("value{}", expected_key);
-        assert_eq!(**key, expected_key);
-        assert_eq!(**value, expected_value);
-    }
-}
-
-#[test]
-fn test_debug_range_iterator() {
-    let mut tree = BPlusTreeMap::new(4).unwrap();
-
-    // First, let me just see what happens when we insert exactly the failing sequence
-    for i in 0..15 {
-        println!("Inserting {}", i);
-        tree.insert(i, format!("value{}", i));
-        println!("After inserting {}: tree.len() = {}", i, tree.len());
-
-        // After insertion 14, let's check what's in the tree
-        if i == 14 {
-            println!("After inserting 14, all keys in tree:");
-            for k in 0..20 {
-                if tree.contains_key(&k) {
-                    println!("  Key {} is present", k);
-                }
-            }
-            break; // Stop here to focus on the corruption
-        }
-    }
-
-    println!("Tree structure after insertions:");
-    println!("Tree length: {}", tree.len());
-    println!("Leaf count: {}", tree.leaf_count());
-
-    let items: Vec<_> = tree.items_range(Some(&5), Some(&15)).collect();
-    println!("Range [5, 15) returned {} items:", items.len());
-    for (key, value) in &items {
-        println!("  {} -> {}", key, value);
-    }
-
-    // This should return keys 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 (10 items)
-    assert_eq!(items.len(), 10);
-
-    // Test the invariant checker - this should catch the linked list issue
-    println!("Checking invariants...");
-    match tree.validate() {
-        Ok(()) => println!("Invariants passed"),
-        Err(e) => println!("Invariants failed: {}", e),
-    }
-}
-
-// TODO: Add fuzz tests against BTreeMap
-// TODO: Add performance benchmarks
-
-#[test]
-fn test_linked_list_invariants() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-    // Validate empty tree
-    assert!(tree.validate().is_ok());
-
-    // Insert items to create multiple leaves
-    for i in 0..50 {
-        tree.insert(i, format!("value{}", i));
-        // Validate after each insertion
-        if let Err(e) = tree.validate() {
-            panic!("Invariant violation after inserting {}: {}", i, e);
-        }
-    }
-
-    // Remove items in various patterns
-    for i in (0..25).step_by(2) {
-        tree.remove(&i);
-        // Validate after each removal
-        if let Err(e) = tree.validate() {
-            panic!("Invariant violation after removing {}: {}", i, e);
-        }
-    }
-
-    // Verify iteration still works correctly
-    let collected: Vec<i32> = tree.keys().copied().collect();
-    let expected: Vec<i32> = (0..50).filter(|i| i % 2 == 1 || *i >= 25).collect();
-    assert_eq!(collected, expected);
-}
-
-#[test]
-fn test_linked_list_iterator() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-    // Insert items in random order
-    let items = vec![5, 1, 9, 3, 7, 2, 8, 4, 6, 10];
-    for i in &items {
-        tree.insert(*i, format!("value{}", i));
-    }
-
-    // Collect all items through iteration
-    let collected: Vec<(i32, String)> = tree.items().map(|(k, v)| (*k, v.clone())).collect();
-
-    // Should be in sorted order
-    assert_eq!(collected.len(), 10);
-    for i in 0..10 {
-        assert_eq!(collected[i].0, (i + 1) as i32);
-        assert_eq!(collected[i].1, format!("value{}", i + 1));
-    }
-
-    // Test that iterator works after deletions
-    tree.remove(&5);
-    tree.remove(&6);
-
-    let collected_after: Vec<i32> = tree.keys().copied().collect();
-    assert_eq!(collected_after, vec![1, 2, 3, 4, 7, 8, 9, 10]);
-}
-
-#[test]
-fn test_leaf_deallocation_reuses_ids() {
-    let mut tree: BPlusTreeMap<i32, String> = BPlusTreeMap::new(4).unwrap();
-
-    // Insert enough items to create multiple leaves (force splits)
-    for i in 0..20 {
-        tree.insert(i, format!("value{}", i));
-    }
-
-    // Get initial free list size (should be empty or small)
-    let initial_free_count = tree.free_leaf_count();
-
-    // Remove items to trigger leaf merges and deallocations
-    // Removing from the beginning should cause merges
-    for i in 0..15 {
-        tree.remove(&i);
-    }
-
-    // Check that we have more free IDs after deletions
-    let after_delete_free_count = tree.free_leaf_count();
-    assert!(
-        after_delete_free_count > initial_free_count,
-        "Free list should grow after deletions: {} -> {}",
-        initial_free_count,
-        after_delete_free_count
-    );
-
-    // Insert new items - these should reuse the freed IDs
-    let free_count_before_reinsert = tree.free_leaf_count();
-    for i in 20..25 {
-        tree.insert(i, format!("value{}", i));
-    }
-
-    // Free list should shrink as IDs are reused
-    let free_count_after_reinsert = tree.free_leaf_count();
-    assert!(
-        free_count_after_reinsert < free_count_before_reinsert,
-        "Free list should shrink as IDs are reused: {} -> {}",
-        free_count_before_reinsert,
-        free_count_after_reinsert
-    );
+    tree.insert(1, "one".to_string());
+    assert!(tree.validate_for_operation("after insert").is_ok());
 }

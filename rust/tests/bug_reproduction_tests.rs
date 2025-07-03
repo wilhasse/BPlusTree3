@@ -202,14 +202,13 @@ fn test_arena_tree_consistency() {
     deletion_range_attack(&mut tree, 5, 15);
 
     // Check that all allocated nodes are actually referenced by the tree
-    let allocated_leaves = tree.allocated_leaf_count();
-    let allocated_branches = tree.allocated_branch_count();
-    let total_allocated = allocated_leaves + allocated_branches;
+    let leaf_stats = tree.leaf_arena_stats();
+    let branch_stats = tree.branch_arena_stats();
+    let total_allocated = leaf_stats.allocated_count + branch_stats.allocated_count;
 
     // Count actual nodes in tree structure
-    let _actual_leaves = tree.leaf_count();
-    // For branches, we need to count them by traversing the tree
-    let actual_total = count_total_nodes(&tree);
+    let (_actual_leaves, actual_branches) = tree.count_nodes_in_tree();
+    let actual_total = tree.leaf_count() + actual_branches;
 
     if total_allocated != actual_total {
         panic!(
@@ -267,7 +266,8 @@ fn test_arena_id_collision() {
     // This creates potential confusion
 
     // Test the ID collision by checking arena behavior
-    let initial_count = tree.allocated_leaf_count();
+        let initial_leaf_stats = tree.leaf_arena_stats();
+    let initial_count = initial_leaf_stats.allocated_count;
 
     // The issue is that ROOT_NODE = 0 and arena allocation starts at 0
     // This creates potential confusion in the implementation

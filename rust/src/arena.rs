@@ -6,6 +6,16 @@ use std::fmt::Debug;
 pub type NodeId = u32;
 pub const NULL_NODE: NodeId = u32::MAX;
 
+/// Statistics for an arena
+#[derive(Debug, Clone, Copy)]
+pub struct ArenaStats {
+    pub total_capacity: usize,
+    pub allocated_count: usize,
+    pub free_count: usize,
+    pub utilization: f64,
+    pub fragmentation: f64,
+}
+
 /// Generic arena allocator for any node type
 /// Eliminates duplication between leaf and branch arena implementations
 #[derive(Debug)]
@@ -137,6 +147,17 @@ impl<T> Arena<T> {
             0.0
         } else {
             self.free_count() as f64 / self.total_capacity() as f64
+        }
+    }
+
+    /// Get all statistics in a single struct
+    pub fn stats(&self) -> ArenaStats {
+        ArenaStats {
+            total_capacity: self.total_capacity(),
+            allocated_count: self.allocated_count(),
+            free_count: self.free_count(),
+            utilization: self.utilization(),
+            fragmentation: self.fragmentation(),
         }
     }
 

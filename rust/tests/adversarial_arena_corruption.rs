@@ -92,8 +92,8 @@ fn test_free_list_corruption_attack() {
 
     println!(
         "Initial free lists: leaves={}, branches={}",
-        tree.free_leaf_count(),
-        tree.free_branch_count()
+        tree.leaf_arena_stats().free_count,
+        tree.branch_arena_stats().free_count
     );
 
     // Step 2: Delete in a pattern that creates a specific free list state
@@ -103,8 +103,8 @@ fn test_free_list_corruption_attack() {
 
     println!(
         "After deletions: leaves={}, branches={}",
-        tree.free_leaf_count(),
-        tree.free_branch_count()
+        tree.leaf_arena_stats().free_count,
+        tree.branch_arena_stats().free_count
     );
 
     // Step 3: Insert items that will reuse free list in specific order
@@ -160,8 +160,8 @@ fn test_deep_recursion_arena_explosion() {
     println!("Created tree with {} nodes", tree.len());
     println!(
         "Free lists: leaves={}, branches={}",
-        tree.free_leaf_count(),
-        tree.free_branch_count()
+        tree.leaf_arena_stats().free_count,
+        tree.branch_arena_stats().free_count
     );
 
     // Now delete internal nodes to force complex rebalancing

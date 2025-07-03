@@ -10,7 +10,7 @@ use std::ops::{Bound, RangeBounds};
 mod arena;
 mod macros;
 
-pub use arena::{Arena, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
+pub use arena::{Arena, ArenaStats, NodeId as ArenaNodeId, NULL_NODE as ARENA_NULL_NODE};
 
 // Constants
 const MIN_CAPACITY: usize = 4;
@@ -1702,6 +1702,20 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.leaf_arena.utilization()
     }
 
+    // ============================================================================
+    // ARENA STATISTICS
+    // ============================================================================
+
+    /// Get statistics for the leaf node arena.
+    pub fn leaf_arena_stats(&self) -> arena::ArenaStats {
+        self.leaf_arena.stats()
+    }
+
+    /// Get statistics for the branch node arena.
+    pub fn branch_arena_stats(&self) -> arena::ArenaStats {
+        self.branch_arena.stats()
+    }
+
     /// Set the next pointer of a leaf node in the arena.
     pub fn set_leaf_next(&mut self, id: NodeId, next_id: NodeId) -> bool {
         self.get_leaf_mut(id)
@@ -1768,20 +1782,7 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         self.branch_arena.get_mut(id)
     }
 
-    /// Get the number of free branch nodes in the arena.
-    pub fn free_branch_count(&self) -> usize {
-        self.branch_arena.free_count()
-    }
-
-    /// Get the number of allocated branch nodes in the arena.
-    pub fn allocated_branch_count(&self) -> usize {
-        self.branch_arena.allocated_count()
-    }
-
-    /// Get the branch arena utilization ratio.
-    pub fn branch_utilization(&self) -> f64 {
-        self.branch_arena.utilization()
-    }
+    
 
     // ============================================================================
     // OTHER HELPERS (TEST HELPERS)
@@ -1815,27 +1816,27 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         let (tree_leaf_count, tree_branch_count) = self.count_nodes_in_tree();
 
         // Get arena counts
-        let arena_leaf_count = self.allocated_leaf_count();
-        let arena_branch_count = self.allocated_branch_count();
+        let leaf_stats = self.leaf_arena_stats();
+        let branch_stats = self.branch_arena_stats();
 
         // Check leaf node consistency
-        if tree_leaf_count != arena_leaf_count {
+        if tree_leaf_count != leaf_stats.allocated_count {
             return Err(BPlusTreeError::arena_error(
                 "Leaf consistency check",
                 &format!(
                     "{} in tree vs {} in arena",
-                    tree_leaf_count, arena_leaf_count
+                    tree_leaf_count, leaf_stats.allocated_count
                 ),
             ));
         }
 
         // Check branch node consistency
-        if tree_branch_count != arena_branch_count {
+        if tree_branch_count != branch_stats.allocated_count {
             return Err(BPlusTreeError::arena_error(
                 "Branch consistency check",
                 &format!(
                     "{} in tree vs {} in arena",
-                    tree_branch_count, arena_branch_count
+                    tree_branch_count, branch_stats.allocated_count
                 ),
             ));
         }

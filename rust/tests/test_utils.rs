@@ -250,7 +250,7 @@ pub fn arena_exhaustion_attack(tree: &mut BPlusTreeMap<i32, String>, cycle: usiz
         "Cycle {}: Free leaves={}, Free branches={}",
         cycle,
         tree.free_leaf_count(),
-        tree.free_branch_count()
+                tree.branch_arena_stats().free_count
     );
 }
 
@@ -432,24 +432,28 @@ pub fn execute_interleaved_ops(
 
 /// Print tree statistics for debugging
 pub fn print_tree_stats(tree: &BPlusTreeMap<i32, String>, label: &str) {
+    let leaf_stats = tree.leaf_arena_stats();
+    let branch_stats = tree.branch_arena_stats();
     println!(
         "{}: {} items, Free leaves={}, Free branches={}",
         label,
         tree.len(),
-        tree.free_leaf_count(),
-        tree.free_branch_count()
+        leaf_stats.free_count,
+        branch_stats.free_count
     );
     println!("Leaf sizes: {:?}", tree.leaf_sizes());
 }
 
 /// Print tree statistics for integer trees
 pub fn print_tree_stats_int(tree: &BPlusTreeMap<i32, i32>, label: &str) {
+    let leaf_stats = tree.leaf_arena_stats();
+    let branch_stats = tree.branch_arena_stats();
     println!(
         "{}: {} items, Free leaves={}, Free branches={}",
         label,
         tree.len(),
-        tree.free_leaf_count(),
-        tree.free_branch_count()
+        leaf_stats.free_count,
+        branch_stats.free_count
     );
     println!("Leaf sizes: {:?}", tree.leaf_sizes());
 }
