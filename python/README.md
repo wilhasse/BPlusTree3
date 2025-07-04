@@ -190,12 +190,57 @@ for key, value in tree.range(None, end_key):    # From beginning to end_key
     pass
 ```
 
+## 🔒 Iterator Safety
+
+The C extension provides **iterator safety** to prevent segmentation faults during tree modifications:
+
+```python
+tree = BPlusTree(capacity=128)
+for i in range(10):
+    tree[i] = f"value_{i}"
+
+# Create iterator
+keys_iter = tree.keys()
+first_key = next(keys_iter)
+
+# Modify tree during iteration
+tree[100] = "new_value"
+
+# Iterator detects modification and raises RuntimeError
+try:
+    next(keys_iter)
+except RuntimeError as e:
+    print(e)  # "tree changed size during iteration"
+```
+
+**Safety Features:**
+
+- **Modification detection**: Iterators track tree changes via internal counter
+- **Graceful failure**: RuntimeError instead of segmentation fault
+- **Multiple iterator support**: All active iterators are invalidated on modification
+- **Consistent behavior**: Matches Python's dict iterator safety model
+
+**Safe Patterns:**
+
+```python
+# ✅ Safe: Complete iteration before modification
+keys = list(tree.keys())  # Collect all keys first
+for key in keys:
+    tree[key] = new_value
+
+# ✅ Safe: Use fresh iterator after modifications
+tree[new_key] = new_value
+for key, value in tree.items():  # New iterator, safe to use
+    process(key, value)
+```
+
 ## 🏗️ Architecture
 
 - **Arena-based memory management** for efficiency
 - **Linked leaf nodes** for fast sequential access
 - **Optimized rebalancing** algorithms
 - **Hybrid navigation** for range queries
+- **Iterator safety** with modification counter tracking
 
 ## 📚 Documentation & Examples
 
