@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test matrix across Python 3.8-3.12
 - Automated wheel building for Linux, macOS, and Windows
 - Complete dictionary API compatibility
+- Iterator modification safety with runtime error detection
+- Comprehensive test suite for iterator safety scenarios
 
 ### Changed
 - Updated setup.py to work with modern packaging standards
@@ -20,9 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced error handling and memory safety in C extension
 
 ### Fixed
+- **CRITICAL**: Segmentation fault in C extension during iterator use after tree modification
+- Iterator safety now raises RuntimeError instead of crashing when tree is modified during iteration
+- Length counter synchronization issues in adversarial test patterns
 - Critical memory safety issues in C extension node splitting
 - Reference counting bugs that caused segmentation faults
 - Circular import issues in pure Python implementation
+
+### Security
+- Eliminated segmentation faults that could potentially be exploited
+- Added modification counter to prevent unsafe memory access patterns
 
 ## [0.1.0] - 2024-XX-XX
 
