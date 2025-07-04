@@ -70,6 +70,7 @@ typedef struct BPlusTree {
     uint16_t capacity;         /* Node capacity */
     uint16_t min_keys;         /* Minimum keys per node (capacity/2) */
     size_t size;               /* Total number of key-value pairs */
+    size_t modification_count; /* Counter incremented on each tree modification */
     
 } BPlusTree;
 

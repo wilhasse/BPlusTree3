@@ -77,7 +77,10 @@ int tree_insert(BPlusTree *tree, PyObject *key, PyObject *value) {
     
     int result = tree_insert_recursive(tree->root, key, value, &new_node, &split_key);
     if (result == -1) return -1;  /* Error */
-    if (result == -2) return 0;   /* Update - don't increment size */
+    if (result == -2) {
+        tree->modification_count++;  /* Update - increment modification count */
+        return 0;   /* Update - don't increment size */
+    }
     
     if (result > 0) {
         /* Root was split, create new root */
@@ -98,6 +101,7 @@ int tree_insert(BPlusTree *tree, PyObject *key, PyObject *value) {
     
     /* Increment size for new insertions (result == 0 or result > 0) */
     tree->size++;
+    tree->modification_count++;
     
     return 0;
 }
@@ -110,6 +114,7 @@ int tree_delete(BPlusTree *tree, PyObject *key) {
     int result = node_delete(leaf, key);
     if (result == 1) {
         tree->size--;  /* Successfully deleted */
+        tree->modification_count++;
     }
     
     return result;

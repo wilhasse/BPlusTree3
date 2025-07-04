@@ -28,6 +28,7 @@ BPlusTree_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
         self->capacity = DEFAULT_CAPACITY;
         self->min_keys = DEFAULT_CAPACITY / 2;
         self->size = 0;
+        self->modification_count = 0;
         PyObject_GC_Track(self);
     }
     return (PyObject *)self;
@@ -96,6 +97,7 @@ BPlusTree_delitem(BPlusTree *self, PyObject *key) {
         PyErr_SetObject(PyExc_KeyError, key);
         return -1;
     }
+    self->modification_count++;
     return 0;  /* Success */
 }
 
@@ -124,6 +126,7 @@ typedef struct {
     BPlusNode *current_node;
     int current_index;
     int include_values;  /* 0 for keys(), 1 for items() */
+    size_t modification_count;  /* Track tree modifications */
 } BPlusTreeIterator;
 
 static void
@@ -134,6 +137,13 @@ BPlusTreeIterator_dealloc(BPlusTreeIterator *self) {
 
 static PyObject *
 BPlusTreeIterator_next(BPlusTreeIterator *self) {
+    /* Check if the tree has been modified since iterator creation */
+    if (self->modification_count != self->tree->modification_count) {
+        PyErr_SetString(PyExc_RuntimeError, 
+                       "tree changed size during iteration");
+        return NULL;
+    }
+    
     if (!self->current_node) {
         PyErr_SetNone(PyExc_StopIteration);
         return NULL;
@@ -197,16 +207,17 @@ BPlusTree_iter(BPlusTree *self) {
     /* Safely find the first leaf node by traversing from root */
     BPlusNode *first_leaf = self->root;
     if (first_leaf) {
-        while (first_leaf->type == NODE_BRANCH && first_leaf->num_keys > 0) {
+        while (first_leaf->type == NODE_BRANCH) {
+            /* For branch nodes, follow the leftmost child */
             first_leaf = node_get_child(first_leaf, 0);
+            if (!first_leaf) break;  /* Safety check */
         }
-        /* Update tree's leaves pointer to current first leaf */
-        self->leaves = first_leaf;
     }
     
     iter->current_node = first_leaf;
     iter->current_index = 0;
     iter->include_values = 0;
+    iter->modification_count = self->modification_count;
     
     return (PyObject *)iter;
 }
@@ -227,16 +238,17 @@ BPlusTree_items(BPlusTree *self, PyObject *Py_UNUSED(args)) {
     /* Safely find the first leaf node by traversing from root */
     BPlusNode *first_leaf = self->root;
     if (first_leaf) {
-        while (first_leaf->type == NODE_BRANCH && first_leaf->num_keys > 0) {
+        while (first_leaf->type == NODE_BRANCH) {
+            /* For branch nodes, follow the leftmost child */
             first_leaf = node_get_child(first_leaf, 0);
+            if (!first_leaf) break;  /* Safety check */
         }
-        /* Update tree's leaves pointer to current first leaf */
-        self->leaves = first_leaf;
     }
     
     iter->current_node = first_leaf;
     iter->current_index = 0;
     iter->include_values = 1;
+    iter->modification_count = self->modification_count;
     
     return (PyObject *)iter;
 }
