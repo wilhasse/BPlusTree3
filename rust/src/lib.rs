@@ -1505,7 +1505,11 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         start_key: Option<&K>,
         end_key: Option<&'a K>,
     ) -> RangeIterator<'a, K, V> {
-        RangeIterator::new(self, start_key, end_key)
+        let start_bound = start_key.map_or(Bound::Unbounded, |k| Bound::Included(k));
+        let end_bound = end_key.map_or(Bound::Unbounded, |k| Bound::Excluded(k));
+
+        let (start_info, skip_first, end_info) = self.resolve_range_bounds((start_bound, end_bound));
+        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
     }
 
     /// Returns an iterator over key-value pairs in a range using Rust's range syntax.
@@ -1543,7 +1547,35 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     where
         R: RangeBounds<K>,
     {
-        // Handle start position and find actual start key/position
+        let (start_info, skip_first, end_info) = self.resolve_range_bounds(range);
+        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
+    }
+
+    /// Returns the first key-value pair in the tree.
+    pub fn first(&self) -> Option<(&K, &V)> {
+        self.items().next()
+    }
+
+    /// Returns the last key-value pair in the tree.
+    pub fn last(&self) -> Option<(&K, &V)> {
+        self.items().last()
+    }
+
+    // ============================================================================
+    // RANGE QUERY HELPERS
+    // ============================================================================
+
+    fn resolve_range_bounds<R>(
+        &self,
+        range: R,
+    ) -> (
+        Option<(NodeId, usize)>,
+        bool,
+        Option<(K, bool)>,
+    )
+    where
+        R: RangeBounds<K>,
+    {
         let (start_info, skip_first) = match range.start_bound() {
             Bound::Included(key) => {
                 if let Some((leaf_id, index)) = self.find_range_start(key) {
@@ -1554,7 +1586,6 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             }
             Bound::Excluded(key) => {
                 if let Some((leaf_id, index)) = self.find_range_start(key) {
-                    // We need to check if the first item equals the excluded key
                     (Some((leaf_id, index)), true)
                 } else {
                     (None, false)
@@ -1569,24 +1600,13 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             }
         };
 
-        // Handle end bound by creating a cloned end key to avoid lifetime issues
         let end_info = match range.end_bound() {
             Bound::Included(key) => Some((key.clone(), true)),
             Bound::Excluded(key) => Some((key.clone(), false)),
             Bound::Unbounded => None,
         };
 
-        RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
-    }
-
-    /// Returns the first key-value pair in the tree.
-    pub fn first(&self) -> Option<(&K, &V)> {
-        self.items().next()
-    }
-
-    /// Returns the last key-value pair in the tree.
-    pub fn last(&self) -> Option<(&K, &V)> {
-        self.items().last()
+        (start_info, skip_first, end_info)
     }
 
     // ============================================================================
