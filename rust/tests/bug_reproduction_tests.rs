@@ -304,21 +304,3 @@ fn test_split_validation_missing() {
         );
     }
 }
-
-// Helper function to count total nodes in tree structure
-fn count_total_nodes(tree: &BPlusTreeMap<i32, String>) -> usize {
-    // This is a simplified count - in a real implementation we'd traverse the tree
-    // For now, just return the sum of leaves and estimated branches
-    tree.leaf_count() + estimate_branch_count(tree)
-}
-
-fn estimate_branch_count(tree: &BPlusTreeMap<i32, String>) -> usize {
-    // Rough estimate based on tree size and capacity
-    let total_items = tree.len();
-    if total_items <= 4 {
-        0 // Leaf-only tree
-    } else {
-        // Estimate branches needed for this many items
-        (total_items / 16).max(1) // Very rough estimate
-    }
-}

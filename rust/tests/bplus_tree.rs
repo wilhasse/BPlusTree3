@@ -2109,7 +2109,7 @@ fn test_range_syntax_support() {
     let range4: Vec<_> = tree.range(..5).map(|(k, v)| *k).collect();
     assert_eq!(range4, vec![0, 1, 2, 3, 4]);
 
-    let range5: Vec<_> = tree.range(..).map(|(k, v)| *k).collect();
+    let range5: Vec<_> = tree.range(..).map(|(k, _v)| *k).collect();
     assert_eq!(range5, vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 }
 

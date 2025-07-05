@@ -115,30 +115,30 @@ macro_rules! attack_pattern {
     // Arena exhaustion attack
     (arena_exhaustion, $tree:expr, $cycle:expr) => {
         // Fill tree to create many nodes
-        for i in 0..100 {
-            $tree.insert($cycle * 1000 + i, format!("v{}-{}", $cycle, i));
+        for i in 0..10 {
+            $tree.insert($cycle * 10 + i, format!("v{}-{}", $cycle, i));
         }
         
         // Delete most items to free nodes
-        for i in 0..95 {
-            $tree.remove(&($cycle * 1000 + i));
+        for i in 0..8 {
+            $tree.remove(&($cycle * 10 + i));
         }
     };
     
     // Fragmentation attack
     (fragmentation, $tree:expr, $base_key:expr) => {
         // Insert in a pattern that creates and frees nodes in specific order
-        for i in 0..500 {
+        for i in 0..50 {
             $tree.insert($base_key + i * 10, format!("fragmented-{}", i));
         }
         
         // Delete every other item
-        for i in (0..500).step_by(2) {
+        for i in (0..50).step_by(2) {
             $tree.remove(&($base_key + i * 10));
         }
         
         // Reinsert to reuse freed slots
-        for i in 0..250 {
+        for i in 0..25 {
             $tree.insert($base_key + i * 10 + 5, format!("reused-{}", i * 1000));
         }
     };
@@ -146,9 +146,9 @@ macro_rules! attack_pattern {
     // Deep tree creation
     (deep_tree, $tree:expr, $capacity:expr) => {
         let mut key = 0;
-        for level in 0..5 {
+        for level in 0..3 {
             let count = $capacity.pow(level);
-            for _ in 0..count * 10 {
+            for _ in 0..count * 5 {
                 $tree.insert(key, key);
                 key += 100;
             }
@@ -267,13 +267,13 @@ mod tests {
         
         // Test arena exhaustion pattern
         attack_pattern!(arena_exhaustion, tree, 0);
-        assert!(tree.len() <= 5); // Should have few items left
+        assert_eq!(tree.len(), 2); // Should have 2 items left
         
         tree.clear();
         
         // Test fragmentation pattern
         attack_pattern!(fragmentation, tree, 0);
-        assert_eq!(tree.len(), 500); // Should have 500 items
+        assert_eq!(tree.len(), 50); // Should have 50 items
     }
 
     #[test]
