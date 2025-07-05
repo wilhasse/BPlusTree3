@@ -149,17 +149,29 @@ BPlusTreeIterator_next(BPlusTreeIterator *self) {
         return NULL;
     }
     
+    /* Handle empty leaves at the beginning or during traversal */
+    while (self->current_node && self->current_node->num_keys == 0) {
+        self->current_node = self->current_node->next;
+    }
+    
+    if (!self->current_node) {
+        PyErr_SetNone(PyExc_StopIteration);
+        return NULL;
+    }
+    
     if (self->current_index >= self->current_node->num_keys) {
-        /* Validate next pointer before using it */
-        BPlusNode *next = self->current_node->next;
-        if (next && next->type == NODE_LEAF && next->num_keys > 0) {
-            self->current_node = next;
-            self->current_index = 0;
-        } else {
-            /* Next pointer is invalid or points to empty node - stop iteration */
+        /* Move to next leaf, skipping empty ones */
+        self->current_node = self->current_node->next;
+        while (self->current_node && self->current_node->num_keys == 0) {
+            self->current_node = self->current_node->next;
+        }
+        
+        if (!self->current_node) {
             PyErr_SetNone(PyExc_StopIteration);
             return NULL;
         }
+        
+        self->current_index = 0;
     }
     
     PyObject *key = node_get_key(self->current_node, self->current_index);
@@ -196,6 +208,7 @@ static PyTypeObject BPlusTreeIteratorType = {
     .tp_iternext = (iternextfunc)BPlusTreeIterator_next,
 };
 
+
 static PyObject *
 BPlusTree_iter(BPlusTree *self) {
     BPlusTreeIterator *iter = PyObject_New(BPlusTreeIterator, &BPlusTreeIteratorType);
@@ -204,13 +217,12 @@ BPlusTree_iter(BPlusTree *self) {
     Py_INCREF(self);
     iter->tree = self;
     
-    /* Safely find the first leaf node by traversing from root */
+    /* Find the first leaf node by traversing from root */
     BPlusNode *first_leaf = self->root;
     if (first_leaf) {
         while (first_leaf->type == NODE_BRANCH) {
-            /* For branch nodes, follow the leftmost child */
             first_leaf = node_get_child(first_leaf, 0);
-            if (!first_leaf) break;  /* Safety check */
+            if (!first_leaf) break;
         }
     }
     
@@ -235,13 +247,12 @@ BPlusTree_items(BPlusTree *self, PyObject *Py_UNUSED(args)) {
     Py_INCREF(self);
     iter->tree = self;
     
-    /* Safely find the first leaf node by traversing from root */
+    /* Find the first leaf node by traversing from root */
     BPlusNode *first_leaf = self->root;
     if (first_leaf) {
         while (first_leaf->type == NODE_BRANCH) {
-            /* For branch nodes, follow the leftmost child */
             first_leaf = node_get_child(first_leaf, 0);
-            if (!first_leaf) break;  /* Safety check */
+            if (!first_leaf) break;
         }
     }
     
