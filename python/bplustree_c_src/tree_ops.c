@@ -27,6 +27,10 @@ BPlusNode* tree_find_leaf(BPlusTree *tree, PyObject *key) {
                 pos++;
             }
         }
+        /* Ensure pos is within valid child range */
+        if (pos > node->num_keys) {
+            return NULL;
+        }
         {
             node = node_prefetch_child(node, pos);
         }
