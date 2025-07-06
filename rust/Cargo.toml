@@ -24,3 +24,7 @@ rand.workspace = true
 [[bench]]
 name = "comparison"
 harness = false
+
+[[bench]]
+name = "quick_clone_bench"
+harness = false

@@ -1018,24 +1018,29 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Extract all content from child
-        let mut child_branch = match self.get_branch_mut(child_id) {
-            Some(child_branch) => {
-                let mut extracted = BranchNode::new(child_branch.capacity);
-                std::mem::swap(&mut extracted.keys, &mut child_branch.keys);
-                std::mem::swap(&mut extracted.children, &mut child_branch.children);
-                extracted
-            }
-            None => return false,
-        };
+        // Extract all content from child and merge into left in one pass
+        // Use a safer approach that avoids multiple mutable borrows
+        {
+            // First, extract content from child
+            let (mut child_keys, mut child_children) = match self.get_branch_mut(child_id) {
+                Some(child_branch) => {
+                    let keys = std::mem::take(&mut child_branch.keys);
+                    let children = std::mem::take(&mut child_branch.children);
+                    (keys, children)
+                }
+                None => return false,
+            };
 
-        // Merge into left branch - use early return for cleaner flow
-        let Some(left_branch) = self.get_branch_mut(left_id) else {
-            return false;
-        };
-        left_branch.merge_from(separator_key, &mut child_branch);
+            // Then merge into left
+            let Some(left_branch) = self.get_branch_mut(left_id) else {
+                return false;
+            };
+            left_branch.keys.push(separator_key);
+            left_branch.keys.append(&mut child_keys);
+            left_branch.children.append(&mut child_children);
+        }
 
-        // Remove child from parent (second and final parent access)
+        // Remove child from parent (single parent access)
         let Some(parent) = self.get_branch_mut(parent_id) else {
             return false;
         };
@@ -1066,22 +1071,27 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Extract all content from right sibling
-        let mut right_branch = match self.get_branch_mut(right_id) {
-            Some(right_branch) => {
-                let mut extracted = BranchNode::new(right_branch.capacity);
-                std::mem::swap(&mut extracted.keys, &mut right_branch.keys);
-                std::mem::swap(&mut extracted.children, &mut right_branch.children);
-                extracted
-            }
-            None => return false,
-        };
+        // Extract all content from right and merge into child in one pass
+        // Use a safer approach that avoids multiple mutable borrows
+        {
+            // First, extract content from right
+            let (mut right_keys, mut right_children) = match self.get_branch_mut(right_id) {
+                Some(right_branch) => {
+                    let keys = std::mem::take(&mut right_branch.keys);
+                    let children = std::mem::take(&mut right_branch.children);
+                    (keys, children)
+                }
+                None => return false,
+            };
 
-        // Merge into child branch - use early return for cleaner flow
-        let Some(child_branch) = self.get_branch_mut(child_id) else {
-            return false;
-        };
-        child_branch.merge_from(separator_key, &mut right_branch);
+            // Then merge into child
+            let Some(child_branch) = self.get_branch_mut(child_id) else {
+                return false;
+            };
+            child_branch.keys.push(separator_key);
+            child_branch.keys.append(&mut right_keys);
+            child_branch.children.append(&mut right_children);
+        }
 
         // Remove right from parent (second and final parent access)
         let Some(parent) = self.get_branch_mut(parent_id) else {
@@ -1331,19 +1341,28 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
             None => return false,
         };
 
-        // Extract all content from right sibling
-        let (mut right_keys, mut right_values, right_next) = match self.get_leaf_mut(right_id) {
-            Some(right_leaf) => right_leaf.extract_all(),
-            None => return false,
-        };
+        // Extract content from right and merge into child in one pass
+        // Use a safer approach that avoids multiple mutable borrows
+        {
+            // First, extract content from right
+            let (mut right_keys, mut right_values, right_next) = match self.get_leaf_mut(right_id) {
+                Some(right_leaf) => {
+                    let keys = std::mem::take(&mut right_leaf.keys);
+                    let values = std::mem::take(&mut right_leaf.values);
+                    let next = right_leaf.next;
+                    (keys, values, next)
+                }
+                None => return false,
+            };
 
-        // Merge into child leaf and update linked list - use early return for cleaner flow
-        let Some(child_leaf) = self.get_leaf_mut(child_id) else {
-            return false;
-        };
-        child_leaf.keys.append(&mut right_keys);
-        child_leaf.values.append(&mut right_values);
-        child_leaf.next = right_next;
+            // Then merge into child
+            let Some(child_leaf) = self.get_leaf_mut(child_id) else {
+                return false;
+            };
+            child_leaf.keys.append(&mut right_keys);
+            child_leaf.values.append(&mut right_values);
+            child_leaf.next = right_next;
+        }
 
         // Remove right from parent (second and final parent access)
         let Some(branch) = self.get_branch_mut(branch_id) else {
