@@ -3,7 +3,6 @@
 //! This module provides a B+ tree data structure with a dictionary-like interface,
 //! supporting efficient insertion, deletion, lookup, and range queries.
 
-use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Bound, RangeBounds};
 
@@ -151,7 +150,7 @@ impl<T> BTreeResultExt<T> for Result<T, BPlusTreeError> {
     }
 
     fn with_operation(self, operation: &str) -> BTreeResult<T> {
-        self.with_context(&format!("Operation {}", operation))
+        self.with_context(&format!("Operation '{}'", operation))
     }
 
     fn or_default_with_log(self) -> T
@@ -218,8 +217,6 @@ pub struct BPlusTreeMap<K, V> {
     capacity: usize,
     /// The root node of the tree.
     root: NodeRef<K, V>,
-    /// Number of key-value pairs in the tree.
-    len: usize,
 
     // Enhanced arena-based allocation using generic Arena<T>
     /// Arena storage for leaf nodes.
@@ -277,7 +274,7 @@ pub enum RemoveResult<V> {
     Updated(Option<V>, bool),
 }
 
-impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<K, V> {
+impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     // ============================================================================
     // CONSTRUCTION
     // ============================================================================
@@ -315,7 +312,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         Ok(Self {
             capacity,
             root: NodeRef::Leaf(root_id, PhantomData),
-            len: 0,
             leaf_arena,
             branch_arena,
         })
@@ -485,21 +481,15 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
     /// use bplustree::BPlusTreeMap;
     ///
     /// let mut tree = BPlusTreeMap::new(16).unwrap();
-    /// tree.insert(1, "first");
+    /// assert_eq!(tree.insert(1, "first"), None);
     /// assert_eq!(tree.insert(1, "second"), Some("first"));
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         // Use insert_recursive to handle the insertion
-        let result = self.insert_recursive(&self.root.clone(), key.clone(), value);
+        let result = self.insert_recursive(&self.root.clone(), key, value);
 
         match result {
-            InsertResult::Updated(old_value) => {
-                // If no old value, this was a new insertion
-                if old_value.is_none() {
-                    self.len += 1;
-                }
-                old_value
-            }
+            InsertResult::Updated(old_value) => old_value,
             InsertResult::Error(_error) => {
                 // Log the error but maintain API compatibility
                 // This should never happen with correct split logic
@@ -511,11 +501,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
                 new_node_data,
                 separator_key,
             } => {
-                // If no old value, this was a new insertion
-                if old_value.is_none() {
-                    self.len += 1;
-                }
-
                 // Root split - need to create a new root
                 let new_node_ref = match new_node_data {
                     SplitNodeData::Leaf(new_leaf_data) => {
@@ -682,9 +667,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
             RemoveResult::Updated(removed_value, _root_became_underfull) => {
                 // Check if root needs collapsing after removal
                 if removed_value.is_some() {
-                    if self.len > 0 {
-                        self.len -= 1;
-                    }
                     self.collapse_root_if_needed();
                 }
                 removed_value
@@ -825,21 +807,21 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
                 // Handle the result
                 match child_result {
                     RemoveResult::Updated(removed_value, child_became_underfull) => {
-                        let mut current_node_became_underfull = false;
                         // If child became underfull, try to rebalance
                         if removed_value.is_some() && child_became_underfull {
-                            // rebalance_child returns true if the branch_id (current node) becomes underfull
-                            current_node_became_underfull = self.rebalance_child(id, child_index);
+                            let _child_still_exists = self.rebalance_child(id, child_index);
                         }
 
-                        RemoveResult::Updated(removed_value, current_node_became_underfull)
+                        // Check if this branch is now underfull after rebalancing
+                        let is_underfull =
+                            self.is_node_underfull(&NodeRef::Branch(id, PhantomData));
+                        RemoveResult::Updated(removed_value, is_underfull)
                     }
                 }
             }
         }
     }
     /// Rebalance an underfull child in an arena branch
-    /// Returns true if the parent branch node became underfull after rebalancing
     fn rebalance_child(&mut self, branch_id: NodeId, child_index: usize) -> bool {
         // Get information about the child and its siblings
         let (has_left_sibling, has_right_sibling, child_is_leaf) = match self.get_branch(branch_id)
@@ -863,7 +845,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
     }
 
     /// Rebalance an underfull leaf child
-    /// Returns true if the parent branch node became underfull after rebalancing
     fn rebalance_leaf_child(
         &mut self,
         branch_id: NodeId,
@@ -871,6 +852,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         has_left_sibling: bool,
         has_right_sibling: bool,
     ) -> bool {
+        // Get parent branch once and cache sibling info to avoid multiple arena lookups
         let (left_can_donate, right_can_donate) = match self.get_branch(branch_id) {
             Some(branch) => {
                 let left_can_donate = if has_left_sibling && child_index > 0 {
@@ -898,24 +880,28 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
             None => return false,
         };
 
-        let _child_still_exists = if left_can_donate {
-            self.borrow_from_left_leaf(branch_id, child_index)
-        } else if right_can_donate {
-            self.borrow_from_right_leaf(branch_id, child_index)
-        } else if has_left_sibling {
-            self.merge_with_left_leaf(branch_id, child_index)
-        } else if has_right_sibling {
-            self.merge_with_right_leaf(branch_id, child_index)
-        } else {
-            false // No siblings to merge with
-        };
+        // Try borrowing from left sibling first
+        if left_can_donate {
+            return self.borrow_from_left_leaf(branch_id, child_index);
+        }
 
-        // After rebalancing, check if the current branch node (parent) is now underfull
-        self.is_node_underfull(&NodeRef::Branch(branch_id, PhantomData))
+        // Try borrowing from right sibling
+        if right_can_donate {
+            return self.borrow_from_right_leaf(branch_id, child_index);
+        }
+
+        // Cannot borrow, must merge
+        if has_left_sibling {
+            return self.merge_with_left_leaf(branch_id, child_index);
+        } else if has_right_sibling {
+            return self.merge_with_right_leaf(branch_id, child_index);
+        }
+
+        // No siblings to merge with - this shouldn't happen
+        false
     }
 
     /// Rebalance an underfull branch child
-    /// Returns true if the parent branch node became underfull after rebalancing
     fn rebalance_branch_child(
         &mut self,
         branch_id: NodeId,
@@ -989,33 +975,42 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
                 None => return false,
             };
 
-        let _child_still_exists = if left_can_donate {
-            self.borrow_from_left_branch(branch_id, child_index)
-        } else if right_can_donate {
-            self.borrow_from_right_branch(branch_id, child_index)
-        } else if left_can_merge {
-            self.merge_with_left_branch(branch_id, child_index)
-        } else if right_can_merge {
-            self.merge_with_right_branch(branch_id, child_index)
-        } else {
-            true // Cannot borrow or merge - leave the node underfull
-        };
+        // Try borrowing from left sibling first
+        if left_can_donate {
+            return self.borrow_from_left_branch(branch_id, child_index);
+        }
 
-        // After rebalancing, check if the current branch node (parent) is now underfull
-        self.is_node_underfull(&NodeRef::Branch(branch_id, PhantomData))
+        // Try borrowing from right sibling
+        if right_can_donate {
+            return self.borrow_from_right_branch(branch_id, child_index);
+        }
+
+        // Try merging with left sibling
+        if left_can_merge {
+            return self.merge_with_left_branch(branch_id, child_index);
+        }
+
+        // Try merging with right sibling
+        if right_can_merge {
+            return self.merge_with_right_branch(branch_id, child_index);
+        }
+
+        // Cannot borrow or merge - leave the node underfull
+        // This can happen when siblings are also near minimum capacity
+        true
     }
 
     /// Merge branch with left sibling
     fn merge_with_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
-            Some(branch) => {
+            Some(parent) => {
                 match (
-                    &branch.children[child_index - 1],
-                    &branch.children[child_index],
+                    &parent.children[child_index - 1],
+                    &parent.children[child_index],
                 ) {
                     (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
-                        (*left, *child, branch.keys[child_index - 1].clone())
+                        (*left, *child, parent.keys[child_index - 1].clone())
                     }
                     _ => return false,
                 }
@@ -1050,24 +1045,20 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         // Deallocate the merged child
         self.deallocate_branch(child_id);
 
-        // Update all separator keys in the parent to reflect the new structure
-        self.fix_separator_keys(parent_id);
-
-        // Check if the parent branch is now underfull
-        self.is_node_underfull(&NodeRef::Branch(parent_id, PhantomData))
+        false // Child was merged away
     }
 
     /// Merge branch with right sibling
     fn merge_with_right_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (child_id, right_id, separator_key) = match self.get_branch(parent_id) {
-            Some(branch) => {
+            Some(parent) => {
                 match (
-                    &branch.children[child_index],
-                    &branch.children[child_index + 1],
+                    &parent.children[child_index],
+                    &parent.children[child_index + 1],
                 ) {
                     (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
-                        (*child, *right, branch.keys[child_index].clone())
+                        (*child, *right, parent.keys[child_index].clone())
                     }
                     _ => return false,
                 }
@@ -1102,61 +1093,20 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         // Deallocate the merged right sibling
         self.deallocate_branch(right_id);
 
-        // Update all separator keys in the parent to reflect the new structure
-        self.fix_separator_keys(parent_id);
-
-        // Check if the parent branch is now underfull
-        self.is_node_underfull(&NodeRef::Branch(parent_id, PhantomData))
+        true // Child still exists
     }
-
-    /// Fix all separator keys in a branch node to correctly reflect child boundaries
-    fn fix_separator_keys(&mut self, branch_id: NodeId) {
-        // Get the children first to avoid borrowing conflicts
-        let children = match self.get_branch(branch_id) {
-            Some(branch) => branch.children.clone(),
-            None => return,
-        };
-
-        // Calculate the correct separator keys
-        let mut correct_keys = Vec::new();
-        for i in 1..children.len() {
-            if let Some(min_key) = self.get_minimum_key_in_subtree(&children[i]) {
-                correct_keys.push(min_key);
-            }
-        }
-
-        // Update the branch with correct separator keys
-        if let Some(branch) = self.get_branch_mut(branch_id) {
-            branch.keys = correct_keys;
-        }
-    }
-
-    /// Get the minimum key in a subtree rooted at the given node
-    fn get_minimum_key_in_subtree(&self, node: &NodeRef<K, V>) -> Option<K> {
-        match node {
-            NodeRef::Leaf(leaf_id, _) => {
-                self.get_leaf(*leaf_id)?.keys.first().cloned()
-            }
-            NodeRef::Branch(branch_id, _) => {
-                let branch = self.get_branch(*branch_id)?;
-                let first_child = branch.children.first()?;
-                self.get_minimum_key_in_subtree(first_child)
-            }
-        }
-    }
-
 
     /// Borrow from left sibling branch
     fn borrow_from_left_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (left_id, child_id, separator_key) = match self.get_branch(parent_id) {
-            Some(branch) => {
+            Some(parent) => {
                 match (
-                    &branch.children[child_index - 1],
-                    &branch.children[child_index],
+                    &parent.children[child_index - 1],
+                    &parent.children[child_index],
                 ) {
                     (NodeRef::Branch(left, _), NodeRef::Branch(child, _)) => {
-                        (*left, *child, branch.keys[child_index - 1].clone())
+                        (*left, *child, parent.keys[child_index - 1].clone())
                     }
                     _ => return false,
                 }
@@ -1185,11 +1135,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         };
         parent.keys[child_index - 1] = new_separator;
 
-        // Ensure all separator keys are correct after borrowing
-        self.fix_separator_keys(parent_id);
-        // EGREGIOUS HACK: Also fix separator keys in the child that received the new subtree
-        self.fix_separator_keys(child_id);
-
         true
     }
 
@@ -1197,13 +1142,13 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
     fn borrow_from_right_branch(&mut self, parent_id: NodeId, child_index: usize) -> bool {
         // Get the branch IDs and collect all needed info from parent in one access
         let (child_id, right_id, separator_key) = match self.get_branch(parent_id) {
-            Some(branch) => {
+            Some(parent) => {
                 match (
-                    &branch.children[child_index],
-                    &branch.children[child_index + 1],
+                    &parent.children[child_index],
+                    &parent.children[child_index + 1],
                 ) {
                     (NodeRef::Branch(child, _), NodeRef::Branch(right, _)) => {
-                        (*child, *right, branch.keys[child_index].clone())
+                        (*child, *right, parent.keys[child_index].clone())
                     }
                     _ => return false,
                 }
@@ -1231,11 +1176,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
             return false;
         };
         parent.keys[child_index] = new_separator;
-
-        // Ensure all separator keys are correct after borrowing
-        self.fix_separator_keys(parent_id);
-        // EGREGIOUS HACK: Also fix separator keys in the child that received the new subtree
-        self.fix_separator_keys(child_id);
 
         true
     }
@@ -1273,18 +1213,11 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         };
         child_leaf.accept_from_left(key.clone(), value);
 
-        // Update separator in parent (new first key of child, second parent access)
-        let new_separator = self
-            .get_leaf(child_id)
-            .and_then(|child_leaf| child_leaf.keys.first().cloned());
-
-        // Use Option combinators for nested conditional update
-        new_separator
-            .zip(self.get_branch_mut(branch_id))
-            .map(|(sep, branch)| branch.keys[child_index - 1] = sep);
-
-        // Ensure all separator keys are correct after borrowing
-        self.fix_separator_keys(branch_id);
+        // Update separator in parent (second and final parent access)
+        let Some(branch) = self.get_branch_mut(branch_id) else {
+            return false;
+        };
+        branch.keys[child_index - 1] = key;
 
         true
     }
@@ -1328,22 +1261,15 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
             .and_then(|right_leaf| right_leaf.keys.first().cloned());
 
         // Use Option combinators for nested conditional update
-        let Some(parent) = self.get_branch_mut(branch_id) else {
-            return false;
-        };
-        if let Some(sep) = new_separator {
-            parent.keys[child_index] = sep;
-        }
-
-        // Ensure all separator keys are correct after borrowing
-        self.fix_separator_keys(branch_id);
+        new_separator
+            .zip(self.get_branch_mut(branch_id))
+            .map(|(sep, branch)| branch.keys[child_index] = sep);
 
         true
     }
 
     /// Merge with left sibling leaf
     fn merge_with_left_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        let capacity = self.capacity;
         // Extract leaf IDs from parent in one access (inlined get_adjacent_leaf_ids logic)
         let (left_id, child_id) = match self.get_branch(branch_id) {
             Some(branch) => {
@@ -1370,37 +1296,25 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         let Some(left_leaf) = self.get_leaf_mut(left_id) else {
             return false;
         };
-
-        // Check if merge is possible without exceeding capacity
-        if left_leaf.len() + child_keys.len() > capacity {
-            return false;
-        }
-
         left_leaf.keys.append(&mut child_keys);
         left_leaf.values.append(&mut child_values);
-        // Fix: Ensure proper linked list maintenance
         left_leaf.next = child_next;
 
         // Remove child from parent (second and final parent access)
         let Some(branch) = self.get_branch_mut(branch_id) else {
             return false;
         };
-        // Standard B+ tree merge: remove child and its separator key
         branch.children.remove(child_index);
         branch.keys.remove(child_index - 1);
 
         // Deallocate the merged child
         self.deallocate_leaf(child_id);
 
-        // EGREGIOUS HACK: Fix separator keys after merge
-        self.fix_separator_keys(branch_id);
-
         false // Child was merged away
     }
 
     /// Merge with right sibling leaf
     fn merge_with_right_leaf(&mut self, branch_id: NodeId, child_index: usize) -> bool {
-        let capacity = self.capacity;
         // Extract leaf IDs from parent in one access (inlined get_adjacent_leaf_ids logic)
         let (child_id, right_id) = match self.get_branch(branch_id) {
             Some(branch) => {
@@ -1427,12 +1341,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         let Some(child_leaf) = self.get_leaf_mut(child_id) else {
             return false;
         };
-
-        // Check if merge is possible without exceeding capacity
-        if child_leaf.len() + right_keys.len() > capacity {
-            return false;
-        }
-
         child_leaf.keys.append(&mut right_keys);
         child_leaf.values.append(&mut right_values);
         child_leaf.next = right_next;
@@ -1441,15 +1349,11 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         let Some(branch) = self.get_branch_mut(branch_id) else {
             return false;
         };
-        // Standard B+ tree merge: remove right child and separator key at child_index
         branch.children.remove(child_index + 1);
         branch.keys.remove(child_index);
 
         // Deallocate the merged right sibling
         self.deallocate_leaf(right_id);
-
-        // EGREGIOUS HACK: Fix separator keys after merge
-        self.fix_separator_keys(branch_id);
 
         true // Child still exists
     }
@@ -1514,12 +1418,29 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
 
     /// Returns the number of elements in the tree.
     pub fn len(&self) -> usize {
-        self.len
+        self.len_recursive(&self.root)
+    }
+
+    /// Recursively count elements with proper arena access.
+    fn len_recursive(&self, node: &NodeRef<K, V>) -> usize {
+        match node {
+            NodeRef::Leaf(id, _) => self.get_leaf(*id).map(|leaf| leaf.len()).unwrap_or(0),
+            NodeRef::Branch(id, _) => self
+                .get_branch(*id)
+                .map(|branch| {
+                    branch
+                        .children
+                        .iter()
+                        .map(|child| self.len_recursive(child))
+                        .sum()
+                })
+                .unwrap_or(0),
+        }
     }
 
     /// Returns true if the tree is empty.
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.len() == 0
     }
 
     /// Returns true if the root is a leaf node.
@@ -1559,9 +1480,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         let root_leaf = LeafNode::new(self.capacity);
         let root_id = self.leaf_arena.allocate(root_leaf);
         self.root = NodeRef::Leaf(root_id, PhantomData);
-
-        // Reset length counter
-        self.len = 0;
     }
 
     /// Returns an iterator over all key-value pairs in sorted order.
@@ -1590,8 +1508,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         let start_bound = start_key.map_or(Bound::Unbounded, |k| Bound::Included(k));
         let end_bound = end_key.map_or(Bound::Unbounded, |k| Bound::Excluded(k));
 
-        let (start_info, skip_first, end_info) =
-            self.resolve_range_bounds((start_bound, end_bound));
+        let (start_info, skip_first, end_info) = self.resolve_range_bounds((start_bound, end_bound));
         RangeIterator::new_with_skip_owned(self, start_info, skip_first, end_info)
     }
 
@@ -1651,7 +1568,11 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
     fn resolve_range_bounds<R>(
         &self,
         range: R,
-    ) -> (Option<(NodeId, usize)>, bool, Option<(K, bool)>)
+    ) -> (
+        Option<(NodeId, usize)>,
+        bool,
+        Option<(K, bool)>,
+    )
     where
         R: RangeBounds<K>,
     {
@@ -1696,6 +1617,7 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
     fn find_range_start(&self, start_key: &K) -> Option<(NodeId, usize)> {
         let mut current = &self.root;
 
+        // Navigate down to leaf level
         loop {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
@@ -1880,6 +1802,8 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         self.branch_arena.get_mut(id)
     }
 
+    
+
     // ============================================================================
     // OTHER HELPERS (TEST HELPERS)
     // ============================================================================
@@ -1904,105 +1828,6 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         self.check_arena_tree_consistency()
             .map_err(|e| e.to_string())?;
         Ok(())
-    }
-
-    /// Recursively check node invariants.
-    /// This function verifies the structural integrity of the B+ tree.
-    /// It checks node sizes, key ordering, and child relationships.
-    fn check_node_invariants(
-        &self,
-        node: &NodeRef<K, V>,
-        min_key: Option<&K>,
-        max_key: Option<&K>,
-        is_root: bool,
-    ) -> bool {
-        match node {
-            NodeRef::Leaf(id, _) => {
-                if let Some(leaf) = self.get_leaf(*id) {
-                    // Check leaf size
-                    if !is_root && leaf.len() < leaf.min_keys() {
-                        return false;
-                    }
-                    if leaf.len() > leaf.capacity {
-                        return false;
-                    }
-
-                    // Check key ordering
-                    if leaf.keys.len() > 1 {
-                        for i in 0..leaf.keys.len() - 1 {
-                            if leaf.keys[i] >= leaf.keys[i + 1] {
-                                return false;
-                            }
-                        }
-                    }
-
-                    // Check key bounds
-                    if let Some(min_k) = min_key {
-                        if leaf.keys.first().map_or(false, |k| k < min_k) {
-                            return false;
-                        }
-                    }
-                    if let Some(max_k) = max_key {
-                        if leaf.keys.last().map_or(false, |k| k >= max_k) {
-                            return false;
-                        }
-                    }
-                } else {
-                    return false;
-                }
-            }
-            NodeRef::Branch(id, _) => {
-                if let Some(branch) = self.get_branch(*id) {
-                    // Check branch size
-                    if !is_root && branch.keys.len() < branch.min_keys() {
-                        return false;
-                    }
-                    if branch.keys.len() > branch.capacity {
-                        return false;
-                    }
-
-                    // Check key ordering
-                    if branch.keys.len() > 1 {
-                        for i in 0..branch.keys.len() - 1 {
-                            if branch.keys[i] >= branch.keys[i + 1] {
-                                return false;
-                            }
-                        }
-                    }
-
-                    // Check child count
-                    if branch.children.len() != branch.keys.len() + 1 {
-                        return false;
-                    }
-
-                    // Recursively check children and their bounds
-                    for i in 0..branch.children.len() {
-                        let child_min_key = if i == 0 {
-                            min_key
-                        } else {
-                            Some(&branch.keys[i - 1])
-                        };
-                        let child_max_key = if i == branch.children.len() - 1 {
-                            max_key
-                        } else {
-                            Some(&branch.keys[i])
-                        };
-
-                        if !self.check_node_invariants(
-                            &branch.children[i],
-                            child_min_key,
-                            child_max_key,
-                            false,
-                        ) {
-                            return false;
-                        }
-                    }
-                } else {
-                    return false;
-                }
-            }
-        }
-        true
     }
 
     /// Check that arena allocation matches tree structure
@@ -2198,205 +2023,448 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> BPlusTreeMap<
         match node {
             NodeRef::Leaf(id, _) => {
                 if let Some(leaf) = self.get_leaf(*id) {
-                    println!("{}Leaf (ID: {}): Keys: {:?}", indent, id, leaf.keys);
+                    println!(
+                        "{}Leaf[id={}, cap={}]: {} keys",
+                        indent,
+                        id,
+                        leaf.capacity,
+                        leaf.keys.len()
+                    );
                 } else {
-                    println!("{}Leaf (ID: {}) - MISSING FROM ARENA", indent, id);
+                    println!("{}Leaf[id={}]: <missing>", indent, id);
                 }
             }
             NodeRef::Branch(id, _) => {
                 if let Some(branch) = self.get_branch(*id) {
-                    println!("{}Branch (ID: {}): Keys: {:?}", indent, id, branch.keys);
+                    println!(
+                        "{}Branch[id={}, cap={}]: {} keys, {} children",
+                        indent,
+                        id,
+                        branch.capacity,
+                        branch.keys.len(),
+                        branch.children.len()
+                    );
                     for child in &branch.children {
                         self.print_node(child, depth + 1);
                     }
                 } else {
-                    println!("{}Branch (ID: {}) - MISSING FROM ARENA", indent, id);
+                    println!("{}Branch[id={}]: <missing>", indent, id);
+                }
+            }
+        }
+    }
+
+    /// Recursively check invariants for a node and its children.
+    fn check_node_invariants(
+        &self,
+        node: &NodeRef<K, V>,
+        min_key: Option<&K>,
+        max_key: Option<&K>,
+        _is_root: bool,
+    ) -> bool {
+        match node {
+            NodeRef::Leaf(id, _) => {
+                if let Some(leaf) = self.get_leaf(*id) {
+                    // Check leaf invariants
+                    if leaf.keys.len() != leaf.values.len() {
+                        return false; // Keys and values must have same length
+                    }
+
+                    // Check that keys are sorted
+                    for i in 1..leaf.keys.len() {
+                        if leaf.keys[i - 1] >= leaf.keys[i] {
+                            return false; // Keys must be in ascending order
+                        }
+                    }
+
+                    // Check capacity constraints
+                    if leaf.keys.len() > self.capacity {
+                        return false; // Node exceeds capacity
+                    }
+
+                    // Check minimum occupancy
+                    if !leaf.keys.is_empty() && leaf.is_underfull() {
+                        // For root nodes, allow fewer keys only if it's the only node
+                        if _is_root {
+                            // Root leaf can have any number of keys >= 1
+                            // (This is fine for leaf roots)
+                        } else {
+                            return false; // Non-root leaf is underfull
+                        }
+                    }
+
+                    // Check key bounds
+                    if let Some(min) = min_key {
+                        if !leaf.keys.is_empty() && &leaf.keys[0] < min {
+                            return false; // First key must be >= min_key
+                        }
+                    }
+                    if let Some(max) = max_key {
+                        if !leaf.keys.is_empty() && &leaf.keys[leaf.keys.len() - 1] >= max {
+                            return false; // Last key must be < max_key
+                        }
+                    }
+
+                    true
+                } else {
+                    false // Missing arena leaf is invalid
+                }
+            }
+            NodeRef::Branch(id, _) => {
+                if let Some(branch) = self.get_branch(*id) {
+                    // Check branch invariants
+                    if branch.keys.len() + 1 != branch.children.len() {
+                        return false; // Must have one more child than keys
+                    }
+
+                    // Check that keys are sorted
+                    for i in 1..branch.keys.len() {
+                        if branch.keys[i - 1] >= branch.keys[i] {
+                            return false; // Keys must be in ascending order
+                        }
+                    }
+
+                    // Check capacity constraints
+                    if branch.keys.len() > self.capacity {
+                        return false; // Node exceeds capacity
+                    }
+
+                    // Check minimum occupancy
+                    if !branch.keys.is_empty() && branch.is_underfull() {
+                        if _is_root {
+                            // Root branch can have any number of keys >= 1 (as long as it has children)
+                            // The only requirement is that keys.len() + 1 == children.len()
+                            // This is already checked above, so root branches are always valid
+                        } else {
+                            return false; // Non-root branch is underfull
+                        }
+                    }
+
+                    // Check that branch has at least one child
+                    if branch.children.is_empty() {
+                        return false; // Branch must have at least one child
+                    }
+
+                    // Check children recursively
+                    for (i, child) in branch.children.iter().enumerate() {
+                        let child_min = if i == 0 {
+                            min_key
+                        } else {
+                            Some(&branch.keys[i - 1])
+                        };
+                        let child_max = if i == branch.keys.len() {
+                            max_key
+                        } else {
+                            Some(&branch.keys[i])
+                        };
+
+                        if !self.check_node_invariants(child, child_min, child_max, false) {
+                            return false;
+                        }
+                    }
+
+                    true
+                } else {
+                    false // Missing arena branch is invalid
                 }
             }
         }
     }
 }
 
-/// Leaf node of the B+ tree.
-#[derive(Debug)]
-pub struct LeafNode<K, V> {
-    pub keys: Vec<K>,
-    pub values: Vec<V>,
-    pub capacity: usize,
-    pub next: NodeId, // Pointer to the next leaf node for range queries
+impl<K: Ord + Clone, V: Clone> Default for BPlusTreeMap<K, V> {
+    /// Create a B+ tree with default capacity (16).
+    fn default() -> Self {
+        Self::new(16).expect("Default capacity should be valid")
+    }
 }
 
-impl<K: Ord + Clone + std::fmt::Debug, V: Clone> LeafNode<K, V> {
+/// Leaf node containing key-value pairs.
+#[derive(Debug, Clone)]
+pub struct LeafNode<K, V> {
+    /// Maximum number of keys this node can hold.
+    capacity: usize,
+    /// Sorted list of keys.
+    keys: Vec<K>,
+    /// List of values corresponding to keys.
+    values: Vec<V>,
+    /// Next leaf node in the linked list (for range queries).
+    next: NodeId,
+}
+
+/// Internal (branch) node containing keys and child pointers.
+#[derive(Debug, Clone)]
+pub struct BranchNode<K, V> {
+    /// Maximum number of keys this node can hold.
+    capacity: usize,
+    /// Sorted list of separator keys.
+    keys: Vec<K>,
+    /// List of child nodes (leaves or other branches).
+    children: Vec<NodeRef<K, V>>,
+}
+
+impl<K: Ord + Clone, V: Clone> LeafNode<K, V> {
+    // ============================================================================
+    // CONSTRUCTION
+    // ============================================================================
+
+    /// Creates a new leaf node with the specified capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            keys: Vec::with_capacity(capacity),
-            values: Vec::with_capacity(capacity),
             capacity,
+            keys: Vec::new(),
+            values: Vec::new(),
             next: NULL_NODE,
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.keys.len()
+    /// Get a reference to the keys in this leaf node.
+    pub fn keys(&self) -> &Vec<K> {
+        &self.keys
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    /// Get a reference to the values in this leaf node.
+    pub fn values(&self) -> &Vec<V> {
+        &self.values
     }
 
-    pub fn is_full(&self) -> bool {
-        self.len() == self.capacity
+    /// Get a mutable reference to the values in this leaf node.
+    pub fn values_mut(&mut self) -> &mut Vec<V> {
+        &mut self.values
     }
 
-    pub fn is_underfull(&self) -> bool {
-        self.len() < self.min_keys()
-    }
+    // ============================================================================
+    // GET OPERATIONS
+    // ============================================================================
 
-    pub fn can_donate(&self) -> bool {
-        self.len() > self.min_keys()
-    }
-
-    pub fn min_keys(&self) -> usize {
-        self.capacity / 2 // floor(capacity / 2)
-    }
-
+    /// Get value for a key from this leaf node.
     pub fn get(&self, key: &K) -> Option<&V> {
-        self.keys
-            .binary_search(key)
-            .ok()
-            .and_then(|index| self.values.get(index))
+        match self.keys.binary_search(key) {
+            Ok(index) => Some(&self.values[index]),
+            Err(_) => None,
+        }
     }
 
+    /// Get a mutable reference to the value for a key from this leaf node.
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.keys
-            .binary_search(key)
-            .ok()
-            .and_then(|index| self.values.get_mut(index))
+        match self.keys.binary_search(key) {
+            Ok(index) => Some(&mut self.values[index]),
+            Err(_) => None,
+        }
     }
 
+    // ============================================================================
+    // HELPERS FOR GET OPERATIONS
+    // ============================================================================
+    // (No additional helpers needed for LeafNode get operations)
+
+    // ============================================================================
+    // INSERT OPERATIONS
+    // ============================================================================
+
+    /// Insert a key-value pair and handle splitting if necessary.
     pub fn insert(&mut self, key: K, value: V) -> InsertResult<K, V> {
+        // Do binary search once and use the result throughout
         match self.keys.binary_search(&key) {
             Ok(index) => {
-                // Key exists, update value
+                // Key already exists, update the value
                 let old_value = std::mem::replace(&mut self.values[index], value);
                 InsertResult::Updated(Some(old_value))
             }
             Err(index) => {
-                // Key does not exist, insert new key-value pair
-                if self.is_full() {
-                    // Node is full, must split
-                    self.split_and_insert(key, value, index)
+                // Key doesn't exist, need to insert
+                // Check if split is needed BEFORE inserting
+                if !self.is_full() {
+                    // Room to insert without splitting
+                    self.insert_at_index(index, key, value);
+                    // Simple insertion - no split needed
+                    return InsertResult::Updated(None);
+                }
+                // Leaf is at capacity, split first then insert
+                let mut new_leaf_data = self.split();
+                let separator_key = new_leaf_data.keys[0].clone();
+
+                // Determine which leaf should receive the new key
+                if key < separator_key {
+                    // Insert into the current (left) leaf
+                    self.insert_at_index(index, key, value);
                 } else {
-                    // Node has space, insert directly
-                    self.keys.insert(index, key);
-                    self.values.insert(index, value);
-                    InsertResult::Updated(None)
+                    // Insert into the new (right) leaf
+                    match new_leaf_data.keys.binary_search(&key) {
+                        Ok(_) => {
+                            // This should never happen with correct split logic
+                            // Return error instead of panic to maintain stability
+                            return InsertResult::Error(BPlusTreeError::data_integrity(
+                                "Leaf split operation",
+                                "Key unexpectedly found in new leaf after split",
+                            ));
+                        }
+                        Err(new_index) => {
+                            new_leaf_data.insert_at_index(new_index, key, value);
+                        }
+                    }
+                }
+
+                // Return the leaf data for arena allocation
+                InsertResult::Split {
+                    old_value: None,
+                    new_node_data: SplitNodeData::Leaf(new_leaf_data),
+                    separator_key,
                 }
             }
         }
     }
 
-    fn split_and_insert(&mut self, key: K, value: V, insert_index: usize) -> InsertResult<K, V> {
+    // ============================================================================
+    // HELPERS FOR INSERT OPERATIONS
+    // ============================================================================
+
+    /// Insert a key-value pair at the specified index.
+    fn insert_at_index(&mut self, index: usize, key: K, value: V) {
+        self.keys.insert(index, key);
+        self.values.insert(index, value);
+    }
+
+    /// Split this leaf node, returning the new right node.
+    pub fn split(&mut self) -> LeafNode<K, V> {
+        // For B+ trees, we need to ensure both resulting nodes have at least min_keys
+        // When splitting a full node (capacity keys), we want to distribute them
+        // so that both nodes have at least min_keys
+        let min_keys = self.min_keys();
+        let total_keys = self.keys.len();
+
+        // Calculate split point for better balance while ensuring both sides have at least min_keys
+        // Use a more balanced split: aim for roughly equal distribution
+        let mid = total_keys.div_ceil(2); // Round up for odd numbers
+
+        // Ensure the split point respects minimum requirements
+        let mid = mid.max(min_keys).min(total_keys - min_keys);
+
+        // Verify this split is valid
+        debug_assert!(mid >= min_keys, "Left side would be underfull");
+        debug_assert!(
+            total_keys - mid >= min_keys,
+            "Right side would be underfull"
+        );
+
+        // Create new leaf for right half (no Box allocation)
         let mut new_leaf = LeafNode::new(self.capacity);
-        let mid = self.capacity / 2; // floor(capacity / 2)
 
-        // Determine where the new key will go relative to the split point
-        let (mut left_keys, mut left_values) = (Vec::new(), Vec::new());
-        let (mut right_keys, mut right_values) = (Vec::new(), Vec::new());
+        // Move right half of keys/values to new leaf
+        new_leaf.keys = self.keys.split_off(mid);
+        new_leaf.values = self.values.split_off(mid);
 
-        for i in 0..self.len() {
-            if i == insert_index {
-                // Insert the new key/value here
-                if i < mid {
-                    left_keys.push(key.clone());
-                    left_values.push(value.clone());
-                } else {
-                    right_keys.push(key.clone());
-                    right_values.push(value.clone());
-                }
-            }
-
-            if i < mid {
-                left_keys.push(self.keys[i].clone());
-                left_values.push(self.values[i].clone());
-            } else {
-                right_keys.push(self.keys[i].clone());
-                right_values.push(self.values[i].clone());
-            }
-        }
-
-        // Handle case where new key is inserted at the end
-        if insert_index == self.len() {
-            if insert_index < mid {
-                left_keys.push(key.clone());
-                left_values.push(value.clone());
-            } else {
-                right_keys.push(key.clone());
-                right_values.push(value.clone());
-            }
-        }
-
-        // Update current leaf and new leaf
-        self.keys = left_keys;
-        self.values = left_values;
-        new_leaf.keys = right_keys;
-        new_leaf.values = right_values;
-
-        // The separator key is the first key of the new leaf
-        let separator_key = new_leaf.keys[0].clone();
-
-        // Link the new leaf
+        // Maintain the linked list: new leaf inherits our next pointer
         new_leaf.next = self.next;
-        self.next = NULL_NODE; // This will be updated by the tree after allocation
+        // Note: The caller must update self.next to point to the new leaf's ID
+        // This can't be done here as we don't know the new leaf's arena ID yet
 
-        InsertResult::Split {
-            old_value: None,
-            new_node_data: SplitNodeData::Leaf(new_leaf),
-            separator_key,
-        }
+        new_leaf
     }
 
+    // ============================================================================
+    // DELETE OPERATIONS
+    // ============================================================================
+
+    /// Remove a key from this leaf node.
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        if let Ok(index) = self.keys.binary_search(key) {
-            self.keys.remove(index);
-            Some(self.values.remove(index))
-        } else {
-            None
+        match self.keys.binary_search(key) {
+            Ok(index) => {
+                self.keys.remove(index);
+                Some(self.values.remove(index))
+            }
+            Err(_) => None,
         }
     }
 
+    // ============================================================================
+    // OTHER API OPERATIONS
+    // ============================================================================
+
+    /// Returns the number of key-value pairs in this leaf node.
+    pub fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Returns true if this leaf node is empty.
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty()
+    }
+
+    /// Returns true if this leaf node is at capacity.
+    pub fn is_full(&self) -> bool {
+        self.keys.len() >= self.capacity
+    }
+
+    /// Returns true if this leaf node needs to be split.
+    /// We allow one extra key beyond capacity to ensure proper splitting.
+    pub fn needs_split(&self) -> bool {
+        self.keys.len() > self.capacity
+    }
+
+    /// Returns true if this leaf node is underfull (below minimum occupancy).
+    pub fn is_underfull(&self) -> bool {
+        self.keys.len() < self.min_keys()
+    }
+
+    /// Returns true if this leaf can donate a key to a sibling.
+    pub fn can_donate(&self) -> bool {
+        self.keys.len() > self.min_keys()
+    }
+
+    // ============================================================================
+    // OTHER HELPERS
+    // ============================================================================
+
+    /// Returns the minimum number of keys this leaf should have.
+    pub fn min_keys(&self) -> usize {
+        // For leaf nodes, minimum is floor(capacity / 2)
+        // Exception: root can have fewer keys
+        self.capacity / 2
+    }
+
+    // ============================================================================
+    // BORROWING AND MERGING HELPERS
+    // ============================================================================
+
+    /// Borrow the last key-value pair from this leaf (used when this is the left sibling)
     pub fn borrow_last(&mut self) -> Option<(K, V)> {
-        if self.can_donate() {
-            let key = self.keys.pop()?;
-            let value = self.values.pop()?;
-            Some((key, value))
-        } else {
-            None
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
         }
+        Some((self.keys.pop().unwrap(), self.values.pop().unwrap()))
     }
 
+    /// Borrow the first key-value pair from this leaf (used when this is the right sibling)
     pub fn borrow_first(&mut self) -> Option<(K, V)> {
-        if self.can_donate() {
-            let key = self.keys.remove(0);
-            let value = self.values.remove(0);
-            Some((key, value))
-        } else {
-            None
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
         }
+        Some((self.keys.remove(0), self.values.remove(0)))
     }
 
+    /// Accept a borrowed key-value pair at the beginning (from left sibling)
     pub fn accept_from_left(&mut self, key: K, value: V) {
         self.keys.insert(0, key);
         self.values.insert(0, value);
-        // The separator key in the parent will be updated by the parent
     }
 
+    /// Accept a borrowed key-value pair at the end (from right sibling)
     pub fn accept_from_right(&mut self, key: K, value: V) {
         self.keys.push(key);
         self.values.push(value);
-        // The separator key in the parent will be updated by the parent
     }
 
+    /// Merge all content from another leaf into this one, returning the other's next pointer
+    pub fn merge_from(&mut self, other: &mut LeafNode<K, V>) -> NodeId {
+        self.keys.append(&mut other.keys);
+        self.values.append(&mut other.values);
+        let other_next = other.next;
+        other.next = NULL_NODE; // Clear the other's next pointer
+        other_next
+    }
+
+    /// Extract all content from this leaf (used for merging)
     pub fn extract_all(&mut self) -> (Vec<K>, Vec<V>, NodeId) {
         let keys = std::mem::take(&mut self.keys);
         let values = std::mem::take(&mut self.values);
@@ -2406,356 +2474,517 @@ impl<K: Ord + Clone + std::fmt::Debug, V: Clone> LeafNode<K, V> {
     }
 }
 
-/// Branch node of the B+ tree.
-#[derive(Debug)]
-pub struct BranchNode<K, V> {
-    pub keys: Vec<K>,
-    pub children: Vec<NodeRef<K, V>>,
-    pub capacity: usize,
-}
+impl<K: Ord + Clone, V: Clone> BranchNode<K, V> {
+    // ============================================================================
+    // CONSTRUCTION
+    // ============================================================================
 
-impl<K: Ord + Clone + std::fmt::Debug, V: Clone> BranchNode<K, V> {
+    /// Creates a new branch node with the specified capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            keys: Vec::with_capacity(capacity),
-            children: Vec::with_capacity(capacity + 1), // One more child than keys
             capacity,
+            keys: Vec::new(),
+            children: Vec::new(),
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.keys.len()
-    }
+    // ============================================================================
+    // GET OPERATIONS
+    // ============================================================================
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.len() == self.capacity
-    }
-
-    pub fn is_underfull(&self) -> bool {
-        self.len() < self.min_keys()
-    }
-
-    pub fn can_donate(&self) -> bool {
-        self.len() > self.min_keys()
-    }
-
-    pub fn min_keys(&self) -> usize {
-        self.capacity / 2 // floor(capacity / 2)
-    }
-
-    pub fn find_child_index(&self, key: &K) -> usize {
-        self.keys.partition_point(|k| k <= key)
-    }
-
+    /// Get the child node for a given key.
     pub fn get_child(&self, key: &K) -> Option<&NodeRef<K, V>> {
-        let index = self.find_child_index(key);
-        self.children.get(index)
+        let child_index = self.find_child_index(key);
+        if child_index < self.children.len() {
+            Some(&self.children[child_index])
+        } else {
+            None
+        }
     }
 
+    /// Get a mutable reference to the child node for a given key.
+    pub fn get_child_mut(&mut self, key: &K) -> Option<&mut NodeRef<K, V>> {
+        let child_index = self.find_child_index(key);
+        if child_index >= self.children.len() {
+            return None; // Invalid child index
+        }
+        Some(&mut self.children[child_index])
+    }
+
+    // ============================================================================
+    // HELPERS FOR GET OPERATIONS
+    // ============================================================================
+
+    /// Find the child index where the given key should be located.
+    pub fn find_child_index(&self, key: &K) -> usize {
+        // Binary search to find the appropriate child
+        match self.keys.binary_search(key) {
+            Ok(index) => index + 1, // Key found, go to right child
+            Err(index) => index,    // Key not found, insert position is the child index
+        }
+    }
+
+    // ============================================================================
+    // INSERT OPERATIONS
+    // ============================================================================
+
+    /// Insert a separator key and new child into this branch node.
+    /// Returns None if no split needed, or Some((new_branch_data, promoted_key)) if split occurred.
+    /// The caller should handle arena allocation for the split data.
     pub fn insert_child_and_split_if_needed(
         &mut self,
         child_index: usize,
         separator_key: K,
-        new_node: NodeRef<K, V>,
+        new_child: NodeRef<K, V>,
     ) -> Option<(BranchNode<K, V>, K)> {
-        if self.keys.len() == self.capacity {
-            // Node is full, split first
-            let (mut new_branch, promoted_key) = self.split();
-
-            // Determine which branch to insert into
-            if separator_key < promoted_key {
-                self.keys.insert(child_index, separator_key);
-                self.children.insert(child_index + 1, new_node);
-            } else {
-                // Adjust child_index for the new_branch
-                let new_child_index = child_index - (self.keys.len() + 1);
-                new_branch.keys.insert(new_child_index, separator_key);
-                new_branch.children.insert(new_child_index + 1, new_node);
-            }
-            Some((new_branch, promoted_key))
-        } else {
-            // Not full, insert directly
+        // Check if split is needed BEFORE inserting
+        if self.is_full() {
+            // Branch is at capacity, need to handle split
+            // For branches, we MUST insert first because split promotes a key
+            // With capacity=4: 4 keys → split needs 5 keys (2 left + 1 promoted + 2 right)
             self.keys.insert(child_index, separator_key);
-            self.children.insert(child_index + 1, new_node);
+            self.children.insert(child_index + 1, new_child);
+            // Return raw data - caller should allocate through arena
+            Some(self.split_data())
+        } else {
+            // Room to insert without splitting
+            self.keys.insert(child_index, separator_key);
+            self.children.insert(child_index + 1, new_child);
             None
         }
     }
 
-    fn split(&mut self) -> (BranchNode<K, V>, K) {
-        let mut new_branch = BranchNode::new(self.capacity);
-        let mid = self.capacity / 2; // floor(capacity / 2)
+    // ============================================================================
+    // HELPERS FOR INSERT OPERATIONS
+    // ============================================================================
 
-        // The key at mid becomes the separator key promoted to the parent
-        let promoted_key = self.keys.remove(mid);
+    /// Split this branch node, returning the new right node and promoted key.
+    pub fn split_data(&mut self) -> (BranchNode<K, V>, K) {
+        // For branch nodes, we need to ensure both resulting nodes have at least min_keys
+        // The middle key gets promoted, so we need at least min_keys on each side
+        let min_keys = self.min_keys();
+        let total_keys = self.keys.len();
 
-        // Move keys and children to the new branch
-        new_branch
-            .keys
-            .extend_from_slice(&self.keys[mid..self.len()]);
-        self.keys.truncate(mid);
+        // For branch splits, we promote the middle key, so we need:
+        // - Left side: min_keys keys
+        // - Middle: 1 key (promoted)
+        // - Right side: min_keys keys
+        // Total needed: min_keys + 1 + min_keys
+        let mid = min_keys;
 
-        new_branch
-            .children
-            .extend_from_slice(&self.children[mid + 1..self.children.len()]);
-        self.children.truncate(mid + 1);
+        // Verify this split is valid
+        debug_assert!(mid < total_keys, "Not enough keys to promote one");
+        debug_assert!(mid >= min_keys, "Left side would be underfull");
+        debug_assert!(total_keys - mid > min_keys, "Right side would be underfull");
 
-        (new_branch, promoted_key)
+        // The middle key gets promoted to the parent
+        let promoted_key = self.keys[mid].clone();
+
+        let mut right_half = BranchNode::new(self.capacity);
+        right_half.keys = self.keys.split_off(mid + 1);
+        right_half.children = self.children.split_off(mid + 1);
+        self.keys.truncate(mid); // Remove the promoted key from left side
+
+        (right_half, promoted_key)
     }
 
-    pub fn merge_from(&mut self, separator_key: K, other: &mut BranchNode<K, V>) {
-        self.keys.push(separator_key);
+    // ============================================================================
+    // HELPERS FOR DELETE OPERATIONS
+    // ============================================================================
+
+    /// Merge this branch with the right sibling using the given separator.
+    /// Returns true if merge was successful.
+    pub fn merge_with_right(&mut self, mut right: BranchNode<K, V>, separator: K) -> bool {
+        // Add the separator key
+        self.keys.push(separator);
+
+        // Move all keys and children from right to this node
+        self.keys.append(&mut right.keys);
+        self.children.append(&mut right.children);
+
+        true
+    }
+
+    // ============================================================================
+    // OTHER API OPERATIONS
+    // ============================================================================
+
+    /// Returns true if this branch node is at capacity.
+    pub fn is_full(&self) -> bool {
+        self.keys.len() >= self.capacity
+    }
+
+    /// Returns true if this branch node needs to be split.
+    /// We allow one extra key beyond capacity to ensure proper splitting.
+    pub fn needs_split(&self) -> bool {
+        self.keys.len() > self.capacity
+    }
+
+    /// Returns true if this branch node is underfull (below minimum occupancy).
+    pub fn is_underfull(&self) -> bool {
+        self.keys.len() < self.min_keys()
+    }
+
+    /// Returns true if this branch can donate a key to a sibling.
+    pub fn can_donate(&self) -> bool {
+        self.keys.len() > self.min_keys()
+    }
+
+    // ============================================================================
+    // OTHER HELPERS
+    // ============================================================================
+
+    /// Returns the minimum number of keys this branch should have.
+    pub fn min_keys(&self) -> usize {
+        // For branch nodes, minimum is floor(capacity / 2)
+        // Exception: root can have fewer keys
+        self.capacity / 2
+    }
+
+    // ============================================================================
+    // BORROWING AND MERGING HELPERS
+    // ============================================================================
+
+    /// Borrow the last key and child from this branch (used when this is the left sibling)
+    pub fn borrow_last(&mut self) -> Option<(K, NodeRef<K, V>)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        let key = self.keys.pop()?;
+        let child = self.children.pop()?;
+        Some((key, child))
+    }
+
+    /// Borrow the first key and child from this branch (used when this is the right sibling)
+    pub fn borrow_first(&mut self) -> Option<(K, NodeRef<K, V>)> {
+        if self.keys.is_empty() || !self.can_donate() {
+            return None;
+        }
+        let key = self.keys.remove(0);
+        let child = self.children.remove(0);
+        Some((key, child))
+    }
+
+    /// Accept a borrowed key and child at the beginning (from left sibling)
+    /// The separator becomes the first key, and the moved child becomes the first child
+    pub fn accept_from_left(
+        &mut self,
+        separator: K,
+        moved_key: K,
+        moved_child: NodeRef<K, V>,
+    ) -> K {
+        self.keys.insert(0, separator);
+        self.children.insert(0, moved_child);
+        moved_key // Return the new separator for parent
+    }
+
+    /// Accept a borrowed key and child at the end (from right sibling)
+    /// The separator becomes the last key, and the moved child becomes the last child
+    pub fn accept_from_right(
+        &mut self,
+        separator: K,
+        moved_key: K,
+        moved_child: NodeRef<K, V>,
+    ) -> K {
+        self.keys.push(separator);
+        self.children.push(moved_child);
+        moved_key // Return the new separator for parent
+    }
+
+    /// Merge all content from another branch into this one, with separator from parent
+    pub fn merge_from(&mut self, separator: K, other: &mut BranchNode<K, V>) {
+        // Add separator key from parent
+        self.keys.push(separator);
+        // Add all keys and children from other
         self.keys.append(&mut other.keys);
         self.children.append(&mut other.children);
     }
-
-    pub fn borrow_last(&mut self) -> Option<(K, NodeRef<K, V>)> {
-        if self.can_donate() {
-            let key = self.keys.pop()?;
-            let child = self.children.pop()?;
-            Some((key, child))
-        } else {
-            None
-        }
-    }
-
-    pub fn borrow_first(&mut self) -> Option<(K, NodeRef<K, V>)> {
-        if self.can_donate() {
-            let key = self.keys.remove(0);
-            let child = self.children.remove(0);
-            Some((key, child))
-        } else {
-            None
-        }
-    }
-
-    pub fn accept_from_left(&mut self, separator_key: K, key: K, child: NodeRef<K, V>) -> K {
-        self.keys.insert(0, key);
-        self.children.insert(0, child);
-        separator_key
-    }
-
-    pub fn accept_from_right(&mut self, separator_key: K, key: K, child: NodeRef<K, V>) -> K {
-        self.keys.push(key);
-        self.children.push(child);
-        separator_key
-    }
 }
 
-/// Iterator over key-value pairs in the B+ tree.
+/// Iterator over key-value pairs in the B+ tree using the leaf linked list.
 pub struct ItemIterator<'a, K, V> {
     tree: &'a BPlusTreeMap<K, V>,
     current_leaf_id: Option<NodeId>,
-    current_index: usize,
+    current_leaf_index: usize,
+    end_key: Option<&'a K>,
+    end_bound_key: Option<K>,
+    end_inclusive: bool,
+    finished: bool,
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> ItemIterator<'a, K, V> {
-    pub fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
-        let first_leaf_id = tree.get_first_leaf_id();
+impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
+    fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
+        // Start with the first (leftmost) leaf in the tree
+        let leftmost_id = tree.get_first_leaf_id();
+
         Self {
             tree,
-            current_leaf_id: first_leaf_id,
-            current_index: 0,
+            current_leaf_id: leftmost_id,
+            current_leaf_index: 0,
+            end_key: None,
+            end_bound_key: None,
+            end_inclusive: false,
+            finished: false,
+        }
+    }
+
+    /// NEW: Start from specific leaf and index position, optionally bounded by end key
+    fn new_from_position(
+        tree: &'a BPlusTreeMap<K, V>,
+        start_leaf_id: NodeId,
+        start_index: usize,
+        end_key: Option<&'a K>,
+    ) -> Self {
+        Self {
+            tree,
+            current_leaf_id: Some(start_leaf_id),
+            current_leaf_index: start_index,
+            end_key,
+            end_bound_key: None,
+            end_inclusive: false,
+            finished: false,
+        }
+    }
+
+    /// Start from specific position with full bound control using owned keys
+    fn new_from_position_with_bounds(
+        tree: &'a BPlusTreeMap<K, V>,
+        start_leaf_id: NodeId,
+        start_index: usize,
+        end_bound: Bound<&K>,
+    ) -> Self {
+        let (end_bound_key, end_inclusive) = match end_bound {
+            Bound::Included(key) => (Some(key.clone()), true),
+            Bound::Excluded(key) => (Some(key.clone()), false),
+            Bound::Unbounded => (None, false),
+        };
+
+        Self {
+            tree,
+            current_leaf_id: Some(start_leaf_id),
+            current_leaf_index: start_index,
+            end_key: None,
+            end_bound_key,
+            end_inclusive,
+            finished: false,
         }
     }
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Iterator for ItemIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for ItemIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+
         loop {
-            if let Some(leaf_id) = self.current_leaf_id {
-                if let Some(leaf) = self.tree.get_leaf(leaf_id) {
-                    if self.current_index < leaf.keys.len() {
-                        let item = Some((
-                            &leaf.keys[self.current_index],
-                            &leaf.values[self.current_index],
-                        ));
-                        self.current_index += 1;
-                        return item;
-                    } else {
-                        // Move to the next leaf
-                        if leaf.next != NULL_NODE {
-                            self.current_leaf_id = Some(leaf.next);
-                            self.current_index = 0;
-                        } else {
-                            // No more leaves
-                            self.current_leaf_id = None;
-                            return None;
-                        }
+            // Use Option::and_then to chain operations cleanly
+            let result = self
+                .current_leaf_id
+                .and_then(|leaf_id| self.tree.get_leaf(leaf_id))
+                .and_then(|leaf| self.try_get_next_item(leaf));
+
+            match result {
+                Some(item) => return Some(item),
+                None => {
+                    // Either no current leaf or no more items in current leaf
+                    if !self.advance_to_next_leaf().unwrap_or(false) {
+                        self.finished = true;
+                        return None;
                     }
-                } else {
-                    // Current leaf is missing from arena, something is wrong
-                    self.current_leaf_id = None;
-                    return None;
+                    // Continue loop with next leaf
                 }
-            } else {
-                // No current leaf, iteration finished
-                return None;
             }
         }
     }
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> DoubleEndedIterator
-    for ItemIterator<'a, K, V>
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        // This is a simplified next_back for demonstration.
-        // A full implementation would require traversing from the rightmost leaf.
-        // For now, we'll just consume from the front.
-        self.next()
+impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
+    /// Helper method to try getting the next item from the current leaf
+    fn try_get_next_item(&mut self, leaf: &'a LeafNode<K, V>) -> Option<(&'a K, &'a V)> {
+        // Check if we have more items in the current leaf
+        if self.current_leaf_index >= leaf.keys.len() {
+            return None;
+        }
+
+        let key = &leaf.keys[self.current_leaf_index];
+        let value = &leaf.values[self.current_leaf_index];
+
+        // Check if we've reached the end bound using Option combinators
+        let beyond_end = self
+            .end_key
+            .map(|end| key >= end)
+            .or_else(|| {
+                self.end_bound_key.as_ref().map(|end| {
+                    if self.end_inclusive {
+                        key > end
+                    } else {
+                        key >= end
+                    }
+                })
+            })
+            .unwrap_or(false);
+
+        if beyond_end {
+            self.finished = true;
+            return None;
+        }
+
+        self.current_leaf_index += 1;
+        Some((key, value))
+    }
+
+    /// Helper method to advance to the next leaf
+    /// Returns Some(true) if successfully advanced, Some(false) if no more leaves, None if invalid leaf
+    fn advance_to_next_leaf(&mut self) -> Option<bool> {
+        let current_leaf = self.current_leaf_id?;
+        let leaf = self.tree.get_leaf(current_leaf)?;
+
+        self.current_leaf_id = (leaf.next != NULL_NODE).then_some(leaf.next);
+        self.current_leaf_index = 0;
+
+        Some(self.current_leaf_id.is_some())
     }
 }
 
 /// Iterator over keys in the B+ tree.
 pub struct KeyIterator<'a, K, V> {
-    inner: ItemIterator<'a, K, V>,
+    items: ItemIterator<'a, K, V>,
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> KeyIterator<'a, K, V> {
-    pub fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
+impl<'a, K: Ord + Clone, V: Clone> KeyIterator<'a, K, V> {
+    fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         Self {
-            inner: ItemIterator::new(tree),
+            items: ItemIterator::new(tree),
         }
     }
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Iterator for KeyIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for KeyIterator<'a, K, V> {
     type Item = &'a K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(key, _)| key)
+        self.items.next().map(|(k, _)| k)
     }
 }
 
 /// Iterator over values in the B+ tree.
 pub struct ValueIterator<'a, K, V> {
-    inner: ItemIterator<'a, K, V>,
+    items: ItemIterator<'a, K, V>,
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> ValueIterator<'a, K, V> {
-    pub fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
+impl<'a, K: Ord + Clone, V: Clone> ValueIterator<'a, K, V> {
+    fn new(tree: &'a BPlusTreeMap<K, V>) -> Self {
         Self {
-            inner: ItemIterator::new(tree),
+            items: ItemIterator::new(tree),
         }
     }
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Iterator for ValueIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for ValueIterator<'a, K, V> {
     type Item = &'a V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(_, value)| value)
+        self.items.next().map(|(_, v)| v)
     }
 }
 
-/// Iterator over a range of key-value pairs in the B+ tree.
+/// Optimized iterator over a range of key-value pairs in the B+ tree.
+/// Uses tree navigation to find start, then linked list traversal for efficiency.
 pub struct RangeIterator<'a, K, V> {
-    tree: &'a BPlusTreeMap<K, V>,
-    current_leaf_id: Option<NodeId>,
-    current_index: usize,
-    end_key: Option<K>,
-    end_inclusive: bool,
-    skip_first: bool, // Used for Bound::Excluded start bounds
+    iterator: Option<ItemIterator<'a, K, V>>,
+    skip_first: bool,
+    first_key: Option<K>,
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> RangeIterator<'a, K, V> {
-    pub fn new_with_skip_owned(
+impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
+    fn new(tree: &'a BPlusTreeMap<K, V>, start_key: Option<&K>, end_key: Option<&'a K>) -> Self {
+        // Use Option combinators to handle start position logic cleanly
+        let iterator = start_key
+            .and_then(|start| tree.find_range_start(start))
+            .map(|(leaf_id, index)| ItemIterator::new_from_position(tree, leaf_id, index, end_key))
+            .or_else(|| {
+                // No start key provided - start from beginning
+                start_key
+                    .is_none()
+                    .then(|| {
+                        tree.get_first_leaf_id().map(|first_leaf| {
+                            ItemIterator::new_from_position(tree, first_leaf, 0, end_key)
+                        })
+                    })
+                    .flatten()
+            });
+
+        Self {
+            iterator,
+            skip_first: false,
+            first_key: None,
+        }
+    }
+
+    fn new_with_skip_owned(
         tree: &'a BPlusTreeMap<K, V>,
         start_info: Option<(NodeId, usize)>,
         skip_first: bool,
-        end_info: Option<(K, bool)>,
+        end_info: Option<(K, bool)>, // (end_key, is_inclusive)
     ) -> Self {
-        let (current_leaf_id, current_index) = start_info.unwrap_or((NULL_NODE, 0)); // Use NULL_NODE if no start
-        let (end_key, end_inclusive) = end_info.map_or((None, false), |(k, inc)| (Some(k), inc));
+        let (iterator, first_key) = start_info
+            .map(|(leaf_id, index)| {
+                // Create iterator with appropriate end bound using Option combinators
+                let end_bound = end_info
+                    .as_ref()
+                    .map(|(key, is_inclusive)| {
+                        if *is_inclusive {
+                            Bound::Included(key)
+                        } else {
+                            Bound::Excluded(key)
+                        }
+                    })
+                    .unwrap_or(Bound::Unbounded);
+
+                let iter =
+                    ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
+
+                // Extract first key if needed for skipping, using Option combinators
+                let first_key = skip_first
+                    .then(|| tree.get_leaf(leaf_id))
+                    .flatten()
+                    .and_then(|leaf| leaf.keys.get(index))
+                    .cloned();
+
+                (Some(iter), first_key)
+            })
+            .unwrap_or((None, None));
 
         Self {
-            tree,
-            current_leaf_id: if current_leaf_id == NULL_NODE {
-                None
-            } else {
-                Some(current_leaf_id)
-            },
-            current_index,
-            end_key,
-            end_inclusive,
+            iterator,
             skip_first,
+            first_key,
         }
     }
 }
 
-impl<'a, K: Ord + Clone + std::fmt::Debug, V: Clone + std::fmt::Debug> Iterator for RangeIterator<'a, K, V> {
+impl<'a, K: Ord + Clone, V: Clone> Iterator for RangeIterator<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(leaf_id) = self.current_leaf_id {
-                if let Some(leaf) = self.tree.get_leaf(leaf_id) {
-                    if self.current_index < leaf.keys.len() {
-                        let current_key = &leaf.keys[self.current_index];
+            let item = self.iterator.as_mut()?.next()?;
 
-                        // Check end bound
-                        if let Some(ref end_k) = self.end_key {
-                            if self.end_inclusive {
-                                if current_key > end_k {
-                                    self.current_leaf_id = None;
-                                    return None;
-                                }
-                            } else {
-                                if current_key >= end_k {
-                                    self.current_leaf_id = None;
-                                    return None;
-                                }
-                            }
-                        }
-
-                        // Handle skip_first for excluded start bounds
-                        if self.skip_first {
-                            self.skip_first = false;
-                            self.current_index += 1;
-                            // If after incrementing, we are now out of bounds for the current leaf,
-                            // we need to move to the next leaf.
-                            if self.current_index >= leaf.keys.len() {
-                                if leaf.next != NULL_NODE {
-                                    self.current_leaf_id = Some(leaf.next);
-                                    self.current_index = 0;
-                                } else {
-                                    // No more leaves
-                                    self.current_leaf_id = None;
-                                    return None;
-                                }
-                            }
-                            continue; // Skip this item and try next
-                        }
-
-                        let item = Some((current_key, &leaf.values[self.current_index]));
-                        self.current_index += 1;
-                        return item;
-                    } else {
-                        // Move to the next leaf
-                        if leaf.next != NULL_NODE {
-                            self.current_leaf_id = Some(leaf.next);
-                            self.current_index = 0;
-                        } else {
-                            // No more leaves
-                            self.current_leaf_id = None;
-                            return None;
-                        }
+            // Handle excluded start bound on first iteration
+            if self.skip_first {
+                self.skip_first = false;
+                if let Some(ref first_key) = self.first_key {
+                    if item.0 == first_key {
+                        // Skip this item and continue to next
+                        continue;
                     }
-                } else {
-                    // Current leaf is missing from arena, something is wrong
-                    self.current_leaf_id = None;
-                    return None;
                 }
-            } else {
-                // No current leaf, iteration finished
-                return None;
             }
+
+            return Some(item);
         }
     }
 }
