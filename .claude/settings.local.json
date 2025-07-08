@@ -124,7 +124,8 @@
       "Bash(chmod:*)",
       "Bash(./test_versions.sh:*)",
       "Bash(RUST_BACKTRACE=1 cargo test test_free_list_corruption_attack -- --exact --nocapture 2 >& 1)",
-      "Bash(./test_free_list_issue)"
+      "Bash(./test_free_list_issue)",
+      "Bash(cat:*)"
     ],
     "deny": []
   },
