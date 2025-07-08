@@ -2724,23 +2724,6 @@ impl<'a, K: Ord + Clone, V: Clone> ItemIterator<'a, K, V> {
         }
     }
 
-    /// NEW: Start from specific leaf and index position, optionally bounded by end key
-    fn new_from_position(
-        tree: &'a BPlusTreeMap<K, V>,
-        start_leaf_id: NodeId,
-        start_index: usize,
-        end_key: Option<&'a K>,
-    ) -> Self {
-        Self {
-            tree,
-            current_leaf_id: Some(start_leaf_id),
-            current_leaf_index: start_index,
-            end_key,
-            end_bound_key: None,
-            end_inclusive: false,
-            finished: false,
-        }
-    }
 
     /// Start from specific position with full bound control using owned keys
     fn new_from_position_with_bounds(
@@ -2896,30 +2879,6 @@ pub struct RangeIterator<'a, K, V> {
 }
 
 impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
-    fn new(tree: &'a BPlusTreeMap<K, V>, start_key: Option<&K>, end_key: Option<&'a K>) -> Self {
-        // Use Option combinators to handle start position logic cleanly
-        let iterator = start_key
-            .and_then(|start| tree.find_range_start(start))
-            .map(|(leaf_id, index)| ItemIterator::new_from_position(tree, leaf_id, index, end_key))
-            .or_else(|| {
-                // No start key provided - start from beginning
-                start_key
-                    .is_none()
-                    .then(|| {
-                        tree.get_first_leaf_id().map(|first_leaf| {
-                            ItemIterator::new_from_position(tree, first_leaf, 0, end_key)
-                        })
-                    })
-                    .flatten()
-            });
-
-        Self {
-            iterator,
-            skip_first: false,
-            first_key: None,
-        }
-    }
-
     fn new_with_skip_owned(
         tree: &'a BPlusTreeMap<K, V>,
         start_info: Option<(NodeId, usize)>,

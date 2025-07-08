@@ -120,7 +120,11 @@
       "Bash(coverage run -m pytest:*)",
       "Bash(coverage report:*)",
       "WebFetch(domain:github.com)",
-      "Bash(diff:*)"
+      "Bash(diff:*)",
+      "Bash(chmod:*)",
+      "Bash(./test_versions.sh:*)",
+      "Bash(RUST_BACKTRACE=1 cargo test test_free_list_corruption_attack -- --exact --nocapture 2 >& 1)",
+      "Bash(./test_free_list_issue)"
     ],
     "deny": []
   },
