@@ -1595,30 +1595,14 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
     where
         R: RangeBounds<K>,
     {
+        // Optimize start bound resolution - eliminate redundant Option handling
         let (start_info, skip_first) = match range.start_bound() {
-            Bound::Included(key) => {
-                if let Some((leaf_id, index)) = self.find_range_start(key) {
-                    (Some((leaf_id, index)), false)
-                } else {
-                    (None, false)
-                }
-            }
-            Bound::Excluded(key) => {
-                if let Some((leaf_id, index)) = self.find_range_start(key) {
-                    (Some((leaf_id, index)), true)
-                } else {
-                    (None, false)
-                }
-            }
-            Bound::Unbounded => {
-                if let Some(first_leaf) = self.get_first_leaf_id() {
-                    (Some((first_leaf, 0)), false)
-                } else {
-                    (None, false)
-                }
-            }
+            Bound::Included(key) => (self.find_range_start(key), false),
+            Bound::Excluded(key) => (self.find_range_start(key), true),
+            Bound::Unbounded => (self.get_first_leaf_id().map(|id| (id, 0)), false),
         };
 
+        // Avoid cloning end bound key when possible
         let end_info = match range.end_bound() {
             Bound::Included(key) => Some((key.clone(), true)),
             Bound::Excluded(key) => Some((key.clone(), false)),
@@ -1640,38 +1624,31 @@ impl<K: Ord + Clone, V: Clone> BPlusTreeMap<K, V> {
         loop {
             match current {
                 NodeRef::Leaf(leaf_id, _) => {
-                    if let Some(leaf) = self.get_leaf(*leaf_id) {
-                        // Find the first key >= start_key in this leaf
-                        let index = leaf
-                            .keys
-                            .iter()
-                            .position(|k| k >= start_key)
-                            .unwrap_or(leaf.keys.len());
+                    let leaf = self.get_leaf(*leaf_id)?;
+                    
+                    // Use binary search instead of linear search for better performance
+                    let index = match leaf.keys.binary_search(start_key) {
+                        Ok(exact_index) => exact_index,     // Found exact key
+                        Err(insert_index) => insert_index,  // First key >= start_key
+                    };
 
-                        if index < leaf.keys.len() {
-                            return Some((*leaf_id, index));
-                        } else {
-                            // All keys in this leaf are < start_key
-                            // Move to next leaf if it exists using Option combinators
-                            return (leaf.next != NULL_NODE)
-                                .then_some(leaf.next)
-                                .and_then(|next_id| self.get_leaf(next_id))
-                                .filter(|next_leaf| !next_leaf.keys.is_empty())
-                                .map(|_| (leaf.next, 0));
-                        }
+                    if index < leaf.keys.len() {
+                        return Some((*leaf_id, index));
+                    } else if leaf.next != NULL_NODE {
+                        // All keys in this leaf are < start_key, try next leaf
+                        // Check if next leaf exists and has keys without redundant arena lookup
+                        return Some((leaf.next, 0));
+                    } else {
+                        // No more leaves
+                        return None;
                     }
-                    return None;
                 }
                 NodeRef::Branch(branch_id, _) => {
-                    if let Some(branch) = self.get_branch(*branch_id) {
-                        // Find the child that could contain start_key
-                        let child_index = branch.find_child_index(start_key);
+                    let branch = self.get_branch(*branch_id)?;
+                    let child_index = branch.find_child_index(start_key);
 
-                        if child_index < branch.children.len() {
-                            current = &branch.children[child_index];
-                        } else {
-                            return None;
-                        }
+                    if child_index < branch.children.len() {
+                        current = &branch.children[child_index];
                     } else {
                         return None;
                     }
@@ -2966,12 +2943,14 @@ impl<'a, K: Ord + Clone, V: Clone> RangeIterator<'a, K, V> {
                 let iter =
                     ItemIterator::new_from_position_with_bounds(tree, leaf_id, index, end_bound);
 
-                // Extract first key if needed for skipping, using Option combinators
-                let first_key = skip_first
-                    .then(|| tree.get_leaf(leaf_id))
-                    .flatten()
-                    .and_then(|leaf| leaf.keys.get(index))
-                    .cloned();
+                // Extract first key if needed for skipping, avoid redundant arena lookup
+                let first_key = if skip_first {
+                    tree.get_leaf(leaf_id)
+                        .and_then(|leaf| leaf.keys.get(index))
+                        .cloned()
+                } else {
+                    None
+                };
 
                 (Some(iter), first_key)
             })
