@@ -61,6 +61,21 @@ pub fn build(b: *std.Build) void {
     const iterator_step = b.step("test-iterator", "Run iterator safety tests");
     iterator_step.dependOn(&run_iterator_tests.step);
     
+    // Advanced deletion tests
+    const deletion_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_deletion_advanced.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    deletion_tests.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_deletion_tests = b.addRunArtifact(deletion_tests);
+    test_step.dependOn(&run_deletion_tests.step);
+    
+    // Separate step for deletion tests
+    const deletion_step = b.step("test-deletion", "Run advanced deletion tests");
+    deletion_step.dependOn(&run_deletion_tests.step);
+    
     // Demo executable
     const demo = b.addExecutable(.{
         .name = "demo",

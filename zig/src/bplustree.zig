@@ -325,42 +325,162 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
                 return Error.KeyNotFound;
             }
             
-            // Navigate to the leaf containing the key
-            var current = self.root.?;
+            // Remove from the tree starting at root
+            const result = try self.removeFromNode(self.root.?, key);
             
-            // Navigate down to leaf
-            while (current.node_type == .branch) {
+            // If root is now empty and is a branch node, promote its only child
+            if (self.root.?.node_type == .branch and self.root.?.keys.items.len == 0) {
+                if (self.root.?.children.?.items.len > 0) {
+                    const old_root = self.root.?;
+                    self.root = self.root.?.children.?.items[0];
+                    
+                    // Clean up old root
+                    old_root.keys.deinit();
+                    old_root.children.?.deinit();
+                    self.allocator.destroy(old_root);
+                }
+            }
+            
+            // If root is a leaf and empty, tree is now empty
+            if (self.root.?.node_type == .leaf and self.root.?.keys.items.len == 0) {
+                self.root.?.deinit(self.allocator);
+                self.root = null;
+            }
+            
+            self.size -= 1;
+            return result;
+        }
+        
+        fn removeFromNode(self: *Self, node: *Node, key: KeyType) !ValueType {
+            if (node.node_type == .leaf) {
+                // Find and remove the key from leaf
+                for (node.keys.items, 0..) |k, i| {
+                    if (k == key) {
+                        const value = node.values.?.items[i];
+                        
+                        // Remove key and value
+                        _ = node.keys.orderedRemove(i);
+                        _ = node.values.?.orderedRemove(i);
+                        
+                        return value;
+                    }
+                }
+                return Error.KeyNotFound;
+            } else {
+                // Find child that contains the key
                 var child_idx: usize = 0;
-                for (current.keys.items, 0..) |k, i| {
+                for (node.keys.items, 0..) |k, i| {
                     if (key < k) {
                         break;
                     }
                     child_idx = i + 1;
                 }
-                if (child_idx >= current.children.?.items.len) {
-                    child_idx = current.children.?.items.len - 1;
+                if (child_idx >= node.children.?.items.len) {
+                    child_idx = node.children.?.items.len - 1;
                 }
-                current = current.children.?.items[child_idx];
+                
+                var child = node.children.?.items[child_idx];
+                const min_keys = (self.capacity + 1) / 2 - 1;
+                
+                // Check if child will underflow after deletion
+                if (child.keys.items.len <= min_keys) {
+                    // Try to borrow from siblings or merge
+                    const new_child_idx = try self.handleUnderflow(node, child_idx);
+                    // Update child reference after potential merge
+                    if (new_child_idx < node.children.?.items.len) {
+                        child = node.children.?.items[new_child_idx];
+                        child_idx = new_child_idx;
+                    }
+                }
+                
+                // Now proceed with deletion
+                return try self.removeFromNode(child, key);
+            }
+        }
+        
+        fn handleUnderflow(self: *Self, parent: *Node, child_idx: usize) !usize {
+            const child = parent.children.?.items[child_idx];
+            const min_keys = (self.capacity + 1) / 2 - 1;
+            
+            // Try borrowing from left sibling
+            if (child_idx > 0) {
+                const left_sibling = parent.children.?.items[child_idx - 1];
+                if (left_sibling.keys.items.len > min_keys) {
+                    // Borrow from left sibling
+                    if (child.node_type == .leaf) {
+                        // Move last key from left sibling to child
+                        const last_idx = left_sibling.keys.items.len - 1;
+                        const borrowed_key = left_sibling.keys.items[last_idx];
+                        const borrowed_value = left_sibling.values.?.items[last_idx];
+                        
+                        _ = left_sibling.keys.pop();
+                        _ = left_sibling.values.?.pop();
+                        
+                        try child.keys.insert(0, borrowed_key);
+                        try child.values.?.insert(0, borrowed_value);
+                        
+                        // Update parent key
+                        parent.keys.items[child_idx - 1] = child.keys.items[0];
+                    }
+                    return child_idx;
+                }
             }
             
-            // Find and remove the key from leaf
-            for (current.keys.items, 0..) |k, i| {
-                if (k == key) {
-                    const value = current.values.?.items[i];
-                    
-                    // Remove key and value
-                    _ = current.keys.orderedRemove(i);
-                    _ = current.values.?.orderedRemove(i);
-                    
-                    self.size -= 1;
-                    
-                    // TODO: Handle underflow and rebalancing
-                    
-                    return value;
+            // Try borrowing from right sibling
+            if (child_idx < parent.children.?.items.len - 1) {
+                const right_sibling = parent.children.?.items[child_idx + 1];
+                if (right_sibling.keys.items.len > min_keys) {
+                    // Borrow from right sibling
+                    if (child.node_type == .leaf) {
+                        // Move first key from right sibling to child
+                        const borrowed_key = right_sibling.keys.orderedRemove(0);
+                        const borrowed_value = right_sibling.values.?.orderedRemove(0);
+                        try child.keys.append(borrowed_key);
+                        try child.values.?.append(borrowed_value);
+                        
+                        // Update parent key
+                        parent.keys.items[child_idx] = right_sibling.keys.items[0];
+                    }
+                    return child_idx;
                 }
             }
             
-            return Error.KeyNotFound;
+            // If can't borrow, merge with a sibling
+            if (child_idx > 0) {
+                // Merge with left sibling
+                try self.mergeNodes(parent, child_idx - 1, child_idx);
+                return child_idx - 1;
+            } else {
+                // Merge with right sibling
+                try self.mergeNodes(parent, child_idx, child_idx + 1);
+                return child_idx;
+            }
+        }
+        
+        fn mergeNodes(self: *Self, parent: *Node, left_idx: usize, right_idx: usize) !void {
+            const left = parent.children.?.items[left_idx];
+            const right = parent.children.?.items[right_idx];
+            
+            if (left.node_type == .leaf) {
+                // Merge leaf nodes
+                for (right.keys.items, 0..) |key, i| {
+                    try left.keys.append(key);
+                    try left.values.?.append(right.values.?.items[i]);
+                }
+                
+                // Update leaf links
+                left.next = right.next;
+                if (right.next) |next| {
+                    next.prev = left;
+                }
+                
+                // Remove the merged node from parent
+                _ = parent.keys.orderedRemove(left_idx);
+                _ = parent.children.?.orderedRemove(right_idx);
+                
+                // Clean up merged node
+                right.deinit(self.allocator);
+            }
         }
         
         pub fn range(self: *const Self, start: KeyType, end: KeyType, results: *std.ArrayList(Entry)) !void {
