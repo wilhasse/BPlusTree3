@@ -116,4 +116,17 @@ pub fn build(b: *std.Build) void {
     const run_benchmark = b.addRunArtifact(benchmark);
     const benchmark_step = b.step("benchmark", "Run performance benchmarks");
     benchmark_step.dependOn(&run_benchmark.step);
+    
+    // Comparison benchmark executable
+    const comparison = b.addExecutable(.{
+        .name = "comparison",
+        .root_source_file = b.path("benchmarks/comparison.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    comparison.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_comparison = b.addRunArtifact(comparison);
+    const comparison_step = b.step("compare", "Run comparison benchmarks");
+    comparison_step.dependOn(&run_comparison.step);
 }
