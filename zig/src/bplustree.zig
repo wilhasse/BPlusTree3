@@ -16,6 +16,64 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             value: ValueType,
         };
         
+        pub const Iterator = struct {
+            current_node: ?*Node,
+            current_index: usize,
+            
+            pub fn next(self: *Iterator) ?Entry {
+                if (self.current_node == null) return null;
+                
+                const node = self.current_node.?;
+                
+                // Check if we have more items in current node
+                if (self.current_index < node.keys.items.len) {
+                    const entry = Entry{
+                        .key = node.keys.items[self.current_index],
+                        .value = node.values.?.items[self.current_index],
+                    };
+                    self.current_index += 1;
+                    return entry;
+                }
+                
+                // Move to next leaf node
+                self.current_node = node.next;
+                self.current_index = 0;
+                
+                // Try again with next node
+                return self.next();
+            }
+        };
+        
+        pub const ReverseIterator = struct {
+            current_node: ?*Node,
+            current_index: usize,
+            
+            pub fn next(self: *ReverseIterator) ?Entry {
+                if (self.current_node == null) return null;
+                
+                const node = self.current_node.?;
+                
+                // Check if we have more items in current node
+                if (self.current_index > 0) {
+                    self.current_index -= 1;
+                    const entry = Entry{
+                        .key = node.keys.items[self.current_index],
+                        .value = node.values.?.items[self.current_index],
+                    };
+                    return entry;
+                }
+                
+                // Move to previous leaf node
+                self.current_node = node.prev;
+                if (self.current_node) |prev_node| {
+                    self.current_index = prev_node.keys.items.len;
+                }
+                
+                // Try again with previous node
+                return self.next();
+            }
+        };
+        
         const NodeType = enum { leaf, branch };
         
         const Node = struct {
@@ -351,6 +409,58 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
                 // Move to next leaf
                 leaf = node.next;
             }
+        }
+        
+        pub fn iterator(self: *const Self) Iterator {
+            if (self.root == null) {
+                return Iterator{
+                    .current_node = null,
+                    .current_index = 0,
+                };
+            }
+            
+            // Find leftmost leaf
+            var current = self.root.?;
+            while (current.node_type == .branch) {
+                current = current.children.?.items[0];
+            }
+            
+            return Iterator{
+                .current_node = current,
+                .current_index = 0,
+            };
+        }
+        
+        pub fn reverseIterator(self: *const Self) ReverseIterator {
+            if (self.root == null) {
+                return ReverseIterator{
+                    .current_node = null,
+                    .current_index = 0,
+                };
+            }
+            
+            // Find rightmost leaf
+            var current = self.root.?;
+            while (current.node_type == .branch) {
+                current = current.children.?.items[current.children.?.items.len - 1];
+            }
+            
+            return ReverseIterator{
+                .current_node = current,
+                .current_index = current.keys.items.len,
+            };
+        }
+        
+        pub fn contains(self: *const Self, key: KeyType) bool {
+            return self.get(key) != null;
+        }
+        
+        pub fn clear(self: *Self) void {
+            if (self.root) |root| {
+                root.deinit(self.allocator);
+                self.root = null;
+            }
+            self.size = 0;
         }
     };
 }

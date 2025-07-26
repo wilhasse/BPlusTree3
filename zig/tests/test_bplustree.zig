@@ -277,3 +277,158 @@ test "should return all values in range" {
         try testing.expectEqual(exp.value, res.value);
     }
 }
+
+test "should iterate all entries in order" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert test data in random order
+    const data = [_]struct { k: i32, v: i32 }{
+        .{ .k = 5, .v = 50 },
+        .{ .k = 2, .v = 20 },
+        .{ .k = 8, .v = 80 },
+        .{ .k = 1, .v = 10 },
+        .{ .k = 9, .v = 90 },
+        .{ .k = 3, .v = 30 },
+        .{ .k = 7, .v = 70 },
+        .{ .k = 4, .v = 40 },
+        .{ .k = 6, .v = 60 },
+    };
+    
+    for (data) |item| {
+        try tree.insert(item.k, item.v);
+    }
+    
+    // Iterate and collect all entries
+    var entries = std.ArrayList(Tree.Entry).init(allocator);
+    defer entries.deinit();
+    
+    var iter = tree.iterator();
+    while (iter.next()) |entry| {
+        try entries.append(entry);
+    }
+    
+    // Should have all entries in sorted order
+    try testing.expectEqual(@as(usize, 9), entries.items.len);
+    
+    // Verify sorted order
+    for (1..10) |i| {
+        try testing.expectEqual(@as(i32, @intCast(i)), entries.items[i - 1].key);
+        try testing.expectEqual(@as(i32, @intCast(i * 10)), entries.items[i - 1].value);
+    }
+}
+
+test "should iterate empty tree" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Iterator on empty tree should return no entries
+    var iter = tree.iterator();
+    try testing.expect(iter.next() == null);
+}
+
+test "should support reverse iteration" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert test data
+    for (1..8) |i| {
+        try tree.insert(@intCast(i), @intCast(i * 100));
+    }
+    
+    // Reverse iterate and collect entries
+    var entries = std.ArrayList(Tree.Entry).init(allocator);
+    defer entries.deinit();
+    
+    var iter = tree.reverseIterator();
+    while (iter.next()) |entry| {
+        try entries.append(entry);
+    }
+    
+    // Should have all entries in reverse order
+    try testing.expectEqual(@as(usize, 7), entries.items.len);
+    
+    // Verify reverse order
+    for (0..7) |i| {
+        const expected_key = 7 - @as(i32, @intCast(i));
+        try testing.expectEqual(expected_key, entries.items[i].key);
+        try testing.expectEqual(expected_key * 100, entries.items[i].value);
+    }
+}
+
+test "should check if key exists with contains" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Empty tree contains nothing
+    try testing.expect(!tree.contains(42));
+    
+    // Insert some values
+    try tree.insert(10, 100);
+    try tree.insert(20, 200);
+    try tree.insert(30, 300);
+    
+    // Check existing keys
+    try testing.expect(tree.contains(10));
+    try testing.expect(tree.contains(20));
+    try testing.expect(tree.contains(30));
+    
+    // Check non-existing keys
+    try testing.expect(!tree.contains(5));
+    try testing.expect(!tree.contains(15));
+    try testing.expect(!tree.contains(40));
+    
+    // Delete a key and verify contains
+    _ = try tree.remove(20);
+    try testing.expect(!tree.contains(20));
+    try testing.expect(tree.contains(10));
+    try testing.expect(tree.contains(30));
+}
+
+test "should clear all entries from tree" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert multiple entries
+    for (1..21) |i| {
+        try tree.insert(@intCast(i), @intCast(i * 10));
+    }
+    
+    // Verify tree has entries and height > 1
+    try testing.expectEqual(@as(usize, 20), tree.len());
+    try testing.expect(tree.getHeight() > 1);
+    
+    // Clear the tree
+    tree.clear();
+    
+    // Tree should be empty
+    try testing.expectEqual(@as(usize, 0), tree.len());
+    try testing.expectEqual(@as(usize, 0), tree.getHeight());
+    
+    // Should not find any keys
+    try testing.expect(!tree.contains(10));
+    
+    // Iterator should return nothing
+    var iter = tree.iterator();
+    try testing.expect(iter.next() == null);
+    
+    // Should be able to insert again
+    try tree.insert(42, 420);
+    try testing.expectEqual(@as(usize, 1), tree.len());
+    try testing.expectEqual(@as(i32, 420), tree.get(42).?);
+}

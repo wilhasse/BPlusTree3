@@ -77,5 +77,47 @@ pub fn main() !void {
         std.debug.print("  {} = {s}\n", .{ entry.key, entry.value });
     }
     
+    // Test contains method
+    std.debug.print("\nTesting contains():\n", .{});
+    const test_keys = [_]i32{ 10, 30, 50, 70, 100 };
+    for (test_keys) |key| {
+        if (tree.contains(key)) {
+            std.debug.print("  Tree contains {}\n", .{key});
+        } else {
+            std.debug.print("  Tree does not contain {}\n", .{key});
+        }
+    }
+    
+    // Test iterators
+    std.debug.print("\nForward iteration:\n", .{});
+    var iter = tree.iterator();
+    var count: usize = 0;
+    while (iter.next()) |entry| {
+        std.debug.print("  {} = {s}\n", .{ entry.key, entry.value });
+        count += 1;
+        if (count >= 5) {
+            std.debug.print("  ... (showing first 5 entries)\n", .{});
+            break;
+        }
+    }
+    
+    std.debug.print("\nReverse iteration:\n", .{});
+    var rev_iter = tree.reverseIterator();
+    count = 0;
+    while (rev_iter.next()) |entry| {
+        std.debug.print("  {} = {s}\n", .{ entry.key, entry.value });
+        count += 1;
+        if (count >= 5) {
+            std.debug.print("  ... (showing first 5 entries)\n", .{});
+            break;
+        }
+    }
+    
+    // Test clear
+    std.debug.print("\nClearing tree...\n", .{});
+    tree.clear();
+    std.debug.print("Tree now contains {} items\n", .{tree.len()});
+    std.debug.print("Is tree empty? {}\n", .{tree.len() == 0});
+    
     std.debug.print("\nDemo complete!\n", .{});
 }
