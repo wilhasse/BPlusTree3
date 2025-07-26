@@ -76,6 +76,21 @@ pub fn build(b: *std.Build) void {
     const deletion_step = b.step("test-deletion", "Run advanced deletion tests");
     deletion_step.dependOn(&run_deletion_tests.step);
     
+    // Memory safety tests
+    const memory_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_memory_safety.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    memory_tests.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_memory_tests = b.addRunArtifact(memory_tests);
+    test_step.dependOn(&run_memory_tests.step);
+    
+    // Separate step for memory safety tests
+    const memory_step = b.step("test-memory", "Run memory safety tests");
+    memory_step.dependOn(&run_memory_tests.step);
+    
     // Demo executable
     const demo = b.addExecutable(.{
         .name = "demo",
