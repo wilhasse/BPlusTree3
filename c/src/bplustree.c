@@ -61,7 +61,10 @@ bplustree_t* bptree_new(size_t capacity) {
 void bptree_free(bplustree_t* tree) {
     if (!tree) return;
     
-    // TODO: Free all nodes recursively
+    // Clear all nodes first
+    bptree_clear(tree);
+    
+    // Free the tree structure itself
     free(tree);
 }
 
@@ -172,9 +175,27 @@ bool bptree_contains(const bplustree_t* tree, int key) {
 }
 
 bptree_result_t bptree_remove(bplustree_t* tree, int key) {
-    (void)tree;
-    (void)key;
-    return BPTREE_ERROR_NULL_POINTER;
+    if (!tree) return BPTREE_ERROR_NULL_POINTER;
+    if (!tree->root) return BPTREE_ERROR_KEY_NOT_FOUND;
+    
+    // Simple removal from root leaf (minimal implementation)
+    bptree_node_t* leaf = tree->root;
+    
+    // Find the key to remove
+    for (size_t i = 0; i < leaf->key_count; i++) {
+        if (leaf->keys[i] == key) {
+            // Shift elements to fill the gap
+            for (size_t j = i; j < leaf->key_count - 1; j++) {
+                leaf->keys[j] = leaf->keys[j + 1];
+                leaf->leaf.values[j] = leaf->leaf.values[j + 1];
+            }
+            leaf->key_count--;
+            tree->size--;
+            return BPTREE_OK;
+        }
+    }
+    
+    return BPTREE_ERROR_KEY_NOT_FOUND;
 }
 
 size_t bptree_size(const bplustree_t* tree) {
@@ -187,8 +208,33 @@ bool bptree_is_empty(const bplustree_t* tree) {
     return tree->size == 0;
 }
 
+// Helper function to free a node recursively
+static void free_node(bptree_node_t* node) {
+    if (!node) return;
+    
+    // Free keys array
+    free(node->keys);
+    
+    if (node->is_leaf) {
+        free(node->leaf.values);
+    } else {
+        // Free children for branch nodes
+        free(node->branch.children);
+    }
+    
+    free(node);
+}
+
 void bptree_clear(bplustree_t* tree) {
-    (void)tree;
+    if (!tree) return;
+    
+    // For now, just clear the root (since we only have single-node trees)
+    if (tree->root) {
+        free_node(tree->root);
+        tree->root = NULL;
+        tree->first_leaf = NULL;
+        tree->size = 0;
+    }
 }
 
 // Iterator structure
@@ -217,16 +263,41 @@ bptree_iterator_t* bptree_iterator_new(const bplustree_t* tree) {
 }
 
 bptree_iterator_t* bptree_range_iterator_new(const bplustree_t* tree, int start_key, int end_key) {
-    (void)tree;
-    (void)start_key;
-    (void)end_key;
-    return NULL;
+    if (!tree) return NULL;
+    
+    bptree_iterator_t* iter = malloc(sizeof(bptree_iterator_t));
+    if (!iter) return NULL;
+    
+    iter->tree = tree;
+    iter->current_node = tree->first_leaf;
+    iter->start_key = start_key;
+    iter->end_key = end_key;
+    iter->has_range = true;
+    
+    // Find starting position
+    iter->current_index = 0;
+    if (iter->current_node) {
+        while (iter->current_index < iter->current_node->key_count && 
+               iter->current_node->keys[iter->current_index] < start_key) {
+            iter->current_index++;
+        }
+    }
+    
+    return iter;
 }
 
 bool bptree_iterator_has_next(const bptree_iterator_t* iter) {
     if (!iter || !iter->current_node) return false;
     
-    return iter->current_index < iter->current_node->key_count;
+    if (iter->current_index >= iter->current_node->key_count) return false;
+    
+    // Check range limits for range iterators
+    if (iter->has_range) {
+        int current_key = iter->current_node->keys[iter->current_index];
+        if (current_key >= iter->end_key) return false;
+    }
+    
+    return true;
 }
 
 bptree_result_t bptree_iterator_next(bptree_iterator_t* iter, bptree_entry_t* entry) {

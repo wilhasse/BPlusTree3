@@ -32,3 +32,7 @@ harness = false
 [[bench]]
 name = "profiling_benchmark"
 harness = false
+
+[[bench]]
+name = "simple_comparison"
+harness = false

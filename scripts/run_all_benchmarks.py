@@ -15,8 +15,9 @@ from typing import Dict, List, Tuple, Optional
 import argparse
 
 class BenchmarkRunner:
-    def __init__(self, verbose=False):
+    def __init__(self, verbose=False, auto_install=False):
         self.verbose = verbose
+        self.auto_install = auto_install
         self.results = {
             "rust": {},
             "go": {},
@@ -73,27 +74,104 @@ class BenchmarkRunner:
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
+    def auto_install_rust(self) -> bool:
+        """Attempt to install Rust automatically."""
+        try:
+            # If auto_install is enabled, proceed without prompting
+            if not self.auto_install:
+                # Check if we're in interactive mode
+                import sys
+                if not sys.stdin.isatty():
+                    print("Non-interactive mode - skipping Rust installation")
+                    return False
+                    
+                response = input("Install Rust? (y/n): ").strip().lower()
+                if response not in ['y', 'yes']:
+                    return False
+            
+            print("Installing Rust... This may take a few minutes.")
+            self.log("Downloading and installing Rust via rustup...")
+            
+            # Download and run rustup installer
+            install_cmd = [
+                'curl', '--proto', '=https', '--tlsv1.2', '-sSf', 
+                'https://sh.rustup.rs', '|', 'sh', '-s', '--', '-y'
+            ]
+            
+            # Use shell=True for pipe command
+            result = subprocess.run(
+                'curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y',
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode != 0:
+                print(f"Failed to install Rust: {result.stderr}")
+                return False
+            
+            # Source the cargo env
+            cargo_env = os.path.expanduser("~/.cargo/env")
+            if os.path.exists(cargo_env):
+                # Add cargo to current PATH
+                cargo_bin = os.path.expanduser("~/.cargo/bin")
+                os.environ["PATH"] = f"{cargo_bin}:{os.environ.get('PATH', '')}"
+                
+            # Verify installation
+            try:
+                subprocess.run(['cargo', '--version'], check=True, capture_output=True)
+                print("✅ Rust installed successfully!")
+                return True
+            except:
+                print("❌ Rust installation completed but cargo not found in PATH")
+                print("Please restart your terminal or run: source ~/.cargo/env")
+                return False
+                
+        except Exception as e:
+            print(f"Error installing Rust: {e}")
+            return False
+    
     def run_rust_benchmarks(self) -> bool:
         """Run Rust benchmarks using cargo bench."""
         print("\n=== Running Rust Benchmarks ===")
         self.log("Checking for Rust installation...")
         
-        # Check if cargo is available
-        try:
-            subprocess.run(['cargo', '--version'], check=True, capture_output=True)
-        except:
-            print("Error: Rust/Cargo not found. Please install Rust.")
-            return False
+        # Check if cargo is available, including common install locations
+        cargo_cmd = None
+        cargo_paths = ['cargo', os.path.expanduser('~/.cargo/bin/cargo')]
+        
+        for path in cargo_paths:
+            try:
+                subprocess.run([path, '--version'], check=True, capture_output=True)
+                cargo_cmd = path
+                self.log(f"Rust/Cargo found at {path}")
+                break
+            except:
+                continue
+        
+        if not cargo_cmd:
+            if self.auto_install:
+                print("Rust/Cargo not found. Attempting automatic installation...")
+                if not self.auto_install_rust():
+                    print("Skipping Rust benchmarks.")
+                    return False
+                # Re-check after installation
+                cargo_cmd = os.path.expanduser('~/.cargo/bin/cargo')
+            else:
+                print("Rust/Cargo not found. Use --auto-install to install automatically, or install manually:")
+                print("  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh")
+                return False
         
         # Run comparison benchmarks
         self.log("Running Rust comparison benchmarks...")
         try:
             os.chdir('rust')
             result = subprocess.run(
-                ['cargo', 'bench', '--bench', 'comparison'],
+                [cargo_cmd, 'bench', '--bench', 'simple_comparison'],
                 capture_output=True,
                 text=True,
-                timeout=180  # 3 minute timeout
+                timeout=600  # 10 minute timeout for Rust benchmarks
             )
             
             if result.returncode != 0:
@@ -114,13 +192,14 @@ class BenchmarkRunner:
         """Parse Rust criterion benchmark output."""
         self.log("Parsing Rust benchmark results...")
         
-        # Pattern for criterion output: test_name ... bench: X ns/iter (+/- Y)
-        # Or: test_name  time: [X µs Y µs Z µs]
+        # Updated patterns for simple_comparison benchmark
         patterns = [
-            # Pattern for time in microseconds
+            # Pattern: OperationName/ImplType/Size  time: [X.XX µs Y.YY µs Z.ZZ µs]
             r'(\w+)/(BTreeMap|BPlusTree)/(\d+)\s+time:\s+\[([0-9.]+)\s*(µs|us|ns)',
-            # Pattern for bench results
-            r'(\w+)/(BTreeMap|BPlusTree)/(\d+)\s+.*?bench:\s+([0-9,]+)\s*ns/iter',
+            # Pattern: OperationName/ImplType/Size ... bench: X ns/iter
+            r'(\w+)/(BTreeMap|BPlusTree)/(\d+)\s+.*?time:\s+\[([0-9.]+)\s*(µs|us|ns)',
+            # Alternative pattern for criterion output
+            r'(\w+)/(BTreeMap|BPlusTree)/(\d+)\s+.*?([0-9.]+)\s*(µs|us|ns)',
         ]
         
         for pattern in patterns:
@@ -129,12 +208,25 @@ class BenchmarkRunner:
                 impl_type = match.group(2).lower()
                 size = int(match.group(3))
                 
-                if 'µs' in match.group(0) or 'us' in match.group(0):
-                    time_us = float(match.group(4))
+                # Get the time value (4th group in all patterns)
+                time_value = float(match.group(4))
+                time_unit = match.group(5)
+                
+                # Convert to microseconds
+                if time_unit in ['µs', 'us']:
+                    time_us = time_value
+                elif time_unit == 'ns':
+                    time_us = time_value / 1000
+                elif time_unit == 'ms':
+                    time_us = time_value * 1000
                 else:
-                    # Convert ns to us
-                    time_str = match.group(4).replace(',', '')
-                    time_us = float(time_str) / 1000
+                    time_us = time_value  # Assume µs if unclear
+                
+                # Map BTreeMap to btreemap for consistency
+                if impl_type == 'btreemap':
+                    impl_type = 'btreemap'
+                elif impl_type == 'bplustree':
+                    impl_type = 'bplustree'
                 
                 # Initialize nested structure
                 if operation not in self.results["rust"]:
@@ -150,9 +242,23 @@ class BenchmarkRunner:
         print("\n=== Running Go Benchmarks ===")
         self.log("Checking for Go installation...")
         
-        # Check if go is available
+        # Check if go is available with PATH expansion
         try:
-            subprocess.run(['go', 'version'], check=True, capture_output=True)
+            # Try common Go installation paths
+            go_paths = ['go', '/usr/local/go/bin/go', '/usr/bin/go']
+            go_cmd = None
+            
+            for path in go_paths:
+                try:
+                    subprocess.run([path, 'version'], check=True, capture_output=True)
+                    go_cmd = path
+                    break
+                except:
+                    continue
+            
+            if not go_cmd:
+                raise FileNotFoundError("Go not found in any standard location")
+                
         except:
             print("Error: Go not found. Please install Go.")
             return False
@@ -162,7 +268,7 @@ class BenchmarkRunner:
         try:
             os.chdir('go')
             result = subprocess.run(
-                ['go', 'test', '-bench=Comparison', './benchmark', '-benchtime=1s'],
+                [go_cmd, 'test', '-bench=Comparison', './benchmark', '-benchtime=1s'],
                 capture_output=True,
                 text=True,
                 timeout=120  # 2 minute timeout
@@ -265,21 +371,30 @@ class BenchmarkRunner:
             elif 'Range Query' in line:
                 current_operation = 'rangequery'
             
-            # Parse timing data
-            timing_match = re.search(r'(B\+ Tree|HashMap)\s+(\d+)\s+ops in\s+([0-9.]+)ms.*?([0-9.]+)\s*ns/op', line)
+            # Parse timing data with scientific notation
+            # Format: B+ Tree    1000 ops in  1.83e-1ms |  5e6 ops/sec |  1.83e2 ns/op
+            timing_match = re.search(r'(B\+ Tree|HashMap)\s+(\d+)\s+ops in\s+([0-9.e+-]+)ms.*?([0-9.e+-]+)\s*ns/op', line)
             if timing_match and current_size and current_operation:
                 impl_type = 'bplustree' if 'B+ Tree' in timing_match.group(1) else 'hashmap'
-                time_ns = float(timing_match.group(4))
-                time_us = time_ns / 1000
+                time_ns_str = timing_match.group(4)
                 
-                # Initialize nested structure
-                if current_operation not in self.results["zig"]:
-                    self.results["zig"][current_operation] = {}
-                if current_size not in self.results["zig"][current_operation]:
-                    self.results["zig"][current_operation][current_size] = {}
-                
-                self.results["zig"][current_operation][current_size][impl_type] = time_us
-                self.log(f"  Zig {current_operation}/{impl_type}/{current_size}: {time_us:.2f} µs")
+                # Parse scientific notation
+                try:
+                    time_ns = float(time_ns_str)
+                    time_us = time_ns / 1000  # Convert ns to µs
+                    
+                    # Initialize nested structure
+                    if current_operation not in self.results["zig"]:
+                        self.results["zig"][current_operation] = {}
+                    if current_size not in self.results["zig"][current_operation]:
+                        self.results["zig"][current_operation][current_size] = {}
+                    
+                    self.results["zig"][current_operation][current_size][impl_type] = time_us
+                    self.log(f"  Zig {current_operation}/{impl_type}/{current_size}: {time_us:.3f} µs")
+                    
+                except ValueError:
+                    self.log(f"  Could not parse time value: {time_ns_str}")
+                    continue
     
     def generate_report(self, output_file: str = "benchmark_report.md"):
         """Generate a comprehensive markdown report."""
@@ -456,6 +571,7 @@ class BenchmarkRunner:
 def main():
     parser = argparse.ArgumentParser(description='Run B+ Tree benchmarks across multiple languages')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--auto-install', action='store_true', help='Automatically install missing languages')
     parser.add_argument('--rust-only', action='store_true', help='Run only Rust benchmarks')
     parser.add_argument('--go-only', action='store_true', help='Run only Go benchmarks')
     parser.add_argument('--zig-only', action='store_true', help='Run only Zig benchmarks')
@@ -463,7 +579,7 @@ def main():
     
     args = parser.parse_args()
     
-    runner = BenchmarkRunner(verbose=args.verbose)
+    runner = BenchmarkRunner(verbose=args.verbose, auto_install=args.auto_install)
     
     print("B+ Tree Cross-Language Benchmark Runner")
     print("======================================\n")

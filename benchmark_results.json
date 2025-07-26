@@ -1,0 +1,231 @@
+{
+  "rust": {
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 1.0329,
+        "btreemap": 1.6848
+      },
+      "1000": {
+        "bplustree": 17.168,
+        "btreemap": 26.856
+      },
+      "10000": {
+        "bplustree": 214.44,
+        "btreemap": 372.66
+      }
+    },
+    "randominsert": {
+      "100": {
+        "bplustree": 1.5632,
+        "btreemap": 1.623
+      },
+      "1000": {
+        "bplustree": 22.923,
+        "btreemap": 20.644
+      },
+      "10000": {
+        "bplustree": 393.5,
+        "btreemap": 525.29
+      }
+    },
+    "lookup": {
+      "100": {
+        "bplustree": 4.7943,
+        "btreemap": 4.729
+      },
+      "1000": {
+        "bplustree": 10.997,
+        "btreemap": 12.977
+      },
+      "10000": {
+        "bplustree": 17.105,
+        "btreemap": 27.924
+      },
+      "100000": {
+        "bplustree": 23.605,
+        "btreemap": 43.345
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.23131000000000002,
+        "btreemap": 0.11069
+      },
+      "1000": {
+        "bplustree": 2.3342,
+        "btreemap": 1.1268
+      },
+      "10000": {
+        "bplustree": 23.811,
+        "btreemap": 11.387
+      }
+    },
+    "rangequery": {
+      "100": {
+        "bplustree": 0.042265000000000004,
+        "btreemap": 0.024315
+      },
+      "1000": {
+        "bplustree": 0.30833,
+        "btreemap": 0.12097
+      },
+      "10000": {
+        "bplustree": 2.821,
+        "btreemap": 1.0793
+      }
+    }
+  },
+  "go": {
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 3.16,
+        "map": 0.9889,
+        "syncmap": 4.883
+      },
+      "1000": {
+        "bplustree": 50.953,
+        "map": 9.937,
+        "syncmap": 68.266
+      },
+      "10000": {
+        "bplustree": 690.547,
+        "map": 109.119,
+        "syncmap": 908.22
+      },
+      "100000": {
+        "bplustree": 22194.272,
+        "map": 1707.397,
+        "syncmap": 12360.069
+      }
+    },
+    "randominsert": {
+      "100": {
+        "bplustree": 9.775,
+        "map": 0.9682999999999999
+      },
+      "1000": {
+        "bplustree": 180.786,
+        "map": 9.792
+      },
+      "10000": {
+        "bplustree": 2042.745,
+        "map": 112.141
+      },
+      "100000": {
+        "bplustree": 34348.772,
+        "map": 1790.637
+      }
+    },
+    "lookup": {
+      "100": {
+        "bplustree": 1.685,
+        "map": 0.3758,
+        "syncmap": 1.033
+      },
+      "1000": {
+        "bplustree": 19.906,
+        "map": 4.043,
+        "syncmap": 12.426
+      },
+      "10000": {
+        "bplustree": 47.226,
+        "map": 4.43,
+        "syncmap": 15.208
+      },
+      "100000": {
+        "bplustree": 201.53,
+        "map": 5.09,
+        "syncmap": 21.1
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.1296,
+        "map": 0.4648
+      },
+      "1000": {
+        "bplustree": 1.319,
+        "map": 5.265
+      },
+      "10000": {
+        "bplustree": 13.186,
+        "map": 56.141
+      }
+    },
+    "rangequery": {
+      "100": {
+        "bplustree": 0.1368
+      },
+      "1000": {
+        "bplustree": 0.6658
+      },
+      "10000": {
+        "bplustree": 6.463
+      }
+    }
+  },
+  "zig": {
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 0.675,
+        "hashmap": 0.49
+      },
+      "1000": {
+        "bplustree": 0.349,
+        "hashmap": 0.123
+      },
+      "10000": {
+        "bplustree": 0.425,
+        "hashmap": 0.0514
+      },
+      "100000": {
+        "bplustree": 0.442,
+        "hashmap": 0.0252
+      }
+    },
+    "lookup": {
+      "100": {
+        "bplustree": 0.00463,
+        "hashmap": 0.00054
+      },
+      "1000": {
+        "bplustree": 0.0263,
+        "hashmap": 3.1e-05
+      },
+      "10000": {
+        "bplustree": 0.046299999999999994,
+        "hashmap": 2.7e-06
+      },
+      "100000": {
+        "bplustree": 0.171,
+        "hashmap": 3.6000000000000005e-07
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.00229,
+        "hashmap": 0.00463
+      },
+      "1000": {
+        "bplustree": 0.00216,
+        "hashmap": 0.00729
+      },
+      "10000": {
+        "bplustree": 0.00231,
+        "hashmap": 0.00531
+      },
+      "100000": {
+        "bplustree": 0.00347,
+        "hashmap": 0.00269
+      }
+    }
+  },
+  "metadata": {
+    "timestamp": "2025-07-26T14:07:56.923776",
+    "system_info": {
+      "os": "Linux godev4 6.1.0-37-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.140-1 (2025-05-22) x86_64 GNU/Linux",
+      "cpu": "Unknown",
+      "memory": "15Gi"
+    }
+  }
+}

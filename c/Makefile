@@ -42,12 +42,15 @@ $(BUILDDIR)/test_%.o: $(TESTDIR)/%.c
 $(BUILDDIR)/test_%: $(BUILDDIR)/test_%.o $(OBJECTS)
 	$(CC) $(TESTFLAGS) $^ -o $@
 
-# Special rule for test_basic since it doesn't follow the pattern
+# Special rules for test files
 $(BUILDDIR)/test_basic: $(BUILDDIR)/test_test_basic.o $(OBJECTS)
 	$(CC) $(TESTFLAGS) $^ -o $@
 
+$(BUILDDIR)/test_advanced: $(BUILDDIR)/test_test_advanced.o $(OBJECTS)
+	$(CC) $(TESTFLAGS) $^ -o $@
+
 # Build benchmark binaries
-$(BUILDDIR)/benchmark_%: $(BENCHDIR)/%.c $(OBJECTS)
+$(BUILDDIR)/benchmark_%: $(BENCHDIR)/benchmark_%.c $(OBJECTS)
 	$(CC) $(BENCHFLAGS) $^ -o $@
 
 # Run tests
