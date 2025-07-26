@@ -12,13 +12,26 @@ A high-performance, generic B+ tree implementation in Go featuring type safety, 
 - **Comprehensive Testing**: 40+ tests including stress and safety tests
 - **Zero Dependencies**: Uses only Go standard library
 
-## Installation
+## Quick Start
+
+### Run the Demo
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd BPlusTree3/go
+
+# Run the demo program
+go run cmd/demo/main.go
+```
+
+### Installation
 
 ```bash
 go get github.com/example/bplustree
 ```
 
-## Quick Start
+### Basic Usage
 
 ```go
 package main
@@ -217,7 +230,39 @@ go test -bench=. -benchmem ./benchmark
 ### Run Demo
 
 ```bash
+# From the go directory
+cd go
 go run cmd/demo/main.go
+
+# Or from the project root
+cd /path/to/BPlusTree3
+go run go/cmd/demo/main.go
+```
+
+The demo program showcases:
+- Creating a B+ tree with string keys and values
+- Inserting, searching, and deleting operations
+- Range queries and iteration (forward/reverse)
+- Performance demonstration with 10,000 integers
+- Tree statistics (size, height)
+
+Example output:
+```
+=== B+ Tree Demo ===
+
+Inserting data...
+  Inserted: apple -> A sweet fruit
+  Inserted: banana -> A yellow fruit
+  ...
+
+Tree now contains 7 items
+Tree height: 2
+
+Looking up values:
+  apple: A sweet fruit
+  cherry: A small red fruit
+  kiwi: (not found)
+  ...
 ```
 
 ## Test Coverage
