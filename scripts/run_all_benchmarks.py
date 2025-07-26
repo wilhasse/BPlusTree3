@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Automated benchmark runner for B+ Tree implementations.
-Runs benchmarks across Rust, Go, and Zig, collects results, and generates a comprehensive report.
+Runs benchmarks across Rust, Go, Zig, and C, collects results, and generates a comprehensive report.
 """
 
 import subprocess
@@ -22,6 +22,7 @@ class BenchmarkRunner:
             "rust": {},
             "go": {},
             "zig": {},
+            "c": {},
             "metadata": {
                 "timestamp": datetime.now().isoformat(),
                 "system_info": self.get_system_info()
@@ -396,6 +397,82 @@ class BenchmarkRunner:
                     self.log(f"  Could not parse time value: {time_ns_str}")
                     continue
     
+    def run_c_benchmarks(self) -> bool:
+        """Run C benchmarks using make benchmark."""
+        print("\n=== Running C Benchmarks ===")
+        self.log("Checking for C compiler and make...")
+        
+        # Check if make and gcc are available
+        try:
+            subprocess.run(['make', '--version'], check=True, capture_output=True)
+            subprocess.run(['gcc', '--version'], check=True, capture_output=True)
+        except:
+            print("Error: make or gcc not found. Please install build tools.")
+            return False
+        
+        # Run C benchmarks
+        self.log("Running C comparison benchmarks...")
+        try:
+            os.chdir('c')
+            result = subprocess.run(
+                ['make', 'benchmark'],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode != 0:
+                print(f"C benchmark failed: {result.stderr}")
+                return False
+            
+            self.parse_c_output(result.stdout)
+            return True
+            
+        except subprocess.TimeoutExpired:
+            print("C benchmark timed out")
+            return False
+        except Exception as e:
+            print(f"Error running C benchmarks: {e}")
+            return False
+        finally:
+            os.chdir('..')
+    
+    def parse_c_output(self, output: str):
+        """Parse C benchmark output."""
+        self.log("Parsing C benchmark results...")
+        
+        current_operation = None
+        
+        for line in output.split('\n'):
+            # Parse operation headers
+            if '=== Sequential Insert ===' in line:
+                current_operation = 'sequentialinsert'
+                continue
+            elif '=== Lookup ===' in line:
+                current_operation = 'lookup'
+                continue
+            elif '=== Iteration ===' in line:
+                current_operation = 'iteration'
+                continue
+            
+            # Parse timing data
+            # Format: B+ Tree    100 ops in     0.00ms | 32954358 ops/sec |    30.34 ns/op
+            timing_match = re.search(r'(B\+ Tree|Hash Table)\s+(\d+)\s+ops in\s+([0-9.]+)ms.*?([0-9.]+)\s*ns/op', line)
+            if timing_match and current_operation:
+                impl_type = 'bplustree' if 'B+ Tree' in timing_match.group(1) else 'hashtable'
+                size = int(timing_match.group(2))
+                time_ns = float(timing_match.group(4))
+                time_us = time_ns / 1000  # Convert ns to µs
+                
+                # Initialize nested structure
+                if current_operation not in self.results["c"]:
+                    self.results["c"][current_operation] = {}
+                if size not in self.results["c"][current_operation]:
+                    self.results["c"][current_operation][size] = {}
+                
+                self.results["c"][current_operation][size][impl_type] = time_us
+                self.log(f"  C {current_operation}/{impl_type}/{size}: {time_us:.3f} µs")
+    
     def generate_report(self, output_file: str = "benchmark_report.md"):
         """Generate a comprehensive markdown report."""
         print(f"\n=== Generating Report: {output_file} ===")
@@ -413,7 +490,7 @@ class BenchmarkRunner:
             
             # Normalize operation names
             operations = set()
-            for lang in ['rust', 'go', 'zig']:
+            for lang in ['rust', 'go', 'zig', 'c']:
                 operations.update(self.results[lang].keys())
             
             # Operation comparison tables
@@ -421,14 +498,14 @@ class BenchmarkRunner:
             f.write("All times in microseconds (µs). Lower is better.\n\n")
             
             for op in sorted(operations):
-                if not any(op in self.results[lang] for lang in ['rust', 'go', 'zig']):
+                if not any(op in self.results[lang] for lang in ['rust', 'go', 'zig', 'c']):
                     continue
                 
                 f.write(f"### {op.replace('_', ' ').title()}\n\n")
                 
                 # Get all sizes
                 sizes = set()
-                for lang in ['rust', 'go', 'zig']:
+                for lang in ['rust', 'go', 'zig', 'c']:
                     if op in self.results[lang]:
                         sizes.update(self.results[lang][op].keys())
                 
@@ -436,8 +513,8 @@ class BenchmarkRunner:
                     continue
                 
                 # Create comparison table
-                f.write("| Size | Rust B+ | Rust Native | Go B+ | Go Native | Zig B+ | Zig Native |\n")
-                f.write("|------|---------|-------------|-------|-----------|--------|------------|\n")
+                f.write("| Size | Rust B+ | Rust Native | Go B+ | Go Native | Zig B+ | Zig Native | C B+ | C Native |\n")
+                f.write("|------|---------|-------------|-------|-----------|--------|------------|------|----------|\n")
                 
                 for size in sorted(sizes):
                     row = f"| {size} |"
@@ -478,6 +555,18 @@ class BenchmarkRunner:
                     else:
                         row += " - | - |"
                     
+                    # C
+                    if 'c' in self.results and op in self.results['c'] and size in self.results['c'][op]:
+                        c_data = self.results['c'][op][size]
+                        bplus = c_data.get('bplustree', 0)
+                        native = c_data.get('hashtable', 0)
+                        if bplus: row += f" {bplus:.2f} |"
+                        else: row += " - |"
+                        if native: row += f" {native:.2f} |"
+                        else: row += " - |"
+                    else:
+                        row += " - | - |"
+                    
                     f.write(row + "\n")
                 
                 f.write("\n")
@@ -489,7 +578,7 @@ class BenchmarkRunner:
             for op in sorted(operations):
                 ratios = []
                 
-                for lang, native_name in [('rust', 'btreemap'), ('go', 'map'), ('zig', 'hashmap')]:
+                for lang, native_name in [('rust', 'btreemap'), ('go', 'map'), ('zig', 'hashmap'), ('c', 'hashtable')]:
                     if lang in self.results and op in self.results[lang]:
                         for size in self.results[lang][op]:
                             data = self.results[lang][op][size]
@@ -556,6 +645,9 @@ class BenchmarkRunner:
         if self.run_zig_benchmarks():
             languages_run.append("Zig")
         
+        if self.run_c_benchmarks():
+            languages_run.append("C")
+        
         if not languages_run:
             print("\nError: No benchmarks could be run. Please install at least one language.")
             return False
@@ -575,6 +667,7 @@ def main():
     parser.add_argument('--rust-only', action='store_true', help='Run only Rust benchmarks')
     parser.add_argument('--go-only', action='store_true', help='Run only Go benchmarks')
     parser.add_argument('--zig-only', action='store_true', help='Run only Zig benchmarks')
+    parser.add_argument('--c-only', action='store_true', help='Run only C benchmarks')
     parser.add_argument('-o', '--output', default='benchmark_report.md', help='Output report filename')
     
     args = parser.parse_args()
@@ -590,6 +683,8 @@ def main():
         runner.run_go_benchmarks()
     elif args.zig_only:
         runner.run_zig_benchmarks()
+    elif args.c_only:
+        runner.run_c_benchmarks()
     else:
         runner.run_all()
 
