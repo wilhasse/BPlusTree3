@@ -46,6 +46,21 @@ pub fn build(b: *std.Build) void {
     const stress_step = b.step("test-stress", "Run stress tests");
     stress_step.dependOn(&run_stress_tests.step);
     
+    // Iterator safety tests
+    const iterator_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_iterator_safety.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    iterator_tests.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_iterator_tests = b.addRunArtifact(iterator_tests);
+    test_step.dependOn(&run_iterator_tests.step);
+    
+    // Separate step for iterator safety tests
+    const iterator_step = b.step("test-iterator", "Run iterator safety tests");
+    iterator_step.dependOn(&run_iterator_tests.step);
+    
     // Demo executable
     const demo = b.addExecutable(.{
         .name = "demo",
