@@ -9,6 +9,7 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
         pub const Error = error{
             KeyNotFound,
             OutOfMemory,
+            InvalidCapacity,
         };
         
         pub const Entry = struct {
@@ -147,6 +148,18 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             };
         }
         
+        pub fn initWithValidation(allocator: std.mem.Allocator, capacity: usize) !Self {
+            if (capacity < 2) {
+                return Error.InvalidCapacity;
+            }
+            return Self{
+                .allocator = allocator,
+                .capacity = capacity,
+                .size = 0,
+                .root = null,
+            };
+        }
+        
         pub fn deinit(self: *Self) void {
             if (self.root) |root| {
                 root.deinit(self.allocator);
@@ -166,9 +179,12 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             if (self.root.?.node_type == .leaf and self.root.?.isFull(self.capacity)) {
                 const old_root = self.root.?;
                 const new_leaf = try self.splitLeaf(old_root);
+                errdefer new_leaf.deinit(self.allocator);
                 
                 // Create new root
                 var new_root = try Node.initBranch(self.allocator);
+                errdefer new_root.deinit(self.allocator);
+                
                 try new_root.keys.append(new_leaf.keys.items[0]);
                 try new_root.children.?.append(old_root);
                 try new_root.children.?.append(new_leaf);
@@ -228,6 +244,7 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
                     // Split the child
                     if (child.node_type == .leaf) {
                         const new_node = try self.splitLeaf(child);
+                        errdefer new_node.deinit(self.allocator);
                         
                         // Insert the new key into parent
                         const split_key = new_node.keys.items[0];
@@ -279,6 +296,10 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             return null;
         }
         
+        pub fn getWithDefault(self: *const Self, key: KeyType, default_value: ValueType) ValueType {
+            return self.get(key) orelse default_value;
+        }
+        
         pub fn getHeight(self: *const Self) usize {
             if (self.root == null) return 0;
             
@@ -298,6 +319,7 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             
             // Create new leaf
             var new_leaf = try Node.initLeaf(self.allocator);
+            errdefer new_leaf.deinit(self.allocator);
             
             // Move half the keys and values to new leaf
             for (mid..leaf.keys.items.len) |i| {
@@ -484,7 +506,7 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
         }
         
         pub fn range(self: *const Self, start: KeyType, end: KeyType, results: *std.ArrayList(Entry)) !void {
-            if (self.root == null) {
+            if (self.root == null or start > end) {
                 return;
             }
             
@@ -515,6 +537,132 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
                 for (node.keys.items, 0..) |k, i| {
                     if (k > end) {
                         // We've passed the end of the range
+                        return;
+                    }
+                    if (k >= start) {
+                        // Key is in range
+                        try results.append(.{
+                            .key = k,
+                            .value = node.values.?.items[i],
+                        });
+                    }
+                }
+                
+                // Move to next leaf
+                leaf = node.next;
+            }
+        }
+        
+        pub fn rangeFrom(self: *const Self, start: KeyType, results: *std.ArrayList(Entry)) !void {
+            if (self.root == null) {
+                return;
+            }
+            
+            // Find the leaf containing the start key
+            var current = self.root.?;
+            
+            // Navigate to the leaf that would contain start
+            while (current.node_type == .branch) {
+                var child_idx: usize = 0;
+                for (current.keys.items, 0..) |k, i| {
+                    if (start < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= current.children.?.items.len) {
+                    child_idx = current.children.?.items.len - 1;
+                }
+                current = current.children.?.items[child_idx];
+            }
+            
+            // Now traverse through all remaining leaf nodes
+            var leaf: ?*Node = current;
+            while (leaf != null) {
+                const node = leaf.?;
+                
+                // Process keys in this leaf
+                for (node.keys.items, 0..) |k, i| {
+                    if (k >= start) {
+                        // Key is in range
+                        try results.append(.{
+                            .key = k,
+                            .value = node.values.?.items[i],
+                        });
+                    }
+                }
+                
+                // Move to next leaf
+                leaf = node.next;
+            }
+        }
+        
+        pub fn rangeTo(self: *const Self, end: KeyType, results: *std.ArrayList(Entry)) !void {
+            if (self.root == null) {
+                return;
+            }
+            
+            // Start from the leftmost leaf
+            var current = self.root.?;
+            while (current.node_type == .branch) {
+                current = current.children.?.items[0];
+            }
+            
+            // Traverse through leaf nodes collecting values up to end
+            var leaf: ?*Node = current;
+            while (leaf != null) {
+                const node = leaf.?;
+                
+                // Process keys in this leaf
+                for (node.keys.items, 0..) |k, i| {
+                    if (k > end) {
+                        // We've passed the end of the range
+                        return;
+                    }
+                    // All keys up to end are in range
+                    try results.append(.{
+                        .key = k,
+                        .value = node.values.?.items[i],
+                    });
+                }
+                
+                // Move to next leaf
+                leaf = node.next;
+            }
+        }
+        
+        pub fn rangeExclusive(self: *const Self, start: KeyType, end: KeyType, results: *std.ArrayList(Entry)) !void {
+            if (self.root == null or start >= end) {
+                return;
+            }
+            
+            // Find the leaf containing the start key
+            var current = self.root.?;
+            
+            // Navigate to the leaf that would contain start
+            while (current.node_type == .branch) {
+                var child_idx: usize = 0;
+                for (current.keys.items, 0..) |k, i| {
+                    if (start < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= current.children.?.items.len) {
+                    child_idx = current.children.?.items.len - 1;
+                }
+                current = current.children.?.items[child_idx];
+            }
+            
+            // Now traverse through leaf nodes collecting values in range
+            var leaf: ?*Node = current;
+            while (leaf != null) {
+                const node = leaf.?;
+                
+                // Process keys in this leaf
+                for (node.keys.items, 0..) |k, i| {
+                    if (k >= end) {
+                        // We've reached the exclusive end
                         return;
                     }
                     if (k >= start) {

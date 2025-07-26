@@ -432,3 +432,60 @@ test "should clear all entries from tree" {
     try testing.expectEqual(@as(usize, 1), tree.len());
     try testing.expectEqual(@as(i32, 420), tree.get(42).?);
 }
+
+test "should get value with default when key not found" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Empty tree should return default value
+    const default_value: i32 = 999;
+    try testing.expectEqual(default_value, tree.getWithDefault(42, default_value));
+    
+    // Insert some values
+    try tree.insert(10, 100);
+    try tree.insert(20, 200);
+    try tree.insert(30, 300);
+    
+    // Existing keys should return their values
+    try testing.expectEqual(@as(i32, 100), tree.getWithDefault(10, default_value));
+    try testing.expectEqual(@as(i32, 200), tree.getWithDefault(20, default_value));
+    try testing.expectEqual(@as(i32, 300), tree.getWithDefault(30, default_value));
+    
+    // Non-existing keys should return default value
+    try testing.expectEqual(default_value, tree.getWithDefault(5, default_value));
+    try testing.expectEqual(default_value, tree.getWithDefault(15, default_value));
+    try testing.expectEqual(default_value, tree.getWithDefault(40, default_value));
+    
+    // Different default values for different calls
+    try testing.expectEqual(@as(i32, -1), tree.getWithDefault(99, -1));
+    try testing.expectEqual(@as(i32, 0), tree.getWithDefault(99, 0));
+}
+
+test "should handle invalid capacity errors" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    
+    // Capacity of 0 should be invalid
+    try testing.expectError(Tree.Error.InvalidCapacity, Tree.initWithValidation(allocator, 0));
+    
+    // Capacity of 1 should be invalid (minimum is 2)
+    try testing.expectError(Tree.Error.InvalidCapacity, Tree.initWithValidation(allocator, 1));
+    
+    // Capacity of 2 should be valid (minimum allowed)
+    var tree2 = try Tree.initWithValidation(allocator, 2);
+    tree2.deinit();
+    
+    // Capacity of 3 and above should be valid
+    var tree3 = try Tree.initWithValidation(allocator, 3);
+    tree3.deinit();
+    
+    var tree4 = try Tree.initWithValidation(allocator, 4);
+    tree4.deinit();
+    
+    var tree128 = try Tree.initWithValidation(allocator, 128);
+    tree128.deinit();
+}
