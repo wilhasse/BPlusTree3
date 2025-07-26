@@ -120,7 +120,16 @@ python -m pytest tests/
 ### Cross-Language Benchmarking
 
 ```bash
-python scripts/analyze_benchmarks.py
+# Run automated benchmarks for all implementations
+./scripts/run_all_benchmarks.py
+
+# Generate visualization charts (requires matplotlib)
+./scripts/benchmark_visualizer.py
+
+# Or run individual language benchmarks
+cargo bench                      # Rust
+go test -bench=. ./benchmark     # Go  
+zig build benchmark             # Zig
 ```
 
 ## 🤝 **Contributing**
