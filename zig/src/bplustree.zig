@@ -6,6 +6,16 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
         const KeyType = K;
         const ValueType = V;
         
+        pub const Error = error{
+            KeyNotFound,
+            OutOfMemory,
+        };
+        
+        pub const Entry = struct {
+            key: KeyType,
+            value: ValueType,
+        };
+        
         const NodeType = enum { leaf, branch };
         
         const Node = struct {
@@ -250,6 +260,97 @@ pub fn BPlusTree(comptime K: type, comptime V: type) type {
             leaf.next = new_leaf;
             
             return new_leaf;
+        }
+        
+        pub fn remove(self: *Self, key: KeyType) !ValueType {
+            if (self.root == null) {
+                return Error.KeyNotFound;
+            }
+            
+            // Navigate to the leaf containing the key
+            var current = self.root.?;
+            
+            // Navigate down to leaf
+            while (current.node_type == .branch) {
+                var child_idx: usize = 0;
+                for (current.keys.items, 0..) |k, i| {
+                    if (key < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= current.children.?.items.len) {
+                    child_idx = current.children.?.items.len - 1;
+                }
+                current = current.children.?.items[child_idx];
+            }
+            
+            // Find and remove the key from leaf
+            for (current.keys.items, 0..) |k, i| {
+                if (k == key) {
+                    const value = current.values.?.items[i];
+                    
+                    // Remove key and value
+                    _ = current.keys.orderedRemove(i);
+                    _ = current.values.?.orderedRemove(i);
+                    
+                    self.size -= 1;
+                    
+                    // TODO: Handle underflow and rebalancing
+                    
+                    return value;
+                }
+            }
+            
+            return Error.KeyNotFound;
+        }
+        
+        pub fn range(self: *const Self, start: KeyType, end: KeyType, results: *std.ArrayList(Entry)) !void {
+            if (self.root == null) {
+                return;
+            }
+            
+            // Find the leaf containing the start key
+            var current = self.root.?;
+            
+            // Navigate to the leaf that would contain start
+            while (current.node_type == .branch) {
+                var child_idx: usize = 0;
+                for (current.keys.items, 0..) |k, i| {
+                    if (start < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= current.children.?.items.len) {
+                    child_idx = current.children.?.items.len - 1;
+                }
+                current = current.children.?.items[child_idx];
+            }
+            
+            // Now traverse through leaf nodes collecting values in range
+            var leaf: ?*Node = current;
+            while (leaf != null) {
+                const node = leaf.?;
+                
+                // Process keys in this leaf
+                for (node.keys.items, 0..) |k, i| {
+                    if (k > end) {
+                        // We've passed the end of the range
+                        return;
+                    }
+                    if (k >= start) {
+                        // Key is in range
+                        try results.append(.{
+                            .key = k,
+                            .value = node.values.?.items[i],
+                        });
+                    }
+                }
+                
+                // Move to next leaf
+                leaf = node.next;
+            }
         }
     };
 }

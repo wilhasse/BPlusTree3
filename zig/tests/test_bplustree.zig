@@ -128,3 +128,152 @@ test "should handle node splitting when capacity exceeded" {
     // Tree should have proper structure (root should be branch node after split)
     try testing.expect(tree.getHeight() > 1);
 }
+
+test "should delete existing key from tree" {
+    const allocator = testing.allocator;
+    
+    var tree = bplustree.BPlusTree(i32, i32).init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert some data
+    try tree.insert(10, 100);
+    try tree.insert(20, 200);
+    try tree.insert(30, 300);
+    try tree.insert(40, 400);
+    
+    // Delete a key
+    const deleted_value = try tree.remove(20);
+    
+    // Verify deletion
+    try testing.expectEqual(@as(i32, 200), deleted_value);
+    try testing.expectEqual(@as(usize, 3), tree.len());
+    try testing.expect(tree.get(20) == null);
+    
+    // Other keys should still exist
+    try testing.expectEqual(@as(i32, 100), tree.get(10).?);
+    try testing.expectEqual(@as(i32, 300), tree.get(30).?);
+    try testing.expectEqual(@as(i32, 400), tree.get(40).?);
+}
+
+test "should return error when deleting non-existent key" {
+    const allocator = testing.allocator;
+    
+    var tree = bplustree.BPlusTree(i32, i32).init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert some data
+    try tree.insert(10, 100);
+    try tree.insert(30, 300);
+    
+    // Try to delete non-existent key
+    try testing.expectError(error.KeyNotFound, tree.remove(20));
+    
+    // Tree should remain unchanged
+    try testing.expectEqual(@as(usize, 2), tree.len());
+    try testing.expectEqual(@as(i32, 100), tree.get(10).?);
+    try testing.expectEqual(@as(i32, 300), tree.get(30).?);
+}
+
+test "should handle deletion from empty tree" {
+    const allocator = testing.allocator;
+    
+    var tree = bplustree.BPlusTree(i32, i32).init(allocator, 4);
+    defer tree.deinit();
+    
+    // Try to delete from empty tree
+    try testing.expectError(error.KeyNotFound, tree.remove(42));
+    
+    // Tree should remain empty
+    try testing.expectEqual(@as(usize, 0), tree.len());
+}
+
+test "should handle sequential deletions maintaining tree integrity" {
+    const allocator = testing.allocator;
+    
+    var tree = bplustree.BPlusTree(i32, i32).init(allocator, 4);
+    defer tree.deinit();
+    
+    // Build a tree that will have multiple levels
+    const n = 20;
+    for (1..n + 1) |i| {
+        try tree.insert(@intCast(i), @intCast(i * 100));
+    }
+    
+    // Verify initial state
+    try testing.expectEqual(@as(usize, n), tree.len());
+    try testing.expect(tree.getHeight() > 1);
+    
+    // Delete every other key
+    var i: i32 = 2;
+    while (i <= n) : (i += 2) {
+        const value = try tree.remove(i);
+        try testing.expectEqual(@as(i32, i * 100), value);
+    }
+    
+    // Verify tree after deletions
+    try testing.expectEqual(@as(usize, n / 2), tree.len());
+    
+    // Check remaining keys
+    i = 1;
+    while (i <= n) : (i += 2) {
+        try testing.expectEqual(@as(i32, i * 100), tree.get(i).?);
+    }
+    
+    // Check deleted keys are gone
+    i = 2;
+    while (i <= n) : (i += 2) {
+        try testing.expect(tree.get(i) == null);
+    }
+}
+
+test "should return empty list for range query on empty tree" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Query range on empty tree
+    var results = std.ArrayList(Tree.Entry).init(allocator);
+    defer results.deinit();
+    
+    try tree.range(10, 20, &results);
+    
+    // Should return empty list
+    try testing.expectEqual(@as(usize, 0), results.items.len);
+}
+
+test "should return all values in range" {
+    const allocator = testing.allocator;
+    
+    const Tree = bplustree.BPlusTree(i32, i32);
+    var tree = Tree.init(allocator, 4);
+    defer tree.deinit();
+    
+    // Insert test data
+    for (1..11) |i| {
+        try tree.insert(@intCast(i), @intCast(i * 10));
+    }
+    
+    // Query range [3, 7]
+    var results = std.ArrayList(Tree.Entry).init(allocator);
+    defer results.deinit();
+    
+    try tree.range(3, 7, &results);
+    
+    // Should return keys 3, 4, 5, 6, 7
+    try testing.expectEqual(@as(usize, 5), results.items.len);
+    
+    const expected = [_]Tree.Entry{
+        .{ .key = 3, .value = 30 },
+        .{ .key = 4, .value = 40 },
+        .{ .key = 5, .value = 50 },
+        .{ .key = 6, .value = 60 },
+        .{ .key = 7, .value = 70 },
+    };
+    
+    for (expected, results.items) |exp, res| {
+        try testing.expectEqual(exp.key, res.key);
+        try testing.expectEqual(exp.value, res.value);
+    }
+}

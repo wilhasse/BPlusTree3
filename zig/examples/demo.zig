@@ -9,7 +9,8 @@ pub fn main() !void {
     std.debug.print("=== B+ Tree Demo ===\n", .{});
     
     // Create a B+ tree
-    var tree = BPlusTree(i32, []const u8).init(allocator, 4);
+    const Tree = BPlusTree(i32, []const u8);
+    var tree = Tree.init(allocator, 4);
     defer tree.deinit();
     
     // Insert some data
@@ -21,6 +22,8 @@ pub fn main() !void {
     try tree.insert(40, "forty");
     try tree.insert(60, "sixty");
     try tree.insert(80, "eighty");
+    try tree.insert(10, "ten");
+    try tree.insert(90, "ninety");
     
     std.debug.print("Tree now contains {} items\n", .{tree.len()});
     std.debug.print("Tree height: {}\n", .{tree.getHeight()});
@@ -42,6 +45,36 @@ pub fn main() !void {
     
     if (tree.get(50)) |value| {
         std.debug.print("  50 = {s}\n", .{value});
+    }
+    
+    // Test deletion
+    std.debug.print("\nDeleting keys 30 and 70...\n", .{});
+    _ = try tree.remove(30);
+    _ = try tree.remove(70);
+    std.debug.print("Tree now contains {} items\n", .{tree.len()});
+    
+    // Verify deletions
+    std.debug.print("\nVerifying deletions:\n", .{});
+    if (tree.get(30)) |_| {
+        std.debug.print("  ERROR: 30 still exists!\n", .{});
+    } else {
+        std.debug.print("  30 = (correctly deleted)\n", .{});
+    }
+    if (tree.get(70)) |_| {
+        std.debug.print("  ERROR: 70 still exists!\n", .{});
+    } else {
+        std.debug.print("  70 = (correctly deleted)\n", .{});
+    }
+    
+    // Test range query
+    std.debug.print("\nRange query [20, 60]:\n", .{});
+    var results = std.ArrayList(Tree.Entry).init(allocator);
+    defer results.deinit();
+    
+    try tree.range(20, 60, &results);
+    
+    for (results.items) |entry| {
+        std.debug.print("  {} = {s}\n", .{ entry.key, entry.value });
     }
     
     std.debug.print("\nDemo complete!\n", .{});
