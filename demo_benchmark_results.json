@@ -1,0 +1,142 @@
+{
+  "rust": {
+    "lookup": {
+      "100": {
+        "bplustree": 12.7,
+        "btreemap": 8.43
+      },
+      "1000": {
+        "bplustree": 14.8,
+        "btreemap": 11.3
+      },
+      "10000": {
+        "bplustree": 24.3,
+        "btreemap": 29.5
+      }
+    },
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 6.03,
+        "btreemap": 3.07
+      },
+      "1000": {
+        "bplustree": 86.2,
+        "btreemap": 49.8
+      },
+      "10000": {
+        "bplustree": 1072,
+        "btreemap": 640
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.267,
+        "btreemap": 0.107
+      },
+      "1000": {
+        "bplustree": 2.69,
+        "btreemap": 2.25
+      },
+      "10000": {
+        "bplustree": 29.8,
+        "btreemap": 22.7
+      }
+    }
+  },
+  "go": {
+    "lookup": {
+      "100": {
+        "bplustree": 1.58,
+        "map": 0.38
+      },
+      "1000": {
+        "bplustree": 19.6,
+        "map": 4.04
+      },
+      "10000": {
+        "bplustree": 48.1,
+        "map": 4.33
+      }
+    },
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 2.96,
+        "map": 0.96
+      },
+      "1000": {
+        "bplustree": 47.3,
+        "map": 9.01
+      },
+      "10000": {
+        "bplustree": 679,
+        "map": 110
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.127,
+        "map": 0.478
+      },
+      "1000": {
+        "bplustree": 1.3,
+        "map": 5.22
+      },
+      "10000": {
+        "bplustree": 12.8,
+        "map": 55.5
+      }
+    }
+  },
+  "zig": {
+    "lookup": {
+      "100": {
+        "bplustree": 1.63,
+        "hashmap": 0.4
+      },
+      "1000": {
+        "bplustree": 16.3,
+        "hashmap": 4.0
+      },
+      "10000": {
+        "bplustree": 163,
+        "hashmap": 40
+      }
+    },
+    "sequentialinsert": {
+      "100": {
+        "bplustree": 4.41,
+        "hashmap": 1.5
+      },
+      "1000": {
+        "bplustree": 44.1,
+        "hashmap": 15.0
+      },
+      "10000": {
+        "bplustree": 441,
+        "hashmap": 150
+      }
+    },
+    "iteration": {
+      "100": {
+        "bplustree": 0.315,
+        "hashmap": 0.5
+      },
+      "1000": {
+        "bplustree": 3.15,
+        "hashmap": 5.0
+      },
+      "10000": {
+        "bplustree": 31.5,
+        "hashmap": 50.0
+      }
+    }
+  },
+  "metadata": {
+    "timestamp": "2025-07-26T13:16:16.615792",
+    "system_info": {
+      "os": "Linux 6.1.0-37-amd64 x86_64",
+      "cpu": "12th Gen Intel(R) Core(TM) i9-12900KS",
+      "memory": "32Gi"
+    }
+  }
+}

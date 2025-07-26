@@ -29,35 +29,42 @@ class BenchmarkRunner:
     
     def get_system_info(self) -> Dict[str, str]:
         """Collect system information for the report."""
-        info = {}
+        info = {
+            'os': 'Unknown',
+            'cpu': 'Unknown', 
+            'memory': 'Unknown'
+        }
         
         # OS info
         try:
-            result = subprocess.run(['uname', '-a'], capture_output=True, text=True)
-            info['os'] = result.stdout.strip()
+            result = subprocess.run(['uname', '-a'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                info['os'] = result.stdout.strip()
         except:
-            info['os'] = 'Unknown'
+            pass
         
         # CPU info
         try:
-            result = subprocess.run(['lscpu'], capture_output=True, text=True)
-            for line in result.stdout.split('\n'):
-                if 'Model name:' in line:
-                    info['cpu'] = line.split(':', 1)[1].strip()
-                    break
+            result = subprocess.run(['lscpu'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'Model name:' in line:
+                        info['cpu'] = line.split(':', 1)[1].strip()
+                        break
         except:
-            info['cpu'] = 'Unknown'
+            pass
         
         # Memory info
         try:
-            result = subprocess.run(['free', '-h'], capture_output=True, text=True)
-            lines = result.stdout.split('\n')
-            if len(lines) > 1:
-                mem_line = lines[1].split()
-                if len(mem_line) > 1:
-                    info['memory'] = mem_line[1]
+            result = subprocess.run(['free', '-h'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                if len(lines) > 1:
+                    mem_line = lines[1].split()
+                    if len(mem_line) > 1:
+                        info['memory'] = mem_line[1]
         except:
-            info['memory'] = 'Unknown'
+            pass
         
         return info
     
@@ -85,7 +92,8 @@ class BenchmarkRunner:
             result = subprocess.run(
                 ['cargo', 'bench', '--bench', 'comparison'],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=180  # 3 minute timeout
             )
             
             if result.returncode != 0:
@@ -154,9 +162,10 @@ class BenchmarkRunner:
         try:
             os.chdir('go')
             result = subprocess.run(
-                ['go', 'test', '-bench=Comparison', './benchmark', '-benchtime=10s'],
+                ['go', 'test', '-bench=Comparison', './benchmark', '-benchtime=1s'],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=120  # 2 minute timeout
             )
             
             if result.returncode != 0:

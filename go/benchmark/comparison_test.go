@@ -179,7 +179,7 @@ func TestComparisonSummary(t *testing.T) {
 		t.Skip("Skipping comparison summary in short mode")
 	}
 	
-	fmt.Println("\n=== B+ Tree vs Map/SyncMap Comparison Summary ===\n")
+	fmt.Println("\n=== B+ Tree vs Map/SyncMap Comparison Summary ===")
 	
 	fmt.Println("B+ Tree advantages:")
 	fmt.Println("  ✓ Ordered keys - iteration in sorted order")
