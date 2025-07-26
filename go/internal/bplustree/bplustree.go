@@ -304,7 +304,13 @@ func (t *BPlusTree[K, V]) deleteFromNode(n *node[K, V], key K) (V, error) {
 	if len(child.keys) <= minKeys {
 		// Try to handle underflow
 		t.handleUnderflow(n, childIdx)
-		// Re-find child after potential merge
+		
+		// Re-find the correct child after potential merge/redistribution
+		// Keys might have moved, so we need to search again
+		childIdx = 0
+		for childIdx < len(n.keys) && key >= n.keys[childIdx] {
+			childIdx++
+		}
 		if childIdx >= len(n.children) {
 			childIdx = len(n.children) - 1
 		}
