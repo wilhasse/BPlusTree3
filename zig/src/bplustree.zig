@@ -1,0 +1,255 @@
+const std = @import("std");
+
+pub fn BPlusTree(comptime K: type, comptime V: type) type {
+    return struct {
+        const Self = @This();
+        const KeyType = K;
+        const ValueType = V;
+        
+        const NodeType = enum { leaf, branch };
+        
+        const Node = struct {
+            node_type: NodeType,
+            keys: std.ArrayList(KeyType),
+            
+            // For leaf nodes
+            values: ?std.ArrayList(ValueType),
+            next: ?*Node,  // Link to next leaf
+            prev: ?*Node,  // Link to previous leaf
+            
+            // For branch nodes
+            children: ?std.ArrayList(*Node),
+            
+            fn initLeaf(allocator: std.mem.Allocator) !*Node {
+                const node = try allocator.create(Node);
+                node.* = Node{
+                    .node_type = .leaf,
+                    .keys = std.ArrayList(KeyType).init(allocator),
+                    .values = std.ArrayList(ValueType).init(allocator),
+                    .children = null,
+                    .next = null,
+                    .prev = null,
+                };
+                return node;
+            }
+            
+            fn initBranch(allocator: std.mem.Allocator) !*Node {
+                const node = try allocator.create(Node);
+                node.* = Node{
+                    .node_type = .branch,
+                    .keys = std.ArrayList(KeyType).init(allocator),
+                    .values = null,
+                    .children = std.ArrayList(*Node).init(allocator),
+                    .next = null,
+                    .prev = null,
+                };
+                return node;
+            }
+            
+            fn deinit(self: *Node, allocator: std.mem.Allocator) void {
+                self.keys.deinit();
+                if (self.values) |*values| {
+                    values.deinit();
+                }
+                if (self.children) |*children| {
+                    for (children.items) |child| {
+                        child.deinit(allocator);
+                    }
+                    children.deinit();
+                }
+                allocator.destroy(self);
+            }
+            
+            fn isFull(self: *const Node, capacity: usize) bool {
+                return self.keys.items.len >= capacity;
+            }
+        };
+        
+        allocator: std.mem.Allocator,
+        capacity: usize,
+        size: usize,
+        root: ?*Node,
+        
+        pub fn init(allocator: std.mem.Allocator, capacity: usize) Self {
+            return Self{
+                .allocator = allocator,
+                .capacity = capacity,
+                .size = 0,
+                .root = null,
+            };
+        }
+        
+        pub fn deinit(self: *Self) void {
+            if (self.root) |root| {
+                root.deinit(self.allocator);
+            }
+        }
+        
+        pub fn len(self: *const Self) usize {
+            return self.size;
+        }
+        
+        pub fn insert(self: *Self, key: KeyType, value: ValueType) !void {
+            if (self.root == null) {
+                self.root = try Node.initLeaf(self.allocator);
+            }
+            
+            // If root is full and is a leaf, split it
+            if (self.root.?.node_type == .leaf and self.root.?.isFull(self.capacity)) {
+                const old_root = self.root.?;
+                const new_leaf = try self.splitLeaf(old_root);
+                
+                // Create new root
+                var new_root = try Node.initBranch(self.allocator);
+                try new_root.keys.append(new_leaf.keys.items[0]);
+                try new_root.children.?.append(old_root);
+                try new_root.children.?.append(new_leaf);
+                
+                self.root = new_root;
+            }
+            
+            // Now insert normally
+            try self.insertIntoNode(self.root.?, key, value);
+            self.size += 1;
+        }
+        
+        fn insertIntoNode(self: *Self, node: *Node, key: KeyType, value: ValueType) !void {
+            if (node.node_type == .leaf) {
+                // Find the position to insert
+                var insert_pos: usize = 0;
+                var found = false;
+                
+                for (node.keys.items, 0..) |k, i| {
+                    if (k == key) {
+                        // Key already exists, update value
+                        node.values.?.items[i] = value;
+                        self.size -= 1; // Compensate for the increment in insert()
+                        return;
+                    }
+                    if (k > key) {
+                        insert_pos = i;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    insert_pos = node.keys.items.len;
+                }
+                
+                // Insert at the correct position
+                try node.keys.insert(insert_pos, key);
+                try node.values.?.insert(insert_pos, value);
+            } else {
+                // Find child to insert into
+                var child_idx: usize = 0;
+                for (node.keys.items, 0..) |k, i| {
+                    if (key < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= node.children.?.items.len) {
+                    child_idx = node.children.?.items.len - 1;
+                }
+                
+                const child = node.children.?.items[child_idx];
+                
+                // Check if child needs splitting before insertion
+                if (child.isFull(self.capacity)) {
+                    // Split the child
+                    if (child.node_type == .leaf) {
+                        const new_node = try self.splitLeaf(child);
+                        
+                        // Insert the new key into parent
+                        const split_key = new_node.keys.items[0];
+                        const insert_pos: usize = child_idx + 1;
+                        
+                        // Insert new key and child pointer
+                        try node.keys.insert(child_idx, split_key);
+                        try node.children.?.insert(insert_pos, new_node);
+                        
+                        // Decide which child to insert into
+                        if (key >= split_key) {
+                            try self.insertIntoNode(new_node, key, value);
+                        } else {
+                            try self.insertIntoNode(child, key, value);
+                        }
+                    }
+                } else {
+                    try self.insertIntoNode(child, key, value);
+                }
+            }
+        }
+        
+        pub fn get(self: *const Self, key: KeyType) ?ValueType {
+            if (self.root == null) return null;
+            
+            var current = self.root.?;
+            
+            // Navigate down the tree
+            while (current.node_type == .branch) {
+                var child_idx: usize = 0;
+                for (current.keys.items, 0..) |k, i| {
+                    if (key < k) {
+                        break;
+                    }
+                    child_idx = i + 1;
+                }
+                if (child_idx >= current.children.?.items.len) {
+                    child_idx = current.children.?.items.len - 1;
+                }
+                current = current.children.?.items[child_idx];
+            }
+            
+            // Search in leaf node
+            for (current.keys.items, 0..) |k, i| {
+                if (k == key) {
+                    return current.values.?.items[i];
+                }
+            }
+            return null;
+        }
+        
+        pub fn getHeight(self: *const Self) usize {
+            if (self.root == null) return 0;
+            
+            var height: usize = 1;
+            var current = self.root.?;
+            
+            while (current.node_type == .branch and current.children.?.items.len > 0) {
+                height += 1;
+                current = current.children.?.items[0];
+            }
+            
+            return height;
+        }
+        
+        fn splitLeaf(self: *Self, leaf: *Node) !*Node {
+            const mid = leaf.keys.items.len / 2;
+            
+            // Create new leaf
+            var new_leaf = try Node.initLeaf(self.allocator);
+            
+            // Move half the keys and values to new leaf
+            for (mid..leaf.keys.items.len) |i| {
+                try new_leaf.keys.append(leaf.keys.items[i]);
+                try new_leaf.values.?.append(leaf.values.?.items[i]);
+            }
+            
+            // Remove moved items from original leaf
+            leaf.keys.shrinkRetainingCapacity(mid);
+            leaf.values.?.shrinkRetainingCapacity(mid);
+            
+            // Update leaf links
+            new_leaf.next = leaf.next;
+            new_leaf.prev = leaf;
+            if (leaf.next) |next| {
+                next.prev = new_leaf;
+            }
+            leaf.next = new_leaf;
+            
+            return new_leaf;
+        }
+    };
+}
