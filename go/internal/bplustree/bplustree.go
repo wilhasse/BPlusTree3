@@ -2,7 +2,17 @@ package bplustree
 
 import (
 	"cmp"
+	"errors"
 )
+
+// ErrKeyNotFound is returned when trying to delete a non-existent key
+var ErrKeyNotFound = errors.New("key not found")
+
+// Entry represents a key-value pair
+type Entry[K cmp.Ordered, V any] struct {
+	Key   K
+	Value V
+}
 
 // nodeType represents the type of a B+ tree node
 type nodeType int
@@ -227,4 +237,198 @@ func (t *BPlusTree[K, V]) Get(key K) (V, bool) {
 	}
 	
 	return zero, false
+}
+
+// Delete removes a key-value pair from the tree
+func (t *BPlusTree[K, V]) Delete(key K) (V, error) {
+	var zero V
+	if t.root == nil {
+		return zero, ErrKeyNotFound
+	}
+	
+	// Delete from the tree
+	value, err := t.deleteFromNode(t.root, key)
+	if err != nil {
+		return zero, err
+	}
+	
+	// Handle root becoming empty
+	if t.root.nodeType == branchNode && len(t.root.keys) == 0 {
+		if len(t.root.children) > 0 {
+			t.root = t.root.children[0]
+		}
+	}
+	
+	// Handle empty tree
+	if t.root.nodeType == leafNode && len(t.root.keys) == 0 {
+		t.root = nil
+	}
+	
+	t.size--
+	return value, nil
+}
+
+// deleteFromNode deletes a key from the given node
+func (t *BPlusTree[K, V]) deleteFromNode(n *node[K, V], key K) (V, error) {
+	var zero V
+	
+	if n.nodeType == leafNode {
+		// Find and delete from leaf
+		for i, k := range n.keys {
+			if k == key {
+				value := n.values[i]
+				
+				// Remove key and value
+				n.keys = append(n.keys[:i], n.keys[i+1:]...)
+				n.values = append(n.values[:i], n.values[i+1:]...)
+				
+				return value, nil
+			}
+		}
+		return zero, ErrKeyNotFound
+	}
+	
+	// Find child containing the key
+	childIdx := 0
+	for childIdx < len(n.keys) && key >= n.keys[childIdx] {
+		childIdx++
+	}
+	if childIdx >= len(n.children) {
+		childIdx = len(n.children) - 1
+	}
+	
+	child := n.children[childIdx]
+	minKeys := (t.capacity + 1) / 2 - 1
+	
+	// Check if child will underflow
+	if len(child.keys) <= minKeys {
+		// Try to handle underflow
+		t.handleUnderflow(n, childIdx)
+		// Re-find child after potential merge
+		if childIdx >= len(n.children) {
+			childIdx = len(n.children) - 1
+		}
+		child = n.children[childIdx]
+	}
+	
+	return t.deleteFromNode(child, key)
+}
+
+// handleUnderflow handles node underflow by redistribution or merging
+func (t *BPlusTree[K, V]) handleUnderflow(parent *node[K, V], childIdx int) {
+	child := parent.children[childIdx]
+	minKeys := (t.capacity + 1) / 2 - 1
+	
+	// Try borrowing from left sibling
+	if childIdx > 0 {
+		leftSibling := parent.children[childIdx-1]
+		if len(leftSibling.keys) > minKeys {
+			if child.nodeType == leafNode {
+				// Borrow from left sibling
+				borrowedKey := leftSibling.keys[len(leftSibling.keys)-1]
+				borrowedValue := leftSibling.values[len(leftSibling.values)-1]
+				
+				leftSibling.keys = leftSibling.keys[:len(leftSibling.keys)-1]
+				leftSibling.values = leftSibling.values[:len(leftSibling.values)-1]
+				
+				child.keys = append([]K{borrowedKey}, child.keys...)
+				child.values = append([]V{borrowedValue}, child.values...)
+				
+				parent.keys[childIdx-1] = child.keys[0]
+			}
+			return
+		}
+	}
+	
+	// Try borrowing from right sibling
+	if childIdx < len(parent.children)-1 {
+		rightSibling := parent.children[childIdx+1]
+		if len(rightSibling.keys) > minKeys {
+			if child.nodeType == leafNode {
+				// Borrow from right sibling
+				borrowedKey := rightSibling.keys[0]
+				borrowedValue := rightSibling.values[0]
+				
+				rightSibling.keys = rightSibling.keys[1:]
+				rightSibling.values = rightSibling.values[1:]
+				
+				child.keys = append(child.keys, borrowedKey)
+				child.values = append(child.values, borrowedValue)
+				
+				parent.keys[childIdx] = rightSibling.keys[0]
+			}
+			return
+		}
+	}
+	
+	// Merge with sibling
+	if childIdx > 0 {
+		// Merge with left sibling
+		t.mergeNodes(parent, childIdx-1, childIdx)
+	} else {
+		// Merge with right sibling
+		t.mergeNodes(parent, childIdx, childIdx+1)
+	}
+}
+
+// mergeNodes merges two sibling nodes
+func (t *BPlusTree[K, V]) mergeNodes(parent *node[K, V], leftIdx, rightIdx int) {
+	left := parent.children[leftIdx]
+	right := parent.children[rightIdx]
+	
+	if left.nodeType == leafNode {
+		// Merge leaf nodes
+		left.keys = append(left.keys, right.keys...)
+		left.values = append(left.values, right.values...)
+		
+		// Update leaf links
+		left.next = right.next
+		if right.next != nil {
+			right.next.prev = left
+		}
+		
+		// Remove from parent
+		parent.keys = append(parent.keys[:leftIdx], parent.keys[leftIdx+1:]...)
+		parent.children = append(parent.children[:rightIdx], parent.children[rightIdx+1:]...)
+	}
+}
+
+// Range returns all entries with keys in the range [start, end]
+func (t *BPlusTree[K, V]) Range(start, end K) []Entry[K, V] {
+	var results []Entry[K, V]
+	
+	if t.root == nil || start > end {
+		return results
+	}
+	
+	// Find the first leaf that could contain start
+	current := t.root
+	for current.nodeType == branchNode {
+		childIdx := 0
+		for childIdx < len(current.keys) && start >= current.keys[childIdx] {
+			childIdx++
+		}
+		if childIdx >= len(current.children) {
+			childIdx = len(current.children) - 1
+		}
+		current = current.children[childIdx]
+	}
+	
+	// Traverse leaves collecting entries in range
+	for current != nil {
+		for i, key := range current.keys {
+			if key > end {
+				return results
+			}
+			if key >= start {
+				results = append(results, Entry[K, V]{
+					Key:   key,
+					Value: current.values[i],
+				})
+			}
+		}
+		current = current.next
+	}
+	
+	return results
 }
