@@ -31,6 +31,21 @@ pub fn build(b: *std.Build) void {
     const run_lib_tests = b.addRunArtifact(lib_tests);
     test_step.dependOn(&run_lib_tests.step);
     
+    // Stress tests
+    const stress_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_stress.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stress_tests.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_stress_tests = b.addRunArtifact(stress_tests);
+    test_step.dependOn(&run_stress_tests.step);
+    
+    // Separate step for just stress tests
+    const stress_step = b.step("test-stress", "Run stress tests");
+    stress_step.dependOn(&run_stress_tests.step);
+    
     // Demo executable
     const demo = b.addExecutable(.{
         .name = "demo",
@@ -43,4 +58,17 @@ pub fn build(b: *std.Build) void {
     const run_demo = b.addRunArtifact(demo);
     const demo_step = b.step("demo", "Run the demo");
     demo_step.dependOn(&run_demo.step);
+    
+    // Benchmark executable
+    const benchmark = b.addExecutable(.{
+        .name = "benchmark",
+        .root_source_file = b.path("benchmarks/benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    benchmark.root_module.addImport("bplustree", bplustree_module);
+    
+    const run_benchmark = b.addRunArtifact(benchmark);
+    const benchmark_step = b.step("benchmark", "Run performance benchmarks");
+    benchmark_step.dependOn(&run_benchmark.step);
 }
