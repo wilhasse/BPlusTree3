@@ -3,7 +3,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -O2 -g
 TESTFLAGS = -Wall -Wextra -std=c99 -g -DDEBUG
-BENCHFLAGS = -Wall -Wextra -std=c99 -O3 -DNDEBUG -march=native
+# Aggressive optimization for benchmarks
+BENCHFLAGS = -Wall -Wextra -std=c99 -O3 -DNDEBUG -march=native -flto -ffast-math -funroll-loops
 
 SRCDIR = src
 TESTDIR = tests
