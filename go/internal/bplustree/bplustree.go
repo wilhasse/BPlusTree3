@@ -432,3 +432,151 @@ func (t *BPlusTree[K, V]) Range(start, end K) []Entry[K, V] {
 	
 	return results
 }
+
+// Iterator represents a forward iterator over the B+ tree
+type Iterator[K cmp.Ordered, V any] struct {
+	currentNode  *node[K, V]
+	currentIndex int
+	key          K
+	value        V
+}
+
+// Iterator returns a new forward iterator
+func (t *BPlusTree[K, V]) Iterator() *Iterator[K, V] {
+	if t.root == nil {
+		return &Iterator[K, V]{
+			currentNode:  nil,
+			currentIndex: 0,
+		}
+	}
+	
+	// Find leftmost leaf
+	current := t.root
+	for current.nodeType == branchNode {
+		current = current.children[0]
+	}
+	
+	return &Iterator[K, V]{
+		currentNode:  current,
+		currentIndex: -1,
+	}
+}
+
+// Next advances the iterator and returns true if there are more elements
+func (it *Iterator[K, V]) Next() bool {
+	if it.currentNode == nil {
+		return false
+	}
+	
+	it.currentIndex++
+	
+	// Check if we have more items in current node
+	if it.currentIndex < len(it.currentNode.keys) {
+		it.key = it.currentNode.keys[it.currentIndex]
+		it.value = it.currentNode.values[it.currentIndex]
+		return true
+	}
+	
+	// Move to next leaf node
+	it.currentNode = it.currentNode.next
+	it.currentIndex = 0
+	
+	// Try again with next node
+	if it.currentNode != nil && len(it.currentNode.keys) > 0 {
+		it.key = it.currentNode.keys[0]
+		it.value = it.currentNode.values[0]
+		return true
+	}
+	
+	return false
+}
+
+// Key returns the current key
+func (it *Iterator[K, V]) Key() K {
+	return it.key
+}
+
+// Value returns the current value
+func (it *Iterator[K, V]) Value() V {
+	return it.value
+}
+
+// ReverseIterator represents a reverse iterator over the B+ tree
+type ReverseIterator[K cmp.Ordered, V any] struct {
+	currentNode  *node[K, V]
+	currentIndex int
+	key          K
+	value        V
+}
+
+// ReverseIterator returns a new reverse iterator
+func (t *BPlusTree[K, V]) ReverseIterator() *ReverseIterator[K, V] {
+	if t.root == nil {
+		return &ReverseIterator[K, V]{
+			currentNode:  nil,
+			currentIndex: 0,
+		}
+	}
+	
+	// Find rightmost leaf
+	current := t.root
+	for current.nodeType == branchNode {
+		current = current.children[len(current.children)-1]
+	}
+	
+	return &ReverseIterator[K, V]{
+		currentNode:  current,
+		currentIndex: len(current.keys),
+	}
+}
+
+// Next advances the reverse iterator and returns true if there are more elements
+func (it *ReverseIterator[K, V]) Next() bool {
+	if it.currentNode == nil {
+		return false
+	}
+	
+	it.currentIndex--
+	
+	// Check if we have more items in current node
+	if it.currentIndex >= 0 {
+		it.key = it.currentNode.keys[it.currentIndex]
+		it.value = it.currentNode.values[it.currentIndex]
+		return true
+	}
+	
+	// Move to previous leaf node
+	it.currentNode = it.currentNode.prev
+	if it.currentNode != nil {
+		it.currentIndex = len(it.currentNode.keys) - 1
+		if it.currentIndex >= 0 {
+			it.key = it.currentNode.keys[it.currentIndex]
+			it.value = it.currentNode.values[it.currentIndex]
+			return true
+		}
+	}
+	
+	return false
+}
+
+// Key returns the current key
+func (it *ReverseIterator[K, V]) Key() K {
+	return it.key
+}
+
+// Value returns the current value
+func (it *ReverseIterator[K, V]) Value() V {
+	return it.value
+}
+
+// Contains checks if a key exists in the tree
+func (t *BPlusTree[K, V]) Contains(key K) bool {
+	_, found := t.Get(key)
+	return found
+}
+
+// Clear removes all elements from the tree
+func (t *BPlusTree[K, V]) Clear() {
+	t.root = nil
+	t.size = 0
+}
